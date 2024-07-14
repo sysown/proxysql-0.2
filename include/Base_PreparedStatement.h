@@ -1,11 +1,13 @@
-#ifndef CLASS_MYSQL_PREPARED_STATEMENT_H
-#define CLASS_MYSQL_PREPARED_STATEMENT_H
+#ifndef CLASS_BASE_PREPARED_STATEMENT_H
+#define CLASS_BASE_PREPARED_STATEMENT_H
 
-#include "Base_PreparedStatement.h"
+#include <stdlib.h>
+#include <pthread.h>
+#include <string.h>
+class Base_STMT_Global_info;
 
-#include "proxysql.h"
-#include "cpp.h"
-
+//#include "proxysql.h"
+//#include "cpp.h"
 
 /*
 One of the main challenge in handling prepared statement (PS) is that a single
@@ -41,51 +43,43 @@ To summarie the most important classes:
 // it is an internal representation of prepared statement
 // it include all metadata associated with it
 
-class MySQL_STMT_Global_info : public Base_STMT_Global_info {
-#if 0
+class Base_STMT_Global_info {
 	private:
 	void compute_hash();
-#endif // 0
 	public:
-#if 0
 	pthread_rwlock_t rwlock_;
-	uint64_t digest;
-	MYSQL_COM_QUERY_command MyComQueryCmd;
-#endif // 0
-	MYSQL_COM_QUERY_command MyComQueryCmd = MYSQL_COM_QUERY__UNINITIALIZED;
-#if 0
-	char * digest_text;
-	uint64_t hash;
-	char *username;
-	char *schemaname;
-	char *query;
-	unsigned int query_length;
+	uint64_t digest = 0;
+	//MYSQL_COM_QUERY_command MyComQueryCmd = MYSQL_COM_QUERY__UNINITIALIZED;
+	char * digest_text = NULL;
+	uint64_t hash = 0;
+	char *username = NULL;
+	char *schemaname = NULL;
+	char *query = NULL;
+	unsigned int query_length = 0;
 //	unsigned int hostgroup_id;
-	int ref_count_client;
-	int ref_count_server;
-	uint64_t statement_id;
-	uint16_t num_columns;
-	uint16_t num_params;
-	uint16_t warning_count;
-#endif // 0
-	MYSQL_FIELD **fields;
-#if 0
-	char* first_comment;
-	uint64_t total_mem_usage;
-//	struct {
-//		int cache_ttl;
-//		int timeout;
-//		int delay;
-//	} properties;
-	bool is_select_NOT_for_update;
-#endif // 0
-	MYSQL_BIND **params; // seems unused (?)
-	MySQL_STMT_Global_info(uint64_t id, char *u, char *s, char *q, unsigned int ql, char *fc, MYSQL_STMT *stmt, uint64_t _h);
-	void update_metadata(MYSQL_STMT *stmt);
-	~MySQL_STMT_Global_info();
-	void calculate_mem_usage();
+	int ref_count_client = 0;
+	int ref_count_server = 0;
+	uint64_t statement_id = 0;
+	uint16_t num_columns = 0;
+	uint16_t num_params = 0;
+	uint16_t warning_count = 0;
+//	MYSQL_FIELD **fields;
+	char* first_comment = NULL;
+	uint64_t total_mem_usage = 0;
+	bool is_select_NOT_for_update = false;
+//	MYSQL_BIND **params; // seems unused (?)
+//	MySQL_STMT_Global_info(uint64_t id, char *u, char *s, char *q, unsigned int ql, char *fc, MYSQL_STMT *stmt, uint64_t _h);
+//	void update_metadata(MYSQL_STMT *stmt);
+	Base_STMT_Global_info();
+	~Base_STMT_Global_info();
+//	void calculate_mem_usage();
+	static uint64_t stmt_compute_hash(char *user, char *schema, char *query, unsigned int query_length);
+
+	friend class MySQL_STMT_Global_info;
 };
 
+
+#if 0
 
 // stmt_execute_metadata_t represent metadata required to run STMT_EXECUTE
 class stmt_execute_metadata_t {
@@ -280,5 +274,6 @@ class MySQL_STMT_Manager_v14 {
 	SQLite3_result * get_prepared_statements_global_infos();
 	void get_memory_usage(uint64_t& prep_stmt_metadata_mem_usage, uint64_t& prep_stmt_backend_mem_usage);
 };
+#endif // 0
 
-#endif // CLASS_MYSQL_PREPARED_STATEMENT_H
+#endif // CLASS_BASE_PREPARED_STATEMENT_H

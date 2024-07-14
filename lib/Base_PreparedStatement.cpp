@@ -1,12 +1,14 @@
-#include "proxysql.h"
-#include "cpp.h"
+//#include "proxysql.h"
+//#include "cpp.h"
 
 #ifndef SPOOKYV2
 #include "SpookyV2.h"
 #define SPOOKYV2
 #endif
 
-#include "MySQL_PreparedStatement.h"
+#include "Base_PreparedStatement.h"
+
+#if 0
 #include "MySQL_Protocol.h"
 
 //extern MySQL_STMT_Manager *GloMyStmt;
@@ -15,11 +17,10 @@
 //#else
 extern MySQL_STMT_Manager_v14 *GloMyStmt;
 //#endif
-
+#endif // 0
 const int PS_GLOBAL_STATUS_FIELD_NUM = 9;
 
-#if 0
-static uint64_t stmt_compute_hash(char *user,
+static uint64_t static_stmt_compute_hash(char *user,
                                   char *schema, char *query,
                                   unsigned int query_length) {
 	int l = 0;
@@ -59,11 +60,20 @@ static uint64_t stmt_compute_hash(char *user,
 	return hash;
 }
 
-void MySQL_STMT_Global_info::compute_hash() {
+
+
+uint64_t Base_STMT_Global_info::stmt_compute_hash(char *user,
+                                  char *schema, char *query,
+                                  unsigned int query_length) {
+	return static_stmt_compute_hash(user, schema, query, query_length);
+}
+
+void Base_STMT_Global_info::compute_hash() {
 	hash = stmt_compute_hash(username, schemaname, query,
 	                         query_length);
 }
-#endif // 0
+
+#if 0
 
 StmtLongDataHandler::StmtLongDataHandler() { long_datas = new PtrArray(); }
 
@@ -143,14 +153,14 @@ MySQL_STMT_Global_info::MySQL_STMT_Global_info(uint64_t id,
                                                unsigned int ql,
                                                char *fc,
                                                MYSQL_STMT *stmt, uint64_t _h) {
-#if 0
+#endif // 0
+Base_STMT_Global_info::Base_STMT_Global_info() {
 	pthread_rwlock_init(&rwlock_, NULL);
+#if 0
 	total_mem_usage = 0;
-	statement_id = id;
 	ref_count_client = 0;
 	ref_count_server = 0;
 	digest_text = NULL;
-#endif // 0
 	username = strdup(u);
 	schemaname = strdup(s);
 	query = (char *)malloc(ql + 1);
@@ -162,7 +172,7 @@ MySQL_STMT_Global_info::MySQL_STMT_Global_info(uint64_t id,
 	} else {
 		first_comment = NULL;
 	}
-//	MyComQueryCmd = MYSQL_COM_QUERY__UNINITIALIZED;
+	MyComQueryCmd = MYSQL_COM_QUERY__UNINITIALIZED;
 	num_params = stmt->param_count;
 	num_columns = stmt->field_count;
 	warning_count = stmt->upsert_status.warning_count;
@@ -303,8 +313,10 @@ __exit_MySQL_STMT_Global_info___search_select:
 	}
 
 	calculate_mem_usage();
+#endif // 0
 }
 
+#if 0
 void MySQL_STMT_Global_info::calculate_mem_usage() {
 	total_mem_usage = sizeof(MySQL_STMT_Global_info) +
 		(num_params * (sizeof(MYSQL_BIND) + sizeof(MYSQL_BIND*))) +
@@ -521,13 +533,16 @@ void MySQL_STMT_Global_info::update_metadata(MYSQL_STMT *stmt) {
 	pthread_rwlock_unlock(&rwlock_);
 }
 
-MySQL_STMT_Global_info::~MySQL_STMT_Global_info() {
+#endif // 0
+
+Base_STMT_Global_info::~Base_STMT_Global_info() {
 	free(username);
 	free(schemaname);
 	free(query);
 	if (first_comment) {
 		free(first_comment);
 	}
+#if 0
 	if (num_columns) {
 		uint16_t i;
 		for (i = 0; i < num_columns; i++) {
@@ -565,7 +580,6 @@ MySQL_STMT_Global_info::~MySQL_STMT_Global_info() {
 		free(fields);
 		fields = NULL;
 	}
-
 	if (num_params) {
 		uint16_t i;
 		for (i = 0; i < num_params; i++) {
@@ -574,12 +588,14 @@ MySQL_STMT_Global_info::~MySQL_STMT_Global_info() {
 		free(params);
 		params = NULL;
 	}
+#endif // 0
 	if (digest_text) {
 		free(digest_text);
 		digest_text = NULL;
 	}
 }
 
+#if 0
 extern MySQL_STMT_Manager_v14 *GloMyStmt;
 
 void MySQL_STMTs_local_v14::backend_insert(uint64_t global_statement_id, MYSQL_STMT *stmt) {
@@ -596,7 +612,7 @@ uint64_t MySQL_STMTs_local_v14::compute_hash(char *user,
                                          char *schema, char *query,
                                          unsigned int query_length) {
 	uint64_t hash;
-	hash = Base_STMT_Global_info::stmt_compute_hash(user, schema, query, query_length);
+	hash = stmt_compute_hash(user, schema, query, query_length);
 	return hash;
 }
 
@@ -823,7 +839,7 @@ MySQL_STMT_Global_info *MySQL_STMT_Manager_v14::add_prepared_statement(
     char *u, char *s, char *q, unsigned int ql,
     char *fc, MYSQL_STMT *stmt, bool lock) {
 	MySQL_STMT_Global_info *ret = NULL;
-	uint64_t hash = Base_STMT_Global_info::stmt_compute_hash(
+	uint64_t hash = stmt_compute_hash(
 		u, s, q, ql);  // this identifies the prepared statement
 	if (lock) {
 		pthread_rwlock_wrlock(&rwlock_);
@@ -1051,3 +1067,4 @@ SQLite3_result * MySQL_STMT_Manager_v14::get_prepared_statements_global_infos() 
 	unlock();
 	return result;
 }
+#endif // 0
