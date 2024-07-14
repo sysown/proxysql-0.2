@@ -258,4 +258,19 @@ void close_all_non_term_fd(std::vector<int> excludeFDs);
  */
 std::pair<int,const char*> get_dollar_quote_error(const char* version);
 
-#endif
+inline int16_t read_big_endian_int16(const char* buffer) {
+	int16_t value = (static_cast<uint16_t>(buffer[0]) << 8) | static_cast<uint16_t>(buffer[1]);
+	return value;
+}
+
+
+inline int32_t read_big_endian_int32(const char* buffer) {
+	// Assuming buffer points to the start of the 4 bytes
+	int32_t value = (static_cast<uint32_t>(buffer[0]) << 24) | 
+		(static_cast<uint32_t>(buffer[1]) << 16) |
+		(static_cast<uint32_t>(buffer[2]) << 8) |
+		static_cast<uint32_t>(buffer[3]); 
+	return value;
+}
+
+#endif // __PROXYSQL_UTILS_H
