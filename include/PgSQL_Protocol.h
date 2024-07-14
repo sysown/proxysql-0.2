@@ -240,7 +240,7 @@ public:
 		myds = __myds;
 		userinfo = __userinfo;
 		sess = __sess;
-		current_PreStmt = NULL;
+		//current_PreStmt = NULL;
 	}
 	PgSQL_Data_Stream* get_myds() { return *myds; }
 
