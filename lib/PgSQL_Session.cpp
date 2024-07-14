@@ -3367,6 +3367,53 @@ __get_pkts_from_client:
 					else {
 						char command = c = *((unsigned char*)pkt.ptr + 0);
 						switch (command) {
+						case 'P':
+						{
+							// A lot of temporary code here. This will be moved on its own function
+							const int32_t message_length = read_big_endian_int32((char *)pkt.ptr + 1);
+							if (message_length != (pkt.size -1)) {
+								l_free(pkt.size, pkt.ptr);
+								handler_ret = -1;
+								return handler_ret;
+							}
+							size_t bytes_left = message_length - 4;
+							const char *stmt_name = (char *)pkt.ptr + 5;
+							const size_t stmt_name_len = strnlen(stmt_name, bytes_left);
+							if (stmt_name_len == bytes_left) {
+								l_free(pkt.size, pkt.ptr);
+								handler_ret = -1;
+								return handler_ret;
+							}
+							bytes_left -= stmt_name_len;
+							bytes_left--;
+							const char *query = stmt_name + stmt_name_len + 1;
+							const size_t query_len = strnlen(query, bytes_left);
+							if (query_len == bytes_left) {
+								l_free(pkt.size, pkt.ptr);
+								handler_ret = -1;
+								return handler_ret;
+							}
+							bytes_left -= query_len;
+							bytes_left--;
+							if (bytes_left < 2) {
+								l_free(pkt.size, pkt.ptr);
+								handler_ret = -1;
+								return handler_ret;
+							}
+							const char * num_params_ptr = query + query_len + 1;
+							int16_t num_params = read_big_endian_int16(num_params_ptr);
+							bytes_left -= sizeof(int16_t);
+							if (bytes_left != num_params * sizeof(int32_t)) {
+								l_free(pkt.size, pkt.ptr);
+								handler_ret = -1;
+								return handler_ret;
+							}
+							proxy_info("Received Parse command for stmt named \"%s\" , query \"%s\" , with %d parameters\n", stmt_name, query, num_params);
+							l_free(pkt.size, pkt.ptr);
+							handler_ret = -1;
+							return handler_ret;
+							break;
+						}
 						case 'Q':
 						{
 							__sync_add_and_fetch(&thread->status_variables.stvar[st_var_queries], 1);
