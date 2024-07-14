@@ -9,6 +9,9 @@
 #include "MySQL_PreparedStatement.h"
 #include "MySQL_Protocol.h"
 
+
+
+
 //extern MySQL_STMT_Manager *GloMyStmt;
 //static uint32_t add_prepared_statement_calls = 0;
 //static uint32_t find_prepared_statement_by_hash_calls = 0;
@@ -592,6 +595,7 @@ void MySQL_STMTs_local_v14::backend_insert(uint64_t global_statement_id, MYSQL_S
 	// GloMyStmt->ref_count_client(global_statement_id, 1);
 }
 
+#if 0
 uint64_t MySQL_STMTs_local_v14::compute_hash(char *user,
                                          char *schema, char *query,
                                          unsigned int query_length) {
@@ -599,8 +603,10 @@ uint64_t MySQL_STMTs_local_v14::compute_hash(char *user,
 	hash = Base_STMT_Global_info::stmt_compute_hash(user, schema, query, query_length);
 	return hash;
 }
+#endif // 0
 
 MySQL_STMT_Manager_v14::MySQL_STMT_Manager_v14() {
+#if 0
 	last_purge_time = time(NULL);
 	pthread_rwlock_init(&rwlock_, NULL);
 	map_stmt_id_to_info= std::map<uint64_t, MySQL_STMT_Global_info *>();       // map using statement id
@@ -617,15 +623,20 @@ MySQL_STMT_Manager_v14::MySQL_STMT_Manager_v14() {
 	statuses.cached = 0;
 	statuses.s_unique = 0;
 	statuses.s_total = 0;
+#endif // 0
 }
 
 MySQL_STMT_Manager_v14::~MySQL_STMT_Manager_v14() {
+#if 0
 	for (auto it = map_stmt_id_to_info.begin(); it != map_stmt_id_to_info.end(); ++it) {
 		MySQL_STMT_Global_info * a = it->second;
 		delete a;
 	}
+#endif // 0
 }
 
+
+#if 0
 void MySQL_STMT_Manager_v14::ref_count_client(uint64_t _stmt_id ,int _v, bool lock) {
 	if (lock)
 		pthread_rwlock_wrlock(&rwlock_);
@@ -722,6 +733,7 @@ void MySQL_STMT_Manager_v14::ref_count_server(uint64_t _stmt_id ,int _v, bool lo
 	if (lock)
 		pthread_rwlock_unlock(&rwlock_);
 }
+#endif // 0
 
 MySQL_STMTs_local_v14::~MySQL_STMTs_local_v14() {
 	// Note: we do not free the prepared statements because we assume that
@@ -745,6 +757,7 @@ MySQL_STMTs_local_v14::~MySQL_STMTs_local_v14() {
 }
 
 
+#if 0
 MySQL_STMT_Global_info *MySQL_STMT_Manager_v14::find_prepared_statement_by_hash(
     uint64_t hash) {
 	MySQL_STMT_Global_info *ret = NULL;  // assume we do not find it
@@ -818,6 +831,7 @@ bool MySQL_STMTs_local_v14::client_close(uint32_t client_statement_id) {
 	}
 	return false;  // we don't really remove the prepared statement
 }
+#endif // 0
 
 MySQL_STMT_Global_info *MySQL_STMT_Manager_v14::add_prepared_statement(
     char *u, char *s, char *q, unsigned int ql,
@@ -901,6 +915,7 @@ void MySQL_STMT_Manager_v14::get_memory_usage(uint64_t& prep_stmt_metadata_mem_u
 	unlock();
 }
 
+#if 0
 void MySQL_STMT_Manager_v14::get_metrics(uint64_t *c_unique, uint64_t *c_total,
                              uint64_t *stmt_max_stmt_id, uint64_t *cached,
                              uint64_t *s_unique, uint64_t *s_total) {
@@ -1051,3 +1066,4 @@ SQLite3_result * MySQL_STMT_Manager_v14::get_prepared_statements_global_infos() 
 	unlock();
 	return result;
 }
+#endif // 0

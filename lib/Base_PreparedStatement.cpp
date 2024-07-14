@@ -1,5 +1,5 @@
-//#include "proxysql.h"
-//#include "cpp.h"
+#include "proxysql.h"
+#include "cpp.h"
 
 #ifndef SPOOKYV2
 #include "SpookyV2.h"
@@ -7,11 +7,29 @@
 #endif
 
 #include "Base_PreparedStatement.h"
+#include "MySQL_PreparedStatement.h"
+
+template Base_STMT_Manager_v14<MySQL_STMT_Global_info>::Base_STMT_Manager_v14();
+template Base_STMT_Manager_v14<MySQL_STMT_Global_info>::~Base_STMT_Manager_v14();
+template MySQL_STMT_Global_info * Base_STMT_Manager_v14<MySQL_STMT_Global_info>::find_prepared_statement_by_stmt_id(unsigned long, bool);
+template MySQL_STMT_Global_info * Base_STMT_Manager_v14<MySQL_STMT_Global_info>::find_prepared_statement_by_hash(unsigned long);
+template void Base_STMT_Manager_v14<MySQL_STMT_Global_info>::ref_count_client(unsigned long, int, bool);
+template void Base_STMT_Manager_v14<MySQL_STMT_Global_info>::ref_count_server(unsigned long, int, bool);
+template void Base_STMT_Manager_v14<MySQL_STMT_Global_info>::get_metrics(unsigned long*, unsigned long*, unsigned long*, unsigned long*, unsigned long*, unsigned long*);
+template SQLite3_result * Base_STMT_Manager_v14<MySQL_STMT_Global_info>::get_prepared_statements_global_infos();
+
+template uint32_t Base_STMTs_local_v14<MySQL_STMTs_local_v14>::generate_new_client_stmt_id(unsigned long);
+template bool Base_STMTs_local_v14<MySQL_STMTs_local_v14>::client_close(unsigned int);
+template uint64_t Base_STMTs_local_v14<MySQL_STMTs_local_v14>::find_global_stmt_id_from_client(unsigned int);
+template uint64_t Base_STMTs_local_v14<MySQL_STMTs_local_v14>::compute_hash(char*, char*, char*, unsigned int);
+
+extern MySQL_STMT_Manager_v14 *GloMyStmt;
+
+
 
 #if 0
 #include "MySQL_Protocol.h"
 
-//extern MySQL_STMT_Manager *GloMyStmt;
 //static uint32_t add_prepared_statement_calls = 0;
 //static uint32_t find_prepared_statement_by_hash_calls = 0;
 //#else
@@ -607,22 +625,27 @@ void MySQL_STMTs_local_v14::backend_insert(uint64_t global_statement_id, MYSQL_S
 	// for this reason, we will the ref count increase in add_prepared_statement()
 	// GloMyStmt->ref_count_client(global_statement_id, 1);
 }
+#endif // 0
 
-uint64_t MySQL_STMTs_local_v14::compute_hash(char *user,
+template <typename T>
+uint64_t Base_STMTs_local_v14<T>::compute_hash(char *user,
                                          char *schema, char *query,
                                          unsigned int query_length) {
 	uint64_t hash;
-	hash = stmt_compute_hash(user, schema, query, query_length);
+	hash = static_stmt_compute_hash(user, schema, query, query_length);
 	return hash;
 }
 
-MySQL_STMT_Manager_v14::MySQL_STMT_Manager_v14() {
+template <typename SGI>
+Base_STMT_Manager_v14<SGI>::Base_STMT_Manager_v14() {
 	last_purge_time = time(NULL);
 	pthread_rwlock_init(&rwlock_, NULL);
+}
+
+#if 0
 	map_stmt_id_to_info= std::map<uint64_t, MySQL_STMT_Global_info *>();       // map using statement id
 	map_stmt_hash_to_info = std::map<uint64_t, MySQL_STMT_Global_info *>();     // map using hashes
 	free_stmt_ids = std::stack<uint64_t> ();
-
 	next_statement_id =
 	    1;  // we initialize this as 1 because we 0 is not allowed
 	num_stmt_with_ref_client_count_zero = 0;
@@ -633,22 +656,25 @@ MySQL_STMT_Manager_v14::MySQL_STMT_Manager_v14() {
 	statuses.cached = 0;
 	statuses.s_unique = 0;
 	statuses.s_total = 0;
-}
 
-MySQL_STMT_Manager_v14::~MySQL_STMT_Manager_v14() {
+#endif // 0
+
+template <typename SGI>
+Base_STMT_Manager_v14<SGI>::~Base_STMT_Manager_v14() {
 	for (auto it = map_stmt_id_to_info.begin(); it != map_stmt_id_to_info.end(); ++it) {
-		MySQL_STMT_Global_info * a = it->second;
+		SGI * a = it->second;
 		delete a;
 	}
 }
 
-void MySQL_STMT_Manager_v14::ref_count_client(uint64_t _stmt_id ,int _v, bool lock) {
+template <typename SGI>
+void Base_STMT_Manager_v14<SGI>::ref_count_client(uint64_t _stmt_id ,int _v, bool lock) {
 	if (lock)
 		pthread_rwlock_wrlock(&rwlock_);
 	auto s = map_stmt_id_to_info.find(_stmt_id);
 	if (s != map_stmt_id_to_info.end()) {
 		statuses.c_total += _v;
-		MySQL_STMT_Global_info *stmt_info = s->second;
+		SGI *stmt_info = s->second;
 		if (stmt_info->ref_count_client == 0 && _v == 1) {
 			__sync_sub_and_fetch(&num_stmt_with_ref_client_count_zero,1);
 		} else {
@@ -673,13 +699,13 @@ void MySQL_STMT_Manager_v14::ref_count_client(uint64_t _stmt_id ,int _v, bool lo
 				int i = -1;
 				uint64_t *torem =
 				    (uint64_t *)malloc(max_purge * sizeof(uint64_t));
-				for (std::map<uint64_t, MySQL_STMT_Global_info *>::iterator it =
+				for (typename std::map<uint64_t, SGI *>::iterator it =
 				         map_stmt_id_to_info.begin();
 					it != map_stmt_id_to_info.end(); ++it) {
 					if ( (i == (max_purge - 1)) || (i == ((int)num_client_count_zero - 1)) ) {
 						break; // nothing left to clean up
 					}
-					MySQL_STMT_Global_info *a = it->second;
+					SGI *a = it->second;
 					if ((__sync_add_and_fetch(&a->ref_count_client, 0) == 0) &&
 						(a->ref_count_server == 0) ) // this to avoid that IDs are incorrectly reused
 					{
@@ -701,7 +727,7 @@ void MySQL_STMT_Manager_v14::ref_count_client(uint64_t _stmt_id ,int _v, bool lo
 				while (i >= 0) {
 					uint64_t id = torem[i];
 					auto s3 = map_stmt_id_to_info.find(id);
-					MySQL_STMT_Global_info *a = s3->second;
+					SGI *a = s3->second;
 					if (a->ref_count_server == 0) {
 						__sync_sub_and_fetch(&num_stmt_with_ref_server_count_zero,1);
 						free_stmt_ids.push(id);
@@ -718,14 +744,15 @@ void MySQL_STMT_Manager_v14::ref_count_client(uint64_t _stmt_id ,int _v, bool lo
 		pthread_rwlock_unlock(&rwlock_);
 }
 
-void MySQL_STMT_Manager_v14::ref_count_server(uint64_t _stmt_id ,int _v, bool lock) {
+template <typename SGI>
+void Base_STMT_Manager_v14<SGI>::ref_count_server(uint64_t _stmt_id ,int _v, bool lock) {
 	if (lock)
 		pthread_rwlock_wrlock(&rwlock_);
-	std::map<uint64_t, MySQL_STMT_Global_info *>::iterator s;
+	typename std::map<uint64_t, SGI *>::iterator s;
 	s = map_stmt_id_to_info.find(_stmt_id);
 	if (s != map_stmt_id_to_info.end()) {
 		statuses.s_total += _v;
-		MySQL_STMT_Global_info *stmt_info = s->second;
+		SGI *stmt_info = s->second;
 		if (stmt_info->ref_count_server == 0 && _v == 1) {
 			__sync_sub_and_fetch(&num_stmt_with_ref_server_count_zero,1);
 		} else {
@@ -739,6 +766,7 @@ void MySQL_STMT_Manager_v14::ref_count_server(uint64_t _stmt_id ,int _v, bool lo
 		pthread_rwlock_unlock(&rwlock_);
 }
 
+#if 0
 MySQL_STMTs_local_v14::~MySQL_STMTs_local_v14() {
 	// Note: we do not free the prepared statements because we assume that
 	// if we call this destructor the connection is being destroyed anyway
@@ -759,11 +787,12 @@ MySQL_STMTs_local_v14::~MySQL_STMTs_local_v14() {
 		}
 	}
 }
+#endif // 0
 
-
-MySQL_STMT_Global_info *MySQL_STMT_Manager_v14::find_prepared_statement_by_hash(
+template <typename SGI>
+SGI * Base_STMT_Manager_v14<SGI>::find_prepared_statement_by_hash(
     uint64_t hash) {
-	MySQL_STMT_Global_info *ret = NULL;  // assume we do not find it
+	SGI *ret = NULL;  // assume we do not find it
 	auto s = map_stmt_hash_to_info.find(hash);
 	if (s != map_stmt_hash_to_info.end()) {
 		ret = s->second;
@@ -771,9 +800,10 @@ MySQL_STMT_Global_info *MySQL_STMT_Manager_v14::find_prepared_statement_by_hash(
 	return ret;
 }
 
-MySQL_STMT_Global_info *MySQL_STMT_Manager_v14::find_prepared_statement_by_stmt_id(
+template <typename SGI>
+SGI * Base_STMT_Manager_v14<SGI>::find_prepared_statement_by_stmt_id(
     uint64_t id, bool lock) {
-	MySQL_STMT_Global_info *ret = NULL;  // assume we do not find it
+	SGI *ret = NULL;  // assume we do not find it
 	if (lock) {
 		pthread_rwlock_wrlock(&rwlock_);
 	}
@@ -789,7 +819,9 @@ MySQL_STMT_Global_info *MySQL_STMT_Manager_v14::find_prepared_statement_by_stmt_
 	return ret;
 }
 
-uint32_t MySQL_STMTs_local_v14::generate_new_client_stmt_id(uint64_t global_statement_id) {
+
+template <typename T>
+uint32_t Base_STMTs_local_v14<T>::generate_new_client_stmt_id(uint64_t global_statement_id) {
 	uint32_t ret=0;
 	if (free_client_ids.size()) {
 		ret=free_client_ids.top();
@@ -801,11 +833,14 @@ uint32_t MySQL_STMTs_local_v14::generate_new_client_stmt_id(uint64_t global_stat
 	assert(ret);
 	client_stmt_to_global_ids.insert(std::make_pair(ret,global_statement_id));
 	global_stmt_to_client_ids.insert(std::make_pair(global_statement_id,ret));
-	GloMyStmt->ref_count_client(global_statement_id, 1, false); // do not lock!
+	if constexpr (std::is_same<T, MySQL_STMTs_local_v14>::value) {
+		GloMyStmt->ref_count_client(global_statement_id, 1, false); // do not lock!
+	}
 	return ret;
 }
 
-uint64_t MySQL_STMTs_local_v14::find_global_stmt_id_from_client(uint32_t client_stmt_id) {
+template <typename T>
+uint64_t Base_STMTs_local_v14<T>::find_global_stmt_id_from_client(uint32_t client_stmt_id) {
 	uint64_t ret=0;
 	auto s = client_stmt_to_global_ids.find(client_stmt_id);
 	if (s != client_stmt_to_global_ids.end()) {
@@ -814,12 +849,15 @@ uint64_t MySQL_STMTs_local_v14::find_global_stmt_id_from_client(uint32_t client_
 	return ret;
 }
 
-bool MySQL_STMTs_local_v14::client_close(uint32_t client_statement_id) {
+template <typename T>
+bool Base_STMTs_local_v14<T>::client_close(uint32_t client_statement_id) {
 	auto s = client_stmt_to_global_ids.find(client_statement_id);
 	if (s != client_stmt_to_global_ids.end()) {  // found
 		uint64_t global_stmt_id = s->second;
 		client_stmt_to_global_ids.erase(s);
-		GloMyStmt->ref_count_client(global_stmt_id, -1);
+		if constexpr (std::is_same<T, MySQL_STMTs_local_v14>::value) {
+			GloMyStmt->ref_count_client(global_stmt_id, -1);
+		}
 		//auto s2 = global_stmt_to_client_ids.find(global_stmt_id);
 		std::pair<std::multimap<uint64_t,uint32_t>::iterator, std::multimap<uint64_t,uint32_t>::iterator> ret;
 		ret = global_stmt_to_client_ids.equal_range(global_stmt_id);
@@ -835,6 +873,7 @@ bool MySQL_STMTs_local_v14::client_close(uint32_t client_statement_id) {
 	return false;  // we don't really remove the prepared statement
 }
 
+#if 0
 MySQL_STMT_Global_info *MySQL_STMT_Manager_v14::add_prepared_statement(
     char *u, char *s, char *q, unsigned int ql,
     char *fc, MYSQL_STMT *stmt, bool lock) {
@@ -916,8 +955,10 @@ void MySQL_STMT_Manager_v14::get_memory_usage(uint64_t& prep_stmt_metadata_mem_u
 	}
 	unlock();
 }
+#endif // 0
 
-void MySQL_STMT_Manager_v14::get_metrics(uint64_t *c_unique, uint64_t *c_total,
+template <typename SGI>
+void Base_STMT_Manager_v14<SGI>::get_metrics(uint64_t *c_unique, uint64_t *c_total,
                              uint64_t *stmt_max_stmt_id, uint64_t *cached,
                              uint64_t *s_unique, uint64_t *s_total) {
 #ifdef DEBUG
@@ -933,9 +974,9 @@ void MySQL_STMT_Manager_v14::get_metrics(uint64_t *c_unique, uint64_t *c_total,
 	statuses.c_unique = statuses.cached - num_stmt_with_ref_client_count_zero;
 	statuses.s_unique = statuses.cached - num_stmt_with_ref_server_count_zero;
 #ifdef DEBUG
-	for (std::map<uint64_t, MySQL_STMT_Global_info *>::iterator it = map_stmt_id_to_info.begin();
+	for (typename std::map<uint64_t, SGI *>::iterator it = map_stmt_id_to_info.begin();
 	     it != map_stmt_id_to_info.end(); ++it) {
-		MySQL_STMT_Global_info *a = it->second;
+		SGI *a = it->second;
 		c++;
 		if (a->ref_count_client) {
 			c_u++;
@@ -1039,7 +1080,8 @@ class PS_global_stats {
 };
 
 
-SQLite3_result * MySQL_STMT_Manager_v14::get_prepared_statements_global_infos() {
+template <typename SGI>
+SQLite3_result * Base_STMT_Manager_v14<SGI>::get_prepared_statements_global_infos() {
 	proxy_debug(PROXY_DEBUG_MYSQL_QUERY_PROCESSOR, 4, "Dumping current prepared statements global info\n");
 	SQLite3_result *result=new SQLite3_result(PS_GLOBAL_STATUS_FIELD_NUM);
 	rdlock();
@@ -1052,9 +1094,9 @@ SQLite3_result * MySQL_STMT_Manager_v14::get_prepared_statements_global_infos() 
 	result->add_column_definition(SQLITE_TEXT,"ref_count_server");
 	result->add_column_definition(SQLITE_TEXT,"num_columns");
 	result->add_column_definition(SQLITE_TEXT,"num_params");
-	for (std::map<uint64_t, MySQL_STMT_Global_info *>::iterator it = map_stmt_id_to_info.begin();
+	for (typename std::map<uint64_t, SGI *>::iterator it = map_stmt_id_to_info.begin();
 			it != map_stmt_id_to_info.end(); ++it) {
-		MySQL_STMT_Global_info *a = it->second;
+		SGI *a = it->second;
 		PS_global_stats * pgs = new PS_global_stats(a->statement_id,
 			a->schemaname, a->username,
 			a->hash, a->query,
@@ -1067,4 +1109,3 @@ SQLite3_result * MySQL_STMT_Manager_v14::get_prepared_statements_global_infos() 
 	unlock();
 	return result;
 }
-#endif // 0
