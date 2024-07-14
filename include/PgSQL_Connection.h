@@ -340,7 +340,7 @@ class PgSQL_Connection_Placeholder {
 	unsigned long long timeout;
 	int auto_increment_delay_token;
 	int fd;
-	MySQL_STMTs_local_v14 *local_stmts;	// local view of prepared statements
+	PgSQL_STMTs_local_v14 *local_stmts;	// local view of prepared statements
 	MYSQL *pgsql;
 	MYSQL *ret_mysql;
 	MYSQL_RES *mysql_result;

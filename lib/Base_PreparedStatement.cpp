@@ -8,6 +8,7 @@
 
 #include "Base_PreparedStatement.h"
 #include "MySQL_PreparedStatement.h"
+#include "PgSQL_PreparedStatement.h"
 
 template Base_STMT_Manager_v14<MySQL_STMT_Global_info>::Base_STMT_Manager_v14();
 template Base_STMT_Manager_v14<MySQL_STMT_Global_info>::~Base_STMT_Manager_v14();
@@ -18,10 +19,18 @@ template void Base_STMT_Manager_v14<MySQL_STMT_Global_info>::ref_count_server(un
 template void Base_STMT_Manager_v14<MySQL_STMT_Global_info>::get_metrics(unsigned long*, unsigned long*, unsigned long*, unsigned long*, unsigned long*, unsigned long*);
 template SQLite3_result * Base_STMT_Manager_v14<MySQL_STMT_Global_info>::get_prepared_statements_global_infos();
 
+template void Base_STMT_Manager_v14<PgSQL_STMT_Global_info>::ref_count_client(unsigned long, int, bool);
+
+
 template uint32_t Base_STMTs_local_v14<MySQL_STMTs_local_v14>::generate_new_client_stmt_id(unsigned long);
 template bool Base_STMTs_local_v14<MySQL_STMTs_local_v14>::client_close(unsigned int);
 template uint64_t Base_STMTs_local_v14<MySQL_STMTs_local_v14>::find_global_stmt_id_from_client(unsigned int);
 template uint64_t Base_STMTs_local_v14<MySQL_STMTs_local_v14>::compute_hash(char*, char*, char*, unsigned int);
+
+template uint32_t Base_STMTs_local_v14<PgSQL_STMTs_local_v14>::generate_new_client_stmt_id(unsigned long);
+template bool Base_STMTs_local_v14<PgSQL_STMTs_local_v14>::client_close(unsigned int);
+template uint64_t Base_STMTs_local_v14<PgSQL_STMTs_local_v14>::find_global_stmt_id_from_client(unsigned int);
+template uint64_t Base_STMTs_local_v14<PgSQL_STMTs_local_v14>::compute_hash(char*, char*, char*, unsigned int);
 
 extern MySQL_STMT_Manager_v14 *GloMyStmt;
 

@@ -473,8 +473,16 @@ MySQL_STMT_Global_info::~MySQL_STMT_Global_info() {
 	free(username);
 	free(schemaname);
 	free(query);
+	username = NULL;
+	schemaname = NULL;
+	query = NULL;
 	if (first_comment) {
 		free(first_comment);
+		first_comment = NULL;
+	}
+	if (digest_text) {
+		free(digest_text);
+		digest_text = NULL;
 	}
 	if (num_columns) {
 		uint16_t i;
@@ -521,10 +529,6 @@ MySQL_STMT_Global_info::~MySQL_STMT_Global_info() {
 		}
 		free(params);
 		params = NULL;
-	}
-	if (digest_text) {
-		free(digest_text);
-		digest_text = NULL;
 	}
 }
 

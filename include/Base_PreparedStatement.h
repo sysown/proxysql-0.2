@@ -252,7 +252,7 @@ class Base_STMTs_local_v14 {
 	}
 */
 	friend class MySQL_STMTs_local_v14;
-
+	friend class PgSQL_STMTs_local_v14;
 };
 
 template <typename SGI>
@@ -291,6 +291,7 @@ class Base_STMT_Manager_v14 {
 	//void get_memory_usage(uint64_t& prep_stmt_metadata_mem_usage, uint64_t& prep_stmt_backend_mem_usage);
 
 	friend class MySQL_STMT_Manager_v14;
+	friend class PgSQL_STMT_Manager_v14;
 };
 
 #endif // CLASS_BASE_PREPARED_STATEMENT_H

@@ -42,43 +42,9 @@ To summarie the most important classes:
 // it include all metadata associated with it
 
 class MySQL_STMT_Global_info : public Base_STMT_Global_info {
-#if 0
-	private:
-	void compute_hash();
-#endif // 0
 	public:
-#if 0
-	pthread_rwlock_t rwlock_;
-	uint64_t digest;
-	MYSQL_COM_QUERY_command MyComQueryCmd;
-#endif // 0
 	MYSQL_COM_QUERY_command MyComQueryCmd = MYSQL_COM_QUERY__UNINITIALIZED;
-#if 0
-	char * digest_text;
-	uint64_t hash;
-	char *username;
-	char *schemaname;
-	char *query;
-	unsigned int query_length;
-//	unsigned int hostgroup_id;
-	int ref_count_client;
-	int ref_count_server;
-	uint64_t statement_id;
-	uint16_t num_columns;
-	uint16_t num_params;
-	uint16_t warning_count;
-#endif // 0
 	MYSQL_FIELD **fields;
-#if 0
-	char* first_comment;
-	uint64_t total_mem_usage;
-//	struct {
-//		int cache_ttl;
-//		int timeout;
-//		int delay;
-//	} properties;
-	bool is_select_NOT_for_update;
-#endif // 0
 	MYSQL_BIND **params; // seems unused (?)
 	MySQL_STMT_Global_info(uint64_t id, char *u, char *s, char *q, unsigned int ql, char *fc, MYSQL_STMT *stmt, uint64_t _h);
 	void update_metadata(MYSQL_STMT *stmt);
@@ -194,41 +160,12 @@ class MySQL_STMTs_meta {
 // class MySQL_STMTs_local associates a global statement ID with a local statement ID for a specific connection
 
 class MySQL_STMTs_local_v14 : public Base_STMTs_local_v14<MySQL_STMTs_local_v14> {
-#if 0
-	private:
-	bool is_client_;
-	std::stack<uint32_t> free_client_ids;
-	uint32_t local_max_stmt_id;
-	public:
-	// this map associate client_stmt_id to global_stmt_id : this is used only for client connections
-	std::map<uint32_t, uint64_t> client_stmt_to_global_ids;
-	// this multimap associate global_stmt_id to client_stmt_id : this is used only for client connections
-	std::multimap<uint64_t, uint32_t> global_stmt_to_client_ids;
-
-	// this map associate backend_stmt_id to global_stmt_id : this is used only for backend connections
-	std::map<uint32_t, uint64_t> backend_stmt_to_global_ids;
-	// this map associate global_stmt_id to backend_stmt_id : this is used only for backend connections
-	std::map<uint64_t, uint32_t> global_stmt_to_backend_ids;
-#endif // 0
-
 	public:
 	std::map<uint64_t, MYSQL_STMT *> global_stmt_to_backend_stmt = std::map<uint64_t, MYSQL_STMT *>();
 
 	MySQL_Session *sess = NULL;
 	MySQL_STMTs_local_v14(bool _ic) {
-/*
-		local_max_stmt_id = 0;
-		sess = NULL;
-*/
-		is_client_ = _ic;
-/*
-		client_stmt_to_global_ids = std::map<uint32_t, uint64_t>();
-		global_stmt_to_client_ids = std::multimap<uint64_t, uint32_t>();
-		backend_stmt_to_global_ids = std::map<uint32_t, uint64_t>();
-		global_stmt_to_backend_ids = std::map<uint64_t, uint32_t>();
-		global_stmt_to_backend_stmt = std::map<uint64_t, MYSQL_STMT *>();
-		free_client_ids = std::stack<uint32_t>();
-*/
+	is_client_ = _ic;
 	}
 	void set_is_client(MySQL_Session *_s) {
 		sess=_s;
@@ -239,13 +176,6 @@ class MySQL_STMTs_local_v14 : public Base_STMTs_local_v14<MySQL_STMTs_local_v14>
 		return is_client_;
 	}
 	void backend_insert(uint64_t global_statement_id, MYSQL_STMT *stmt);
-/*
-	uint64_t compute_hash(char *user, char *schema, char *query, unsigned int query_length);
-	unsigned int get_num_backend_stmts() { return backend_stmt_to_global_ids.size(); }
-	uint32_t generate_new_client_stmt_id(uint64_t global_statement_id);
-	uint64_t find_global_stmt_id_from_client(uint32_t client_stmt_id);
-	bool client_close(uint32_t client_statement_id);
-*/
 	MYSQL_STMT * find_backend_stmt_by_global_id(uint32_t global_statement_id) {
 		auto s=global_stmt_to_backend_stmt.find(global_statement_id);
 		if (s!=global_stmt_to_backend_stmt.end()) {	// found
@@ -256,43 +186,10 @@ class MySQL_STMTs_local_v14 : public Base_STMTs_local_v14<MySQL_STMTs_local_v14>
 };
 
 class MySQL_STMT_Manager_v14 : public Base_STMT_Manager_v14<MySQL_STMT_Global_info> {
-#if 0
-	private:
-	uint64_t next_statement_id;
-	uint64_t num_stmt_with_ref_client_count_zero;
-	uint64_t num_stmt_with_ref_server_count_zero;
-	pthread_rwlock_t rwlock_;
-	std::map<uint64_t, MySQL_STMT_Global_info *> map_stmt_id_to_info;	// map using statement id
-	std::map<uint64_t, MySQL_STMT_Global_info *> map_stmt_hash_to_info;	// map using hashes
-	std::stack<uint64_t> free_stmt_ids;
-	struct {
-		uint64_t c_unique;
-		uint64_t c_total;
-		uint64_t stmt_max_stmt_id;
-		uint64_t cached;
-		uint64_t s_unique;
-		uint64_t s_total;
-	} statuses;
-	time_t last_purge_time;
-#endif // 0
 	public:
 	MySQL_STMT_Manager_v14();
 	~MySQL_STMT_Manager_v14();
-#if 0
-	//MySQL_STMT_Global_info * find_prepared_statement_by_hash(uint64_t hash, bool lock=true); // removed in 2.3
-	MySQL_STMT_Global_info * find_prepared_statement_by_hash(uint64_t hash);
-	MySQL_STMT_Global_info * find_prepared_statement_by_stmt_id(uint64_t id, bool lock=true);
-	void rdlock() { pthread_rwlock_rdlock(&rwlock_); }
-	void wrlock() { pthread_rwlock_wrlock(&rwlock_); }
-	void unlock() { pthread_rwlock_unlock(&rwlock_); }
-	void ref_count_client(uint64_t _stmt, int _v, bool lock=true);
-	void ref_count_server(uint64_t _stmt, int _v, bool lock=true);
-#endif // 0
 	MySQL_STMT_Global_info * add_prepared_statement(char *u, char *s, char *q, unsigned int ql, char *fc, MYSQL_STMT *stmt, bool lock=true);
-#if 0
-	void get_metrics(uint64_t *c_unique, uint64_t *c_total, uint64_t *stmt_max_stmt_id, uint64_t *cached, uint64_t *s_unique, uint64_t *s_total);
-	SQLite3_result * get_prepared_statements_global_infos();
-#endif // 0
 	void get_memory_usage(uint64_t& prep_stmt_metadata_mem_usage, uint64_t& prep_stmt_backend_mem_usage);
 };
 
