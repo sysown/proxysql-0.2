@@ -22,6 +22,7 @@ using json = nlohmann::json;
 
 #include "ProxySQL_Statistics.hpp"
 #include "MySQL_PreparedStatement.h"
+#include "PgSQL_PreparedStatement.h"
 #include "ProxySQL_Cluster.hpp"
 #include "MySQL_Logger.hpp"
 #include "PgSQL_Logger.hpp"
@@ -446,7 +447,9 @@ ProxySQL_Admin *GloAdmin;
 MySQL_Threads_Handler *GloMTH = NULL;
 PgSQL_Threads_Handler* GloPTH = NULL;
 Web_Interface *GloWebInterface;
+
 MySQL_STMT_Manager_v14 *GloMyStmt;
+PgSQL_STMT_Manager_v14 *GloPgStmt;
 
 MySQL_Monitor *GloMyMon;
 std::thread *MyMon_thread = NULL;

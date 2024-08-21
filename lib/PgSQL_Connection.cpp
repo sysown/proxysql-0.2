@@ -9,6 +9,7 @@ using json = nlohmann::json;
 #include "proxysql.h"
 #include "cpp.h"
 #include "MySQL_PreparedStatement.h"
+#include "PgSQL_PreparedStatement.h"
 #include "PgSQL_Data_Stream.h"
 #include "query_processor.h"
 #include "MySQL_Variables.h"
@@ -452,7 +453,7 @@ PgSQL_Connection_Placeholder::PgSQL_Connection_Placeholder() {
 	auto_increment_delay_token = 0;
 	processing_multi_statement=false;
 	proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 4, "Creating new PgSQL_Connection %p\n", this);
-	local_stmts=new MySQL_STMTs_local_v14(false); // false by default, it is a backend
+	local_stmts=new PgSQL_STMTs_local_v14(false); // false by default, it is a backend
 	bytes_info.bytes_recv = 0;
 	bytes_info.bytes_sent = 0;
 	statuses.questions = 0;
@@ -1459,7 +1460,7 @@ void PgSQL_Connection_Placeholder::reset() {
 	options.last_set_autocommit=-1; // never sent
 	warning_count=0;
 	delete local_stmts;
-	local_stmts=new MySQL_STMTs_local_v14(false);
+	local_stmts=new PgSQL_STMTs_local_v14(false);
 	creation_time = monotonic_time();
 
 	for (auto i = 0; i < SQL_NAME_LAST_HIGH_WM; i++) {

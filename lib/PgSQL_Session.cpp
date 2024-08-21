@@ -15,6 +15,7 @@ using json = nlohmann::json;
 #include "MySQL_Data_Stream.h"
 #include "query_processor.h"
 #include "MySQL_PreparedStatement.h"
+#include "PgSQL_PreparedStatement.h"
 #include "PgSQL_Logger.hpp"
 #include "StatCounters.h"
 #include "PgSQL_Authentication.h"
@@ -134,6 +135,7 @@ extern MySQL_LDAP_Authentication* GloMyLdapAuth;
 extern ProxySQL_Admin* GloAdmin;
 extern PgSQL_Logger* GloPgSQL_Logger;
 extern MySQL_STMT_Manager_v14* GloMyStmt;
+extern PgSQL_STMT_Manager_v14* GloPgStmt;
 
 extern SQLite3_Server* GloSQLite3Server;
 
@@ -1447,7 +1449,7 @@ int PgSQL_Session::handler_again___status_RESETTING_CONNECTION() {
 	myds->DSS = STATE_MARIADB_QUERY;
 	// we recreate local_stmts : see issue #752
 	delete myconn->local_stmts;
-	myconn->local_stmts = new MySQL_STMTs_local_v14(false); // false by default, it is a backend
+	myconn->local_stmts = new PgSQL_STMTs_local_v14(false); // false by default, it is a backend
 	int rc = myconn->async_reset_session(myds->revents);
 	if (rc == 0) {
 		//__sync_fetch_and_add(&PgHGM->status.backend_change_user, 1);
@@ -2621,7 +2623,7 @@ bool PgSQL_Session::handler_again___status_RESETTING_CONNECTION(int* _rc) {
 	}
 	// we recreate local_stmts : see issue #752
 	delete myconn->local_stmts;
-	myconn->local_stmts = new MySQL_STMTs_local_v14(false); // false by default, it is a backend
+	myconn->local_stmts = new PgSQL_STMTs_local_v14(false); // false by default, it is a backend
 	if (pgsql_thread___connect_timeout_server_max) {
 		if (mybe->server_myds->max_connect_time == 0) {
 			mybe->server_myds->max_connect_time = thread->curtime + pgsql_thread___connect_timeout_server_max * 1000;
@@ -2775,7 +2777,7 @@ void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 		}
 		mybe = find_or_create_backend(current_hostgroup);
 		if (client_myds->myconn->local_stmts == NULL) {
-			client_myds->myconn->local_stmts = new MySQL_STMTs_local_v14(true);
+			client_myds->myconn->local_stmts = new PgSQL_STMTs_local_v14(true);
 		}
 		uint64_t hash = client_myds->myconn->local_stmts->compute_hash(
 			(char*)client_myds->myconn->userinfo->username,
@@ -3340,6 +3342,53 @@ __get_pkts_from_client:
 					else {
 						char command = c = *((unsigned char*)pkt.ptr + 0);
 						switch (command) {
+						case 'P':
+						{
+							// A lot of temporary code here. This will be moved on its own function
+							const int32_t message_length = read_big_endian_int32((char *)pkt.ptr + 1);
+							if (message_length != (pkt.size -1)) {
+								l_free(pkt.size, pkt.ptr);
+								handler_ret = -1;
+								return handler_ret;
+							}
+							size_t bytes_left = message_length - 4;
+							const char *stmt_name = (char *)pkt.ptr + 5;
+							const size_t stmt_name_len = strnlen(stmt_name, bytes_left);
+							if (stmt_name_len == bytes_left) {
+								l_free(pkt.size, pkt.ptr);
+								handler_ret = -1;
+								return handler_ret;
+							}
+							bytes_left -= stmt_name_len;
+							bytes_left--;
+							const char *query = stmt_name + stmt_name_len + 1;
+							const size_t query_len = strnlen(query, bytes_left);
+							if (query_len == bytes_left) {
+								l_free(pkt.size, pkt.ptr);
+								handler_ret = -1;
+								return handler_ret;
+							}
+							bytes_left -= query_len;
+							bytes_left--;
+							if (bytes_left < 2) {
+								l_free(pkt.size, pkt.ptr);
+								handler_ret = -1;
+								return handler_ret;
+							}
+							const char * num_params_ptr = query + query_len + 1;
+							int16_t num_params = read_big_endian_int16(num_params_ptr);
+							bytes_left -= sizeof(int16_t);
+							if (bytes_left != num_params * sizeof(int32_t)) {
+								l_free(pkt.size, pkt.ptr);
+								handler_ret = -1;
+								return handler_ret;
+							}
+							proxy_info("Received Parse command for stmt named \"%s\" , query \"%s\" , with %d parameters\n", stmt_name, query, num_params);
+							l_free(pkt.size, pkt.ptr);
+							handler_ret = -1;
+							return handler_ret;
+							break;
+						}
 						case 'Q':
 						{
 							__sync_add_and_fetch(&thread->status_variables.stvar[st_var_queries], 1);
@@ -4025,7 +4074,9 @@ bool PgSQL_Session::handler_rc0_PROCESSING_STMT_PREPARE(enum session_status& st,
 		}
 	}
 	global_stmtid = stmt_info->statement_id;
+#if 0 // DISABLED FOR NOW
 	myds->myconn->local_stmts->backend_insert(global_stmtid, CurrentQuery.mysql_stmt);
+#endif // 0 , DISABLED FOR NOW
 	// We only perform the generation for a new 'client_stmt_id' when there is no previous status, this
 	// is, when 'PROCESSING_STMT_PREPARE' is reached directly without transitioning from a previous status
 	// like 'PROCESSING_STMT_EXECUTE'. The same condition needs to hold for setting 'stmt_client_id',
@@ -4565,6 +4616,7 @@ handler_again:
 						}
 					}
 					if (status == PROCESSING_STMT_EXECUTE) {
+#if 0 // DISABLED FOR NOW
 						CurrentQuery.mysql_stmt = myconn->local_stmts->find_backend_stmt_by_global_id(CurrentQuery.stmt_global_id);
 						if (CurrentQuery.mysql_stmt == NULL) {
 							MySQL_STMT_Global_info* stmt_info = NULL;
@@ -4585,6 +4637,7 @@ handler_again:
 								PROXY_TRACE();
 							}
 						}
+#endif // 0 , DISABLED FOR NOW
 					}
 				}
 			}

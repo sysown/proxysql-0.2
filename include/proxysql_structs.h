@@ -576,6 +576,8 @@ class PgSQL_HostGroups_Manager;
 class ProxySQL_HTTP_Server;
 class MySQL_STMTs_local_v14;
 class MySQL_STMT_Global_info;
+class PgSQL_STMTs_local_v14;
+class PgSQL_STMT_Global_info;
 class StmtLongDataHandler;
 class ProxySQL_Cluster;
 class MySQL_ResultSet;
