@@ -87,17 +87,6 @@ public:
 
 /* Issues with forward class declaration
 template<class T>
-using Query_Info_T = TypeSelector<T*>;
-*/
-template <class T>
-class Query_Info_T : public TypeSelector<T> {
-public:
-	using TypeSelector<T>::TypeSelector;
-};
-#define TO_QUERY_INFO(query_info) Query_Info_T<decltype(query_info)>(query_info)
-
-/* Issues with forward class declaration
-template<class T>
 using Data_Stream_T = TypeSelector<T*>;
 */
 template <class T>

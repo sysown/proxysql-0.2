@@ -3170,7 +3170,7 @@ void MySQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 		if (thread->variables.stats_time_query_processor) {
 			clock_gettime(CLOCK_THREAD_CPUTIME_ID,&begint);
 		}
-		qpo=GloQPro->process_mysql_query(TO_CLIENT_SESSION(this),pkt.ptr,pkt.size,TO_QUERY_INFO(&CurrentQuery));
+		qpo=GloQPro->process_mysql_query(this, pkt.ptr,pkt.size, &CurrentQuery);
 		if (thread->variables.stats_time_query_processor) {
 			clock_gettime(CLOCK_THREAD_CPUTIME_ID,&endt);
 			thread->status_variables.stvar[st_var_query_processor_time] = thread->status_variables.stvar[st_var_query_processor_time] +
@@ -3314,7 +3314,7 @@ void MySQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 		if (thread->variables.stats_time_query_processor) {
 			clock_gettime(CLOCK_THREAD_CPUTIME_ID,&begint);
 		}
-		qpo=GloQPro->process_mysql_query(TO_CLIENT_SESSION(this),NULL,0,TO_QUERY_INFO(&CurrentQuery));
+		qpo=GloQPro->process_mysql_query(this, NULL, 0, &CurrentQuery);
 		if (qpo->max_lag_ms >= 0) {
 			thread->status_variables.stvar[st_var_queries_with_max_lag_ms]++;
 		}
@@ -4051,7 +4051,7 @@ __get_pkts_from_client:
 									if (thread->variables.stats_time_query_processor) {
 										clock_gettime(CLOCK_THREAD_CPUTIME_ID,&begint);
 									}
-									qpo=GloQPro->process_mysql_query(TO_CLIENT_SESSION(this),pkt.ptr,pkt.size,TO_QUERY_INFO(&CurrentQuery));
+									qpo=GloQPro->process_mysql_query(this, pkt.ptr, pkt.size, &CurrentQuery);
 									if (thread->variables.stats_time_query_processor) {
 										clock_gettime(CLOCK_THREAD_CPUTIME_ID,&endt);
 										thread->status_variables.stvar[st_var_query_processor_time]=thread->status_variables.stvar[st_var_query_processor_time] +

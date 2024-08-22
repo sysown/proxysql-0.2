@@ -1468,8 +1468,8 @@ SQLite3_result * Query_Processor::get_query_digests_reset() {
 	return result;
 }
 
-template<class T, class U>
-Query_Processor_Output * Query_Processor::process_mysql_query(Client_Session<T> sess, void *ptr, unsigned int size, Query_Info_T<U> qi) {
+template<typename S, typename QI>
+Query_Processor_Output * Query_Processor::process_mysql_query(S * sess, void *ptr, unsigned int size, QI * qi) {
 	// NOTE: if ptr == NULL , we are calling process_mysql_query() on an STMT_EXECUTE
 	// to avoid unnecssary deallocation/allocation, we initialize qpo witout new allocation
 	Query_Processor_Output *ret=sess->qpo;
@@ -3423,13 +3423,13 @@ void Query_Processor_Output::get_info_json(json& j) {
 }
 
 template 
-Query_Processor_Output* Query_Processor::process_mysql_query<MySQL_Session*, Query_Info*>(Client_Session<MySQL_Session*>, void*, unsigned int, Query_Info_T<Query_Info*>);
+Query_Processor_Output* Query_Processor::process_mysql_query<MySQL_Session, Query_Info>(MySQL_Session *, void*, unsigned int, Query_Info *);
 
 template
 unsigned long long Query_Processor::query_parser_update_counters<MySQL_Session*>(Client_Session<MySQL_Session*>, MYSQL_COM_QUERY_command, __SQP_query_parser_t*, unsigned long long);
 
 template
-Query_Processor_Output* Query_Processor::process_mysql_query<PgSQL_Session*, PgSQL_Query_Info*>(Client_Session<PgSQL_Session*>, void*, unsigned int, Query_Info_T<PgSQL_Query_Info*>);
+Query_Processor_Output* Query_Processor::process_mysql_query<PgSQL_Session, PgSQL_Query_Info>(PgSQL_Session *, void*, unsigned int, PgSQL_Query_Info *);
 
 template
 unsigned long long Query_Processor::query_parser_update_counters<PgSQL_Session*>(Client_Session<PgSQL_Session*>, MYSQL_COM_QUERY_command, __SQP_query_parser_t*, unsigned long long);
