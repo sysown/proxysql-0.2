@@ -7,7 +7,11 @@ int main() {
   //const char * conninfo = "host=127.0.0.1 port=15432 dbname=postgres user=postgres password=postgres";
   //const char * conninfo = "host=127.0.0.1 port=6133 dbname=postgres user=postgres password=postgres sslmode=disable";
   //const char * conninfo = "host=127.0.0.1 port=5432 dbname=postgres user=postgres password=postgres sslmode=disable";
-  const char * conninfo = "host=127.0.0.1 port=15432 dbname=postgres user=postgres password=postgres sslmode=disable";
+  char * conninfo = (char *)"host=127.0.0.1 port=15432 dbname=postgres user=postgres password=postgres sslmode=disable";
+
+  if (getenv("PGCONN") != NULL) {
+	conninfo = getenv("PGCONN");
+  }
 
   // Connect to the PostgreSQL server
   PGconn* conn = PQconnectdb(conninfo);
@@ -32,7 +36,7 @@ int main() {
 
   // Execute the prepared statement
   const char* params[1] = {"123"};  // Assuming id=123
-  PGresult* exec_result = PQexecPrepared(conn, statement_name, 1, params, NULL, NULL, NULL);
+  PGresult* exec_result = PQexecPrepared(conn, statement_name, 1, params, NULL, NULL, 0);
 
   if (PQresultStatus(exec_result) != PGRES_TUPLES_OK) {
     fprintf(stderr, "Execution failed: %s\n", PQresultErrorMessage(exec_result));
