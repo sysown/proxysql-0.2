@@ -71,8 +71,9 @@ public:
 	unsigned long long start_time;
 	unsigned long long end_time;
 
-	MYSQL_STMT* mysql_stmt;
-	stmt_execute_metadata_t* stmt_meta;
+	MYSQL_STMT* mysql_stmt; // FIXME: to be removed
+	unsigned char *stmt_name = NULL;
+	stmt_execute_metadata_t* stmt_meta; // FIXME: to be removed
 	uint64_t stmt_global_id;
 	uint64_t stmt_client_id;
 	MySQL_STMT_Global_info* stmt_info;
@@ -218,7 +219,8 @@ private:
 	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_RESET(PtrSize_t&);
 	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_CLOSE(PtrSize_t&);
 	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_SEND_LONG_DATA(PtrSize_t&);
-	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_PREPARE(PtrSize_t& pkt);
+	bool is_valid_PGSQL_PARSE_pkt(PtrSize_t& pkt);
+	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_PARSE(PtrSize_t& pkt);
 	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_EXECUTE(PtrSize_t& pkt);
 
 	// these functions have code that used to be inline, and split into functions for readibility

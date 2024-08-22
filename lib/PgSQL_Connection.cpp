@@ -452,7 +452,7 @@ PgSQL_Connection_Placeholder::PgSQL_Connection_Placeholder() {
 	creation_time=0;
 	auto_increment_delay_token = 0;
 	processing_multi_statement=false;
-	proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 4, "Creating new PgSQL_Connection %p\n", this);
+	proxy_debug(PROXY_DEBUG_PGSQL_CONNPOOL, 4, "Creating new PgSQL_Connection %p\n", this);
 	local_stmts=new PgSQL_STMTs_local_v14(false); // false by default, it is a backend
 	bytes_info.bytes_recv = 0;
 	bytes_info.bytes_sent = 0;
@@ -464,7 +464,7 @@ PgSQL_Connection_Placeholder::PgSQL_Connection_Placeholder() {
 };
 
 PgSQL_Connection_Placeholder::~PgSQL_Connection_Placeholder() {
-	proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 4, "Destroying PgSQL_Connection %p\n", this);
+	proxy_debug(PROXY_DEBUG_PGSQL_CONNPOOL, 4, "Destroying PgSQL_Connection %p\n", this);
 	if (options.server_version) free(options.server_version);
 	if (options.init_connect) free(options.init_connect);
 	if (options.ldap_user_variable) free(options.ldap_user_variable);
@@ -531,13 +531,13 @@ PgSQL_Connection_Placeholder::~PgSQL_Connection_Placeholder() {
 };
 
 bool PgSQL_Connection_Placeholder::set_autocommit(bool _ac) {
-	proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 4, "Setting autocommit %d\n", _ac);
+	proxy_debug(PROXY_DEBUG_PGSQL_CONNPOOL, 4, "Setting autocommit %d\n", _ac);
 	options.autocommit=_ac;
 	return _ac;
 }
 
 bool PgSQL_Connection_Placeholder::set_no_backslash_escapes(bool _ac) {
-	proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 4, "Setting no_backslash_escapes %d\n", _ac);
+	proxy_debug(PROXY_DEBUG_PGSQL_CONNPOOL, 4, "Setting no_backslash_escapes %d\n", _ac);
 	options.no_backslash_escapes=_ac;
 	return _ac;
 }
@@ -545,7 +545,7 @@ bool PgSQL_Connection_Placeholder::set_no_backslash_escapes(bool _ac) {
 void print_backtrace(void);
 
 unsigned int PgSQL_Connection_Placeholder::set_charset(unsigned int _c, enum pgsql_charset_action action) {
-	proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 4, "Setting charset %d\n", _c);
+	proxy_debug(PROXY_DEBUG_PGSQL_CONNPOOL, 4, "Setting charset %d\n", _c);
 
 	// SQL_CHARACTER_SET should be set befor setting SQL_CHRACTER_ACTION
 	std::stringstream ss;
@@ -675,7 +675,7 @@ void PgSQL_Connection_Placeholder::initdb_start() {
 }
 
 void PgSQL_Connection_Placeholder::initdb_cont(short event) {
-	proxy_debug(PROXY_DEBUG_MYSQL_PROTOCOL, 6,"event=%d\n", event);
+	proxy_debug(PROXY_DEBUG_PGSQL_PROTOCOL, 6,"event=%d\n", event);
 	async_exit_status = mysql_select_db_cont(&interr,pgsql, mysql_status(event, true));
 }
 
@@ -688,7 +688,7 @@ void PgSQL_Connection_Placeholder::set_option_start() {
 }
 
 void PgSQL_Connection_Placeholder::set_option_cont(short event) {
-	proxy_debug(PROXY_DEBUG_MYSQL_PROTOCOL, 6,"event=%d\n", event);
+	proxy_debug(PROXY_DEBUG_PGSQL_PROTOCOL, 6,"event=%d\n", event);
 	async_exit_status = mysql_set_server_option_cont(&interr,pgsql, mysql_status(event, true));
 }
 
@@ -698,7 +698,7 @@ void PgSQL_Connection_Placeholder::set_autocommit_start() {
 }
 
 void PgSQL_Connection_Placeholder::set_autocommit_cont(short event) {
-	proxy_debug(PROXY_DEBUG_MYSQL_PROTOCOL, 6,"event=%d\n", event);
+	proxy_debug(PROXY_DEBUG_PGSQL_PROTOCOL, 6,"event=%d\n", event);
 	async_exit_status = mysql_autocommit_cont(&ret_bool, pgsql, mysql_status(event, true));
 }
 
@@ -715,7 +715,7 @@ void PgSQL_Connection_Placeholder::set_names_start() {
 }
 
 void PgSQL_Connection_Placeholder::set_names_cont(short event) {
-	proxy_debug(PROXY_DEBUG_MYSQL_PROTOCOL, 6,"event=%d\n", event);
+	proxy_debug(PROXY_DEBUG_PGSQL_PROTOCOL, 6,"event=%d\n", event);
 	async_exit_status = mysql_set_character_set_cont(&interr,pgsql, mysql_status(event, true));
 }
 
@@ -739,7 +739,7 @@ void PgSQL_Connection_Placeholder::stmt_prepare_start() {
 }
 
 void PgSQL_Connection_Placeholder::stmt_prepare_cont(short event) {
-	proxy_debug(PROXY_DEBUG_MYSQL_PROTOCOL, 6,"event=%d\n", event);
+	proxy_debug(PROXY_DEBUG_PGSQL_PROTOCOL, 6,"event=%d\n", event);
 	async_exit_status = mysql_stmt_prepare_cont(&interr , query.stmt , mysql_status(event, true));
 }
 
@@ -761,7 +761,7 @@ void PgSQL_Connection_Placeholder::stmt_execute_start() {
 }
 
 void PgSQL_Connection_Placeholder::stmt_execute_cont(short event) {
-	proxy_debug(PROXY_DEBUG_MYSQL_PROTOCOL, 6,"event=%d\n", event);
+	proxy_debug(PROXY_DEBUG_PGSQL_PROTOCOL, 6,"event=%d\n", event);
 	async_exit_status = mysql_stmt_execute_cont(&interr , query.stmt , mysql_status(event, true));
 }
 
@@ -771,7 +771,7 @@ void PgSQL_Connection_Placeholder::stmt_execute_store_result_start() {
 }
 
 void PgSQL_Connection_Placeholder::stmt_execute_store_result_cont(short event) {
-	proxy_debug(PROXY_DEBUG_MYSQL_PROTOCOL, 6,"event=%d\n", event);
+	proxy_debug(PROXY_DEBUG_PGSQL_PROTOCOL, 6,"event=%d\n", event);
 	async_exit_status = mysql_stmt_store_result_cont(&interr , query.stmt , mysql_status(event, true));
 }
 
@@ -782,7 +782,7 @@ void PgSQL_Connection_Placeholder::store_result_start() {
 }
 
 void PgSQL_Connection_Placeholder::store_result_cont(short event) {
-	proxy_debug(PROXY_DEBUG_MYSQL_PROTOCOL, 6,"event=%d\n", event);
+	proxy_debug(PROXY_DEBUG_PGSQL_PROTOCOL, 6,"event=%d\n", event);
 	async_exit_status = mysql_store_result_cont(&mysql_result , pgsql , mysql_status(event, true));
 }
 #endif // PROXYSQL_USE_RESULT
@@ -1622,7 +1622,7 @@ PG_ASYNC_ST PgSQL_Connection::handler(short event) {
 		}
 	}
 handler_again:
-	proxy_debug(PROXY_DEBUG_MYSQL_PROTOCOL, 6, "async_state_machine=%d\n", async_state_machine);
+	proxy_debug(PROXY_DEBUG_PGSQL_PROTOCOL, 6, "async_state_machine=%d\n", async_state_machine);
 	switch (async_state_machine) {
 	case ASYNC_CONNECT_START:
 		connect_start();
@@ -2135,7 +2135,7 @@ void PgSQL_Connection::query_start() {
 
 void PgSQL_Connection::query_cont(short event) {
 	PROXY_TRACE();
-	proxy_debug(PROXY_DEBUG_MYSQL_PROTOCOL, 6, "event=%d\n", event);
+	proxy_debug(PROXY_DEBUG_PGSQL_PROTOCOL, 6, "event=%d\n", event);
 	reset_error();
 	async_exit_status = PG_EVENT_NONE;
 	if (event & POLLOUT) {
@@ -2752,7 +2752,7 @@ void PgSQL_Connection::reset_session_start() {
 
 void PgSQL_Connection::reset_session_cont(short event) {
 	PROXY_TRACE();
-	proxy_debug(PROXY_DEBUG_MYSQL_PROTOCOL, 6, "event=%d\n", event);
+	proxy_debug(PROXY_DEBUG_PGSQL_PROTOCOL, 6, "event=%d\n", event);
 	reset_error();
 	async_exit_status = PG_EVENT_NONE;
 	if (event & POLLOUT) {
