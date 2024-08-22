@@ -1475,37 +1475,75 @@ Query_Processor_Output * Query_Processor::process_mysql_query(S * sess, void *pt
 	Query_Processor_Output *ret=sess->qpo;
 	ret->init();
 
-
+/*
+	// Conditional initialization based on derived class
+	if constexpr (std::is_same_v<S, MySQL_Session>) {
+		sess_STMTs_meta = new MySQL_STMTs_meta();
+		SLDH = new StmtLongDataHandler();
+	} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
+		sess_STMTs_meta = NULL;
+		SLDH = NULL;
+	} else {
+		assert(0);
+	}
+*/
 	SQP_par_t stmt_exec_qp;
 	SQP_par_t *qp=NULL;
 	if (qi) {
-		// NOTE: if ptr == NULL , we are calling process_mysql_query() on an STMT_EXECUTE
-		if (ptr) {
-			qp=(SQP_par_t *)&qi->QueryParserArgs;
+		if constexpr (std::is_same_v<S, MySQL_Session>) {
+			// NOTE: if ptr == NULL , we are calling process_mysql_query() on an STMT_EXECUTE
+			if (ptr) {
+				qp=(SQP_par_t *)&qi->QueryParserArgs;
+			} else {
+				qp=&stmt_exec_qp;
+				qp->digest = qi->stmt_info->digest;
+				qp->digest_text = qi->stmt_info->digest_text;
+				qp->first_comment = qi->stmt_info->first_comment;
+			}
+		} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
+			if (ptr) {
+				qp=(SQP_par_t *)&qi->QueryParserArgs;
+			} else {
+				assert(0); // FIXME
+			}
 		} else {
-			qp=&stmt_exec_qp;
-			qp->digest = qi->stmt_info->digest;
-			qp->digest_text = qi->stmt_info->digest_text;
-			qp->first_comment = qi->stmt_info->first_comment;
+			assert(0);
 		}
 	}
 #define stackbuffer_size 128
 	char stackbuffer[stackbuffer_size];
 	unsigned int len=0;
 	char *query=NULL;
-	// NOTE: if ptr == NULL , we are calling process_mysql_query() on an STMT_EXECUTE
-	if (ptr) {
-		len = size-sizeof(mysql_hdr)-1;
-		if (len < stackbuffer_size) {
-			query=stackbuffer;
+	if constexpr (std::is_same_v<S, MySQL_Session>) {
+		// NOTE: if ptr == NULL , we are calling process_mysql_query() on an STMT_EXECUTE
+		if (ptr) {
+			len = size-sizeof(mysql_hdr)-1;
+			if (len < stackbuffer_size) {
+				query=stackbuffer;
+			} else {
+				query=(char *)l_alloc(len+1);
+			}
+			memcpy(query,(char *)ptr+sizeof(mysql_hdr)+1,len);
+			query[len]=0;
 		} else {
-			query=(char *)l_alloc(len+1);
+			query = qi->stmt_info->query;
+			len = qi->stmt_info->query_length;
 		}
-		memcpy(query,(char *)ptr+sizeof(mysql_hdr)+1,len);
-		query[len]=0;
+	} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
+		if (ptr) {
+			len = qi->QueryLength;
+			if (len < stackbuffer_size) {
+				query=stackbuffer;
+			} else {
+				query=(char *)l_alloc(len+1);
+			}
+			memcpy(query, qi->QueryPointer, len);
+			query[len]=0;
+		} else {
+			assert(0); // FIXME
+		}
 	} else {
-		query = qi->stmt_info->query;
-		len = qi->stmt_info->query_length;
+		assert(0);
 	}
 	if (__sync_add_and_fetch(&version,0) > _thr_SQP_version) {
 		// update local rules;
