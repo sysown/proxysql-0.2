@@ -430,12 +430,9 @@ PgSQL_Connection_Placeholder::PgSQL_Connection_Placeholder() {
 	options.no_backslash_escapes=false;
 	options.init_connect=NULL;
 	options.init_connect_sent=false;
-	options.session_track_gtids = NULL;
-	options.session_track_gtids_sent = false;
 	options.ldap_user_variable=NULL;
 	options.ldap_user_variable_value=NULL;
 	options.ldap_user_variable_sent=false;
-	options.session_track_gtids_int=0;
 	compression_pkt_id=0;
 	mysql_result=NULL;
 	query.ptr=NULL;
@@ -459,7 +456,6 @@ PgSQL_Connection_Placeholder::PgSQL_Connection_Placeholder() {
 	statuses.questions = 0;
 	statuses.myconnpoll_get = 0;
 	statuses.myconnpoll_put = 0;
-	memset(gtid_uuid,0,sizeof(gtid_uuid));
 	memset(&connected_host_details, 0, sizeof(connected_host_details));
 };
 
@@ -505,11 +501,6 @@ PgSQL_Connection_Placeholder::~PgSQL_Connection_Placeholder() {
 	}
 	if (query.stmt) {
 		query.stmt=NULL;
-	}
-
-	if (options.session_track_gtids) {
-		free(options.session_track_gtids);
-		options.session_track_gtids=NULL;
 	}
 
 	for (auto i = 0; i < SQL_NAME_LAST_HIGH_WM; i++) {
@@ -1487,46 +1478,7 @@ void PgSQL_Connection_Placeholder::reset() {
 		options.ldap_user_variable = NULL;
 		options.ldap_user_variable_sent = false;
 	}
-	options.session_track_gtids_int = 0;
-	if (options.session_track_gtids) {
-		free (options.session_track_gtids);
-		options.session_track_gtids = NULL;
-		options.session_track_gtids_sent = false;
-	}
 }
-
-bool PgSQL_Connection_Placeholder::get_gtid(char *buff, uint64_t *trx_id) {
-	// note: current implementation for for OWN GTID only!
-	bool ret = false;
-	if (buff==NULL || trx_id == NULL) {
-		return ret;
-	}
-	if (pgsql) {
-		if (pgsql->net.last_errno==0) { // only if there is no error
-			if (pgsql->server_status & SERVER_SESSION_STATE_CHANGED) { // only if status changed
-				const char *data;
-				size_t length;
-				if (mysql_session_track_get_first(pgsql, SESSION_TRACK_GTIDS, &data, &length) == 0) {
-					if (length >= (sizeof(gtid_uuid) - 1)) {
-						length = sizeof(gtid_uuid) - 1;
-					}
-					if (memcmp(gtid_uuid,data,length)) {
-						// copy to local buffer in PgSQL_Connection
-						memcpy(gtid_uuid,data,length);
-						gtid_uuid[length]=0;
-						// copy to external buffer in MySQL_Backend
-						memcpy(buff,data,length);
-						buff[length]=0;
-						__sync_fetch_and_add(&myds->sess->thread->status_variables.stvar[st_var_gtid_session_collected],1);
-						ret = true;
-					}
-				}
-			}
-		}
-	}
-	return ret;
-}
-
 
 
 PgSQL_Connection::PgSQL_Connection() {
@@ -1703,9 +1655,6 @@ handler_again:
 		myds->sess->thread->status_variables.stvar[st_var_queries_backends_bytes_sent] += query.length;
 		myds->bytes_info.bytes_sent += query.length;
 		bytes_info.bytes_sent += query.length;
-		if (myds->sess->with_gtid == true) {
-			__sync_fetch_and_add(&parent->queries_gtid_sync, 1);
-		}
 		if (async_exit_status) {
 			next_event(ASYNC_QUERY_CONT);
 		} else {

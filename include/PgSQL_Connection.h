@@ -303,17 +303,14 @@ class PgSQL_Connection_Placeholder {
 	public:
 	struct {
 		char *server_version;
-		uint32_t session_track_gtids_int;
 		uint32_t max_allowed_pkt;
 		uint32_t server_capabilities;
 		uint32_t client_flag;
 		unsigned int compression_min_length;
 		char *init_connect;
 		bool init_connect_sent;
-		char * session_track_gtids;
 		char *ldap_user_variable;
 		char *ldap_user_variable_value;
-		bool session_track_gtids_sent;
 		bool ldap_user_variable_sent;
 		uint8_t protocol_version;
 		int8_t last_set_autocommit;
@@ -392,7 +389,6 @@ class PgSQL_Connection_Placeholder {
 	bool multiplex_delayed;
 	bool unknown_transaction_status;
 	void compute_unknown_transaction_status();
-	char gtid_uuid[128];
 	PgSQL_Connection_Placeholder();
 	~PgSQL_Connection_Placeholder();
 	bool set_autocommit(bool);
@@ -455,7 +451,6 @@ class PgSQL_Connection_Placeholder {
 
 	void reset();
 
-	bool get_gtid(char *buff, uint64_t *trx_id);
 	void reduce_auto_increment_delay_token() { if (auto_increment_delay_token) auto_increment_delay_token--; };
 
 	bool match_tracked_options(const PgSQL_Connection *c);
