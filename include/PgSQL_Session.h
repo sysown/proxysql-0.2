@@ -76,7 +76,7 @@ public:
 	stmt_execute_metadata_t* stmt_meta; // FIXME: to be removed
 	uint64_t stmt_global_id;
 	uint64_t stmt_client_id;
-	MySQL_STMT_Global_info* stmt_info;
+	PgSQL_STMT_Global_info* stmt_info;
 
 	int QueryLength;
 	enum MYSQL_COM_QUERY_command MyComQueryCmd;
@@ -219,13 +219,13 @@ private:
 	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_SEND_LONG_DATA(PtrSize_t&);
 	bool is_valid_PGSQL_PARSE_pkt(PtrSize_t& pkt);
 	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_PARSE(PtrSize_t& pkt);
-	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_EXECUTE(PtrSize_t& pkt);
+	//void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_EXECUTE(PtrSize_t& pkt);
 
 	// these functions have code that used to be inline, and split into functions for readibility
 	int handler_ProcessingQueryError_CheckBackendConnectionStatus(PgSQL_Data_Stream* myds);
 	void SetQueryTimeout();
 	bool handler_rc0_PROCESSING_STMT_PREPARE(enum session_status& st, PgSQL_Data_Stream* myds, bool& prepared_stmt_with_no_params);
-	void handler_rc0_PROCESSING_STMT_EXECUTE(PgSQL_Data_Stream* myds);
+	//void handler_rc0_PROCESSING_STMT_EXECUTE(PgSQL_Data_Stream* myds);
 	bool handler_minus1_ClientLibraryError(PgSQL_Data_Stream* myds);
 	void handler_minus1_LogErrorDuringQuery(PgSQL_Connection* myconn);
 	bool handler_minus1_HandleErrorCodes(PgSQL_Data_Stream* myds, int& handler_ret);

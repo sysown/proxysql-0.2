@@ -11,6 +11,7 @@ using json = nlohmann::json;
 #include "cpp.h"
 
 #include "MySQL_PreparedStatement.h"
+#include "PgSQL_PreparedStatement.h"
 #include "PgSQL_Data_Stream.h"
 #include "MySQL_Data_Stream.h"
 #include "query_processor.h"
@@ -1475,18 +1476,6 @@ Query_Processor_Output * Query_Processor::process_mysql_query(S * sess, void *pt
 	Query_Processor_Output *ret=sess->qpo;
 	ret->init();
 
-/*
-	// Conditional initialization based on derived class
-	if constexpr (std::is_same_v<S, MySQL_Session>) {
-		sess_STMTs_meta = new MySQL_STMTs_meta();
-		SLDH = new StmtLongDataHandler();
-	} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
-		sess_STMTs_meta = NULL;
-		SLDH = NULL;
-	} else {
-		assert(0);
-	}
-*/
 	SQP_par_t stmt_exec_qp;
 	SQP_par_t *qp=NULL;
 	if (qi) {
@@ -2129,8 +2118,8 @@ enum MYSQL_COM_QUERY_command Query_Processor::query_parser_command_type(SQP_par_
 	return ret;
 }
 
-template<class T>
-unsigned long long Query_Processor::query_parser_update_counters(Client_Session<T> sess, enum MYSQL_COM_QUERY_command c, SQP_par_t *qp, unsigned long long t) {
+template<typename S>
+unsigned long long Query_Processor::query_parser_update_counters(S * sess, enum MYSQL_COM_QUERY_command c, SQP_par_t *qp, unsigned long long t) {
 	if (c>=MYSQL_COM_QUERY___NONE) return 0;
 	unsigned long long ret=_thr_commands_counters[c]->add_time(t);
 
@@ -2161,7 +2150,15 @@ unsigned long long Query_Processor::query_parser_update_counters(Client_Session<
 		myhash.Update(&sess->current_hostgroup,sizeof(sess->default_hostgroup));
 		myhash.Update(ca,strlen(ca));
 		myhash.Final(&qp->digest_total,&hash2);
-		update_query_digest(qp, sess->current_hostgroup, TO_CONNECTION_INFO(ui), t, sess->thread->curtime, NULL, sess);
+		if constexpr (std::is_same_v<S, MySQL_Session>) {
+			MySQL_STMT_Global_info *stmt_info = NULL;
+			update_query_digest(qp, sess->current_hostgroup, TO_CONNECTION_INFO(ui), t, sess->thread->curtime, stmt_info, sess);
+		} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
+			PgSQL_STMT_Global_info *stmt_info = NULL;
+			update_query_digest(qp, sess->current_hostgroup, TO_CONNECTION_INFO(ui), t, sess->thread->curtime, stmt_info, sess);
+		} else {
+			assert(0);
+		}
 	}
 	if (sess->CurrentQuery.stmt_info && sess->CurrentQuery.stmt_info->digest_text) {
 		uint64_t hash2;
@@ -2174,21 +2171,34 @@ unsigned long long Query_Processor::query_parser_update_counters(Client_Session<
 		auto *ui=sess->client_myds->myconn->userinfo;
 		assert(ui->username);
 		assert(ui->schemaname);
-		MySQL_STMT_Global_info *stmt_info=sess->CurrentQuery.stmt_info;
 		myhash.Update(ui->username,strlen(ui->username));
-		myhash.Update(&stmt_info->digest,sizeof(qp->digest));
+		if constexpr (std::is_same_v<S, MySQL_Session>) {
+			MySQL_STMT_Global_info *stmt_info=sess->CurrentQuery.stmt_info;
+			myhash.Update(&stmt_info->digest,sizeof(qp->digest));
+		} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
+			PgSQL_STMT_Global_info *stmt_info=sess->CurrentQuery.stmt_info;
+			myhash.Update(&stmt_info->digest,sizeof(qp->digest));
+		} else {
+			assert(0);
+		}
 		myhash.Update(ui->schemaname,strlen(ui->schemaname));
 		myhash.Update(&sess->current_hostgroup,sizeof(sess->default_hostgroup));
 		myhash.Update(ca,strlen(ca));
 		myhash.Final(&qp->digest_total,&hash2);
 		//delete myhash;
-		update_query_digest(qp, sess->current_hostgroup, TO_CONNECTION_INFO(ui), t, sess->thread->curtime, stmt_info, sess);
+		if constexpr (std::is_same_v<S, MySQL_Session>) {
+			MySQL_STMT_Global_info *stmt_info=sess->CurrentQuery.stmt_info;
+			update_query_digest(qp, sess->current_hostgroup, TO_CONNECTION_INFO(ui), t, sess->thread->curtime, stmt_info, sess);
+		} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
+			PgSQL_STMT_Global_info *stmt_info=sess->CurrentQuery.stmt_info;
+			update_query_digest(qp, sess->current_hostgroup, TO_CONNECTION_INFO(ui), t, sess->thread->curtime, stmt_info, sess);
+		}
 	}
 	return ret;
 }
 
-template<class T, class U>
-void Query_Processor::update_query_digest(SQP_par_t *qp, int hid, Connection_Info_T<U> ui, unsigned long long t, unsigned long long n, MySQL_STMT_Global_info *_stmt_info, Client_Session<T> sess) {
+template<typename S, class U, typename SGI>
+void Query_Processor::update_query_digest(SQP_par_t *qp, int hid, Connection_Info_T<U> ui, unsigned long long t, unsigned long long n, SGI *_stmt_info, S * sess) {
 	pthread_rwlock_wrlock(&digest_rwlock);
 	QP_query_digest_stats *qds;
 
@@ -3464,11 +3474,11 @@ template
 Query_Processor_Output* Query_Processor::process_mysql_query<MySQL_Session, Query_Info>(MySQL_Session *, void*, unsigned int, Query_Info *);
 
 template
-unsigned long long Query_Processor::query_parser_update_counters<MySQL_Session*>(Client_Session<MySQL_Session*>, MYSQL_COM_QUERY_command, __SQP_query_parser_t*, unsigned long long);
+unsigned long long Query_Processor::query_parser_update_counters<MySQL_Session>(MySQL_Session *, MYSQL_COM_QUERY_command, __SQP_query_parser_t*, unsigned long long);
 
 template
 Query_Processor_Output* Query_Processor::process_mysql_query<PgSQL_Session, PgSQL_Query_Info>(PgSQL_Session *, void*, unsigned int, PgSQL_Query_Info *);
 
 template
-unsigned long long Query_Processor::query_parser_update_counters<PgSQL_Session*>(Client_Session<PgSQL_Session*>, MYSQL_COM_QUERY_command, __SQP_query_parser_t*, unsigned long long);
+unsigned long long Query_Processor::query_parser_update_counters<PgSQL_Session>(PgSQL_Session *, MYSQL_COM_QUERY_command, __SQP_query_parser_t*, unsigned long long);
 

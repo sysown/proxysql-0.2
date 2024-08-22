@@ -129,7 +129,8 @@ int ProxySQL_Test___GenerateRandomQueryInDigestTable(int n) {
 					myhash.Update(&hg,sizeof(hg));
 					myhash.Final(&qp.digest_total,&hash2);
 					//update_query_digest(qp, sess->current_hostgroup, ui, t, sess->thread->curtime, NULL, sess);
-					GloQPro->update_query_digest(&qp,hg, TO_CONNECTION_INFO(&ui),fastrand(),0,NULL,TO_CLIENT_SESSION(sess));
+					MySQL_STMT_Global_info *stmt_info = NULL;
+					GloQPro->update_query_digest(&qp,hg, TO_CONNECTION_INFO(&ui),fastrand(),0, stmt_info, sess);
 				}
 			}
 		}

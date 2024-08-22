@@ -8,7 +8,7 @@ using json = nlohmann::json;
 
 #include "PgSQL_Data_Stream.h"
 #include "query_processor.h"
-#include "MySQL_PreparedStatement.h"
+#include "PgSQL_PreparedStatement.h"
 #include "PgSQL_Logger.hpp"
 
 #include <dirent.h>
@@ -727,12 +727,14 @@ void PgSQL_Logger::log_request(PgSQL_Session *sess, PgSQL_Data_Stream *myds) {
 	char *c = NULL;
 	int ql = 0;
 	switch (sess->status) {
+/*
 		case PROCESSING_STMT_EXECUTE:
 			c = (char *)sess->CurrentQuery.stmt_info->query;
 			ql = sess->CurrentQuery.stmt_info->query_length;
 			me.set_client_stmt_id(sess->CurrentQuery.stmt_client_id);
 			break;
 		case PROCESSING_STMT_PREPARE:
+*/
 		default:
 			c = (char *)sess->CurrentQuery.QueryPointer;
 			ql = sess->CurrentQuery.QueryLength;

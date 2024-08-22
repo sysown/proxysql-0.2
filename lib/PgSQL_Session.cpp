@@ -134,7 +134,7 @@ extern PgSQL_Authentication* GloPgAuth;
 extern MySQL_LDAP_Authentication* GloMyLdapAuth;
 extern ProxySQL_Admin* GloAdmin;
 extern PgSQL_Logger* GloPgSQL_Logger;
-extern MySQL_STMT_Manager_v14* GloMyStmt;
+//extern MySQL_STMT_Manager_v14* GloMyStmt;
 extern PgSQL_STMT_Manager_v14* GloPgStmt;
 
 extern SQLite3_Server* GloSQLite3Server;
@@ -436,7 +436,7 @@ unsigned long long PgSQL_Query_Info::query_parser_update_counters() {
 	}
 	if (MyComQueryCmd==MYSQL_COM_QUERY___NONE) return 0; // this means that it was never initialized
 	if (MyComQueryCmd == MYSQL_COM_QUERY__UNINITIALIZED) return 0; // this means that it was never initialized
-	unsigned long long ret=GloQPro->query_parser_update_counters(TO_CLIENT_SESSION(sess), MyComQueryCmd, &QueryParserArgs, end_time-start_time);
+	unsigned long long ret=GloQPro->query_parser_update_counters(sess, MyComQueryCmd, &QueryParserArgs, end_time-start_time);
 	MyComQueryCmd=MYSQL_COM_QUERY___NONE;
 	QueryPointer=NULL;
 	QueryLength=0;
@@ -2758,10 +2758,10 @@ void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_P
 			(char*)CurrentQuery.QueryPointer,
 			CurrentQuery.QueryLength
 		);
-		MySQL_STMT_Global_info* stmt_info = NULL;
+		PgSQL_STMT_Global_info* stmt_info = NULL;
 		// we first lock GloStmt
-		GloMyStmt->wrlock();
-		stmt_info = GloMyStmt->find_prepared_statement_by_hash(hash);
+		GloPgStmt->wrlock();
+		stmt_info = GloPgStmt->find_prepared_statement_by_hash(hash);
 		if (stmt_info) {
 			// the prepared statement exists in GloMyStmt
 			// for this reason, we do not need to prepare it again, and we can already reply to the client
@@ -2769,7 +2769,8 @@ void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_P
 			uint32_t new_stmt_id = client_myds->myconn->local_stmts->generate_new_client_stmt_id(stmt_info->statement_id);
 			CurrentQuery.stmt_client_id = new_stmt_id;
 			client_myds->setDSS_STATE_QUERY_SENT_NET();
-			client_myds->myprot.generate_STMT_PREPARE_RESPONSE(client_myds->pkt_sid + 1, stmt_info, new_stmt_id);
+// FIXME: disabled for now
+//			client_myds->myprot.generate_STMT_PREPARE_RESPONSE(client_myds->pkt_sid + 1, stmt_info, new_stmt_id);
 			LogQuery(NULL);
 			l_free(pkt.size, pkt.ptr);
 			client_myds->DSS = STATE_SLEEP;
@@ -2789,7 +2790,7 @@ void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_P
 			mybe->server_myds->statuses.questions++;
 			client_myds->setDSS_STATE_QUERY_SENT_NET();
 		}
-		GloMyStmt->unlock();
+		GloPgStmt->unlock();
 		return; // make sure to not return before unlocking GloMyStmt
 	}
 }
@@ -2801,6 +2802,7 @@ void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_P
 // enum_mysql_command = _MYSQL_COM_STMT_EXECUTE
 //
 // all break were replaced with a return
+/* FIXME: completely disabled for now
 void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_EXECUTE(PtrSize_t& pkt) {
 	if (session_type != PROXYSQL_SESSION_PGSQL) { // only MySQL module supports prepared statement!!
 		l_free(pkt.size, pkt.ptr);
@@ -2829,8 +2831,8 @@ void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 		}
 		CurrentQuery.stmt_global_id = stmt_global_id;
 		// now we get the statement information
-		MySQL_STMT_Global_info* stmt_info = NULL;
-		stmt_info = GloMyStmt->find_prepared_statement_by_stmt_id(stmt_global_id);
+		PgSQL_STMT_Global_info* stmt_info = NULL;
+		stmt_info = GloPgStmt->find_prepared_statement_by_stmt_id(stmt_global_id);
 		if (stmt_info == NULL) {
 			// we couldn't find it
 			l_free(pkt.size, pkt.ptr);
@@ -2929,6 +2931,7 @@ void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 		client_myds->setDSS_STATE_QUERY_SENT_NET();
 	}
 }
+*/
 
 // this function was inline inside PgSQL_Session::get_pkts_from_client
 // ClickHouse doesn't support COM_INIT_DB , so we replace it
@@ -3750,6 +3753,7 @@ __get_pkts_from_client:
 					}
 					//handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_PREPARE(pkt);
 					break;
+/*
 				case _MYSQL_COM_STMT_EXECUTE:
 					handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_EXECUTE(pkt);
 					break;
@@ -3762,6 +3766,7 @@ __get_pkts_from_client:
 				case _MYSQL_COM_STMT_SEND_LONG_DATA:
 					handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_SEND_LONG_DATA(pkt);
 					break;
+*/
 				case _MYSQL_COM_BINLOG_DUMP:
 				case _MYSQL_COM_BINLOG_DUMP_GTID:
 				case _MYSQL_COM_REGISTER_SLAVE:
@@ -3998,14 +4003,15 @@ void PgSQL_Session::SetQueryTimeout() {
 // now it returns:
 // true: NEXT_IMMEDIATE(st) needs to be called
 // false: continue
+/* FIXME: completely disabled for now
 bool PgSQL_Session::handler_rc0_PROCESSING_STMT_PREPARE(enum session_status& st, PgSQL_Data_Stream* myds, bool& prepared_stmt_with_no_params) {
 	thread->status_variables.stvar[st_var_backend_stmt_prepare]++;
-	GloMyStmt->wrlock();
+	GloPgStmt->wrlock();
 	uint32_t client_stmtid = 0;
 	uint64_t global_stmtid;
 	//bool is_new;
-	MySQL_STMT_Global_info* stmt_info = NULL;
-	stmt_info = GloMyStmt->add_prepared_statement(
+	PgSQL_STMT_Global_info* stmt_info = NULL;
+	stmt_info = GloPgStmt->add_prepared_statement(
 		(char*)client_myds->myconn->userinfo->username,
 		(char*)client_myds->myconn->userinfo->dbname,
 		(char*)CurrentQuery.QueryPointer,
@@ -4041,7 +4047,7 @@ bool PgSQL_Session::handler_rc0_PROCESSING_STMT_PREPARE(enum session_status& st,
 		myds->DSS = STATE_MARIADB_GENERIC;
 		st = previous_status.top();
 		previous_status.pop();
-		GloMyStmt->unlock();
+		GloPgStmt->unlock();
 		return true;
 		//NEXT_IMMEDIATE(st);
 	}
@@ -4051,13 +4057,15 @@ bool PgSQL_Session::handler_rc0_PROCESSING_STMT_PREPARE(enum session_status& st,
 			prepared_stmt_with_no_params = true;
 		}
 		LogQuery(myds);
-		GloMyStmt->unlock();
+		GloPgStmt->unlock();
 	}
 	return false;
 }
-
+*/
 
 // this function used to be inline
+/*
+// FIXME: completely disabled for now
 void PgSQL_Session::handler_rc0_PROCESSING_STMT_EXECUTE(PgSQL_Data_Stream* myds) {
 	thread->status_variables.stvar[st_var_backend_stmt_execute]++;
 	PROXY_TRACE2();
@@ -4066,15 +4074,16 @@ void PgSQL_Session::handler_rc0_PROCESSING_STMT_EXECUTE(PgSQL_Data_Stream* myds)
 		// during STMT_EXECUTE, so a failure in the prepared statement
 		// metadata cache is only hit once. This way we ensure that the next
 		// 'PREPARE' will be answered with the properly updated metadata.
-		/********************************************************************/
+		// ********************************************************************
 		// Lock the global statement manager
-		GloMyStmt->wrlock();
+		GloPgStmt->wrlock();
 		// Update the global prepared statement metadata
-		MySQL_STMT_Global_info* stmt_info = GloMyStmt->find_prepared_statement_by_stmt_id(CurrentQuery.stmt_global_id, false);
-		stmt_info->update_metadata(CurrentQuery.mysql_stmt);
+		PgSQL_STMT_Global_info* stmt_info = GloPgStmt->find_prepared_statement_by_stmt_id(CurrentQuery.stmt_global_id, false);
+// FIXME: disabled for now
+//		stmt_info->update_metadata(CurrentQuery.mysql_stmt);
 		// Unlock the global statement manager
-		GloMyStmt->unlock();
-		/********************************************************************/
+		GloPgStmt->unlock();
+		// ********************************************************************
 	}
 	MySQL_Stmt_Result_to_MySQL_wire(CurrentQuery.mysql_stmt, myds->myconn);
 	LogQuery(myds);
@@ -4107,6 +4116,7 @@ void PgSQL_Session::handler_rc0_PROCESSING_STMT_EXECUTE(PgSQL_Data_Stream* myds)
 	}
 	CurrentQuery.mysql_stmt = NULL;
 }
+*/
 
 // this function used to be inline.
 // now it returns:
@@ -4247,6 +4257,7 @@ void PgSQL_Session::handler_minus1_GenerateErrorMessage(PgSQL_Data_Stream* myds,
 	}
 	break;
 	case PROCESSING_STMT_EXECUTE:
+/*
 	{
 		char sqlstate[10];
 		if (myconn && myconn->pgsql) {
@@ -4264,6 +4275,7 @@ void PgSQL_Session::handler_minus1_GenerateErrorMessage(PgSQL_Data_Stream* myds,
 		}
 		client_myds->pkt_sid++;
 	}
+*/
 	break;
 	default:
 		// LCOV_EXCL_START
@@ -4629,6 +4641,7 @@ handler_again:
 					}
 				}
 
+/*
 				switch (status) {
 				case PROCESSING_QUERY:
 					PgSQL_Result_to_PgSQL_wire(myconn, myconn->myds);
@@ -4650,6 +4663,7 @@ handler_again:
 					break;
 					// LCOV_EXCL_STOP
 				}
+*/
 
 				if (mysql_thread___log_mysql_warnings_enabled) {
 					auto warn_no = mysql_warning_count(myconn->pgsql);
