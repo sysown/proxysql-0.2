@@ -1,5 +1,8 @@
 #include <iostream>
-#include <libpq-fe.h>
+#include "c.h"
+#include "libpq/pqcomm.h"
+#include "libpq-fe.h"
+#include "libpq-int.h"
 #include <vector>
 #include <string>
 #include <cstring>

@@ -6,6 +6,7 @@
 #include "proxysql.h"
 #include "cpp.h"
 
+#define PROXYSQL_PS_PREFIX "proxysql_ps_"
 
 class PgSQL_STMT_Global_info : public Base_STMT_Global_info {
 	public:
@@ -35,6 +36,7 @@ class PgSQL_STMTs_local_v14 : public Base_STMTs_local_v14<PgSQL_STMTs_local_v14>
 	bool is_client() {
 		return is_client_;
 	}
+	uint32_t generate_new_backend_id();
 /*
 	void backend_insert(uint64_t global_statement_id, MYSQL_STMT *stmt);
 	MYSQL_STMT * find_backend_stmt_by_global_id(uint32_t global_statement_id) {

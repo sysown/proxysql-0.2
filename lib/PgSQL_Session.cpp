@@ -4033,8 +4033,8 @@ void PgSQL_Session::SetQueryTimeout() {
 // now it returns:
 // true: NEXT_IMMEDIATE(st) needs to be called
 // false: continue
-/* FIXME: completely disabled for now
 bool PgSQL_Session::handler_rc0_PROCESSING_STMT_PREPARE(enum session_status& st, PgSQL_Data_Stream* myds, bool& prepared_stmt_with_no_params) {
+/*
 	thread->status_variables.stvar[st_var_backend_stmt_prepare]++;
 	GloPgStmt->wrlock();
 	uint32_t client_stmtid = 0;
@@ -4089,9 +4089,10 @@ bool PgSQL_Session::handler_rc0_PROCESSING_STMT_PREPARE(enum session_status& st,
 		LogQuery(myds);
 		GloPgStmt->unlock();
 	}
+*/
+	client_myds->myprot.generate_ParseComplete(true, nullptr);
 	return false;
 }
-*/
 
 // this function used to be inline
 /*
@@ -4671,7 +4672,7 @@ handler_again:
 					}
 				}
 
-/*
+
 				switch (status) {
 				case PROCESSING_QUERY:
 					PgSQL_Result_to_PgSQL_wire(myconn, myconn->myds);
@@ -4684,16 +4685,17 @@ handler_again:
 					}
 				}
 				break;
+/*
 				case PROCESSING_STMT_EXECUTE:
 					handler_rc0_PROCESSING_STMT_EXECUTE(myds);
 					break;
+*/
 				default:
 					// LCOV_EXCL_START
 					assert(0);
 					break;
 					// LCOV_EXCL_STOP
 				}
-*/
 
 				if (mysql_thread___log_mysql_warnings_enabled) {
 					auto warn_no = mysql_warning_count(myconn->pgsql);

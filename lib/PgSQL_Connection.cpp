@@ -721,6 +721,7 @@ void PgSQL_Connection_Placeholder::set_query(char *stmt, unsigned long length) {
 	}
 }
 
+/*
 void PgSQL_Connection_Placeholder::stmt_prepare_start() {
 	PROXY_TRACE();
 	query.stmt=mysql_stmt_init(pgsql);
@@ -733,6 +734,7 @@ void PgSQL_Connection_Placeholder::stmt_prepare_cont(short event) {
 	proxy_debug(PROXY_DEBUG_PGSQL_PROTOCOL, 6,"event=%d\n", event);
 	async_exit_status = mysql_stmt_prepare_cont(&interr , query.stmt , mysql_status(event, true));
 }
+*/
 
 void PgSQL_Connection_Placeholder::stmt_execute_start() {
 	PROXY_TRACE();
@@ -2126,37 +2128,48 @@ void PgSQL_Connection::query_cont(short event) {
 	}
 }
 
-/*
 void PgSQL_Connection::stmt_prepare_start() {
 	PROXY_TRACE();
-	reset_error(); // TODO: why?
+	//reset_error(); // TODO: why?
 	processing_multi_statement = false;
-	async_exit_status = PG_EVENT_NONE;
-	if (PQsendQuery(pgsql_conn, query.ptr) == 0) {
+	uint32_t newid = local_stmts->generate_new_backend_id();
+	std::string psname = PROXYSQL_PS_PREFIX + std::to_string(newid);
+	// FIXME: for now we do not specify parameters types
+	async_exit_status = PQsendPrepare(pgsql_conn, psname.c_str(), (const char*)myds->sess->CurrentQuery.QueryPointer, 0, nullptr);
+/*
+	async_exit_status = rc;
+	if (rc == 0) {
 		// WARNING: DO NOT RELEASE this PGresult
 		const PGresult* result = PQgetResultFromPGconn(pgsql_conn);
 		set_error_from_result(result);
 		proxy_error("Failed to send query. %s\n", get_error_code_with_message().c_str());
 		return;
 	}
-	flush();
+	//flush(); // TODO: why?
+*/
 }
 
 void PgSQL_Connection::stmt_prepare_cont(short event) {
 	PROXY_TRACE();
-	reset_error(); // TODO: why?
+	//reset_error(); // TODO: why?
 	processing_multi_statement = false;
-	async_exit_status = PG_EVENT_NONE;
-	if (PQsendQuery(pgsql_conn, query.ptr) == 0) {
-		// WARNING: DO NOT RELEASE this PGresult
-		const PGresult* result = PQgetResultFromPGconn(pgsql_conn);
-		set_error_from_result(result);
-		proxy_error("Failed to send query. %s\n", get_error_code_with_message().c_str());
-		return;
+	PQconsumeInput(pgsql_conn); // TODO: error handling
+	if (PQisBusy(pgsql_conn) == 0) { // A 0 return indicates that PQgetResult can be called with assurance of not blocking
+		async_exit_status = 0; // completed
+		PGresult *res = PQgetResult(pgsql_conn);
+		if (PQresultStatus(res) == PGRES_COMMAND_OK) {
+			interr = 0;
+			PQclear(res);
+			res = PQgetResult(pgsql_conn);
+			assert(res == NULL); // there should never be more result!
+		} else {
+			interr = 1;
+			assert(0); // FIXME: TODO: error handling!!!
+		}
+	} else {
+		async_exit_status = 1; // not completed yet
 	}
-	flush();
 }
-*/
 
 void PgSQL_Connection::fetch_result_start() {
 	PROXY_TRACE();
@@ -2510,13 +2523,14 @@ int PgSQL_Connection::async_query(short event, char* stmt, unsigned long length,
 		}
 	}
 	if (async_state_machine == ASYNC_STMT_PREPARE_SUCCESSFUL || async_state_machine == ASYNC_STMT_PREPARE_FAILED) {
-		query.stmt_meta = NULL;
-		compute_unknown_transaction_status();
+		PROXY_TRACE2();
+		//query.stmt_meta = NULL;
+		//compute_unknown_transaction_status();
 		if (async_state_machine == ASYNC_STMT_PREPARE_FAILED) {
 			return -1;
 		}
 		else {
-			*_stmt = query.stmt;
+			//*_stmt = query.stmt;
 			return 0;
 		}
 	}

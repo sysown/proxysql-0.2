@@ -106,6 +106,45 @@ void PG_pkt::finish_packet() {
 	*pos++ = len & 255;
 }
 
+/**
+ * @brief Writes a packet with generic data types based on a descriptor string.
+ *
+ * This function allows for flexible packet construction by defining the data
+ * types and order using a descriptor string. It supports various data types,
+ * including char, uint16, uint32, uint64, C-style strings, and byte arrays.
+ *
+ * @param type The packet type identifier.
+ * @param pktdesc A string describing the packet structure. Each character
+ *                represents a specific data type:
+ *                - 'c': char/byte
+ *                - 'h': uint16
+ *                - 'i': uint32
+ *                - 'q': uint64
+ *                - 's': C-style string
+ *                - 'b': byte array
+ * @param ... Variable arguments containing the actual data to write.
+ *            The order and type of the arguments must match the descriptor string.
+ *
+ * @note The function assumes the existence of helper functions:
+ *       - start_packet(int type): Initializes a new packet with the specified type.
+ *       - finish_packet(): Finalizes the packet and prepares it for transmission.
+ *       - put_char(int): Writes a single byte (character) to the packet.
+ *       - put_uint16(int): Writes a 16-bit unsigned integer to the packet.
+ *       - put_uint32(int): Writes a 32-bit unsigned integer to the packet.
+ *       - put_uint64(uint64_t): Writes a 64-bit unsigned integer to the packet.
+ *       - put_string(char*): Writes a null-terminated string to the packet.
+ *       - put_bytes(uint8_t* bin, int len): Writes a block of bytes to the packet.
+ *
+ * @note If the 'multiple_pkt_mode' flag is set, the current packet size is
+ *       stored in the 'pkt_offset' vector. This allows for handling multiple
+ *       packets within a larger transmission.
+ *
+ * @warning It is crucial to ensure the correct order and types of the variable
+ *          arguments match the descriptor string. Incorrect data types can lead
+ *          to undefined behavior or crashes.
+ *
+ */
+
 void PG_pkt::write_generic(int type, const char *pktdesc, ...) {
 	va_list ap;
 	const char *adesc = pktdesc;
@@ -1218,6 +1257,29 @@ char* extract_tag_from_query(const char* query) {
 	}
 }
 
+void PgSQL_Protocol::generate_ParseComplete(bool send, PtrSize_t* _ptr) {
+	assert(send == true || _ptr != nullptr);
+
+	const size_t ParseComplete_length = 5;
+	const size_t ReadyForQuery_length = 6;
+
+	PG_pkt pgpkt(ParseComplete_length+ReadyForQuery_length);
+
+	pgpkt.put_char('1');
+	pgpkt.put_uint32(ParseComplete_length - 1);
+	pgpkt.set_multi_pkt_mode(true);
+	pgpkt.write_ReadyForQuery();
+	pgpkt.set_multi_pkt_mode(false);
+
+
+	auto buff = pgpkt.detach();
+	if (send == true) {
+		(*myds)->PSarrayOUT->add((void*)buff.first, buff.second);
+	} else {
+		_ptr->ptr = buff.first;
+		_ptr->size = buff.second;
+	}
+}
 
 bool PgSQL_Protocol::generate_ok_packet(bool send, bool ready, const char* msg, int rows, const char* query, PtrSize_t* _ptr) {
 	// to avoid memory leak

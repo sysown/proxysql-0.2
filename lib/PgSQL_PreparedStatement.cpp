@@ -59,3 +59,20 @@ PgSQL_STMT_Manager_v14::PgSQL_STMT_Manager_v14() {
 
 PgSQL_STMT_Manager_v14::~PgSQL_STMT_Manager_v14() {
 }
+
+
+uint32_t PgSQL_STMTs_local_v14::generate_new_backend_id() {
+	assert(is_client_ == false);
+	uint32_t ret=0;
+	if (free_client_ids.size()) {
+		ret=free_client_ids.top();
+		free_client_ids.pop();
+	} else {
+		local_max_stmt_id+=1;
+		ret=local_max_stmt_id;
+	}
+	std::string name = PROXYSQL_PS_PREFIX + std::to_string(ret);
+	stmt_name_to_id[name] = ret;
+	stmt_id_to_name[ret] = name;
+	return ret;
+}
