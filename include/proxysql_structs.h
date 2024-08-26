@@ -282,6 +282,7 @@ enum session_status {
 	SHOW_WARNINGS,
 	SETTING_NEXT_ISOLATION_LEVEL,
 	SETTING_NEXT_TRANSACTION_READ,
+	PGSQL_PROCESSING_PARSE,
 	session_status___NONE // special marker
 };
 

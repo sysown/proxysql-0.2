@@ -18,6 +18,8 @@ class PgSQL_STMT_Global_info : public Base_STMT_Global_info {
 
 class PgSQL_STMTs_local_v14 : public Base_STMTs_local_v14<PgSQL_STMTs_local_v14> {
 	public:
+	std::unordered_map<std::string, uint64_t> stmt_name_to_id = {};
+	std::unordered_map<uint64_t, std::string> stmt_id_to_name = {};
 //	std::map<uint64_t, MYSQL_STMT *> global_stmt_to_backend_stmt = std::map<uint64_t, MYSQL_STMT *>();
 
 

@@ -53,3 +53,9 @@ PgSQL_STMT_Global_info::~PgSQL_STMT_Global_info() {
 		digest_text = NULL;
 	}
 }
+
+PgSQL_STMT_Manager_v14::PgSQL_STMT_Manager_v14() {
+}
+
+PgSQL_STMT_Manager_v14::~PgSQL_STMT_Manager_v14() {
+}

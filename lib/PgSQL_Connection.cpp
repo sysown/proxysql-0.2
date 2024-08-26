@@ -1678,6 +1678,40 @@ handler_again:
 			NEXT_IMMEDIATE(ASYNC_USE_RESULT_START);
 		}
 		break;
+		case ASYNC_STMT_PREPARE_START:
+			stmt_prepare_start();
+			__sync_fetch_and_add(&parent->queries_sent,1);
+			__sync_fetch_and_add(&parent->bytes_sent,query.length);
+			myds->sess->thread->status_variables.stvar[st_var_queries_backends_bytes_sent]+=query.length;
+			myds->bytes_info.bytes_sent += query.length;
+			bytes_info.bytes_sent += query.length;
+			if (async_exit_status) {
+				next_event(ASYNC_STMT_PREPARE_CONT);
+			} else {
+				NEXT_IMMEDIATE(ASYNC_STMT_PREPARE_END);
+			}
+			break;
+		case ASYNC_STMT_PREPARE_CONT:
+			stmt_prepare_cont(event);
+			if (async_exit_status) {
+				next_event(ASYNC_STMT_PREPARE_CONT);
+			} else {
+				NEXT_IMMEDIATE(ASYNC_STMT_PREPARE_END);
+			}
+			break;
+
+		case ASYNC_STMT_PREPARE_END:
+			if (interr) {
+				NEXT_IMMEDIATE(ASYNC_STMT_PREPARE_FAILED);
+			} else {
+				NEXT_IMMEDIATE(ASYNC_STMT_PREPARE_SUCCESSFUL);
+			}
+			break;
+		case ASYNC_STMT_PREPARE_SUCCESSFUL:
+			break;
+		case ASYNC_STMT_PREPARE_FAILED:
+			break;
+
 	case ASYNC_USE_RESULT_START:
 		fetch_result_start();
 		if (async_exit_status == PG_EVENT_NONE) {
@@ -2092,6 +2126,38 @@ void PgSQL_Connection::query_cont(short event) {
 	}
 }
 
+/*
+void PgSQL_Connection::stmt_prepare_start() {
+	PROXY_TRACE();
+	reset_error(); // TODO: why?
+	processing_multi_statement = false;
+	async_exit_status = PG_EVENT_NONE;
+	if (PQsendQuery(pgsql_conn, query.ptr) == 0) {
+		// WARNING: DO NOT RELEASE this PGresult
+		const PGresult* result = PQgetResultFromPGconn(pgsql_conn);
+		set_error_from_result(result);
+		proxy_error("Failed to send query. %s\n", get_error_code_with_message().c_str());
+		return;
+	}
+	flush();
+}
+
+void PgSQL_Connection::stmt_prepare_cont(short event) {
+	PROXY_TRACE();
+	reset_error(); // TODO: why?
+	processing_multi_statement = false;
+	async_exit_status = PG_EVENT_NONE;
+	if (PQsendQuery(pgsql_conn, query.ptr) == 0) {
+		// WARNING: DO NOT RELEASE this PGresult
+		const PGresult* result = PQgetResultFromPGconn(pgsql_conn);
+		set_error_from_result(result);
+		proxy_error("Failed to send query. %s\n", get_error_code_with_message().c_str());
+		return;
+	}
+	flush();
+}
+*/
+
 void PgSQL_Connection::fetch_result_start() {
 	PROXY_TRACE();
 	reset_error();
@@ -2397,6 +2463,12 @@ int PgSQL_Connection::async_query(short event, char* stmt, unsigned long length,
 		if (stmt_meta == NULL)
 			set_query(stmt, length);
 		async_state_machine = ASYNC_QUERY_START;
+		if (myds->sess->status == PROCESSING_STMT_PREPARE) {
+			async_state_machine = ASYNC_STMT_PREPARE_START;
+		} else if (myds->sess->status == PROCESSING_STMT_EXECUTE) {
+			async_state_machine = ASYNC_STMT_EXECUTE_START;
+		}
+/*
 		if (_stmt) {
 			query.stmt = *_stmt;
 			if (stmt_meta == NULL) {
@@ -2409,6 +2481,7 @@ int PgSQL_Connection::async_query(short event, char* stmt, unsigned long length,
 				async_state_machine = ASYNC_STMT_EXECUTE_START;
 			}
 		}
+*/
 	default:
 		handler(event);
 		break;

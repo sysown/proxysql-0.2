@@ -819,6 +819,7 @@ void ProxySQL_Main_init_main_modules() {
 	GloMyLogger=NULL;
 	GloPgSQL_Logger = NULL;
 	GloMyStmt=NULL;
+	GloPgStmt=NULL;
 
 	// initialize libev
 	if (!ev_default_loop (EVBACKEND_POLL | EVFLAG_NOENV)) {
@@ -837,6 +838,7 @@ void ProxySQL_Main_init_main_modules() {
 	GloPgSQL_Logger = new PgSQL_Logger();
 	GloPgSQL_Logger->print_version();
 	GloMyStmt=new MySQL_STMT_Manager_v14();
+	GloPgStmt=new PgSQL_STMT_Manager_v14();
 
 	PgHGM = new PgSQL_HostGroups_Manager();
 	PgHGM->init();
@@ -1138,6 +1140,10 @@ void ProxySQL_Main_shutdown_all_modules() {
 	if (GloMyStmt) {
 		delete GloMyStmt;
 		GloMyStmt=NULL;
+	}
+	if (GloPgStmt) {
+		delete GloPgStmt;
+		GloPgStmt=NULL;
 	}
 }
 

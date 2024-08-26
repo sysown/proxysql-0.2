@@ -2714,10 +2714,13 @@ void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_P
 		}
 		assert(qpo);	// GloQPro->process_mysql_query() should always return a qpo
 		// setting 'prepared' to prevent fetching results from the cache if the digest matches
+/*
+		// FIXME: no handling of special queries for now
 		rc_break = handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_QUERY_qpo(&pkt, &lock_hostgroup, PgSQL_ps_type_prepare_stmt);
 		if (rc_break == true) {
 			return;
 		}
+*/
 		if (pgsql_thread___set_query_lock_on_hostgroup == 1) { // algorithm introduced in 2.0.6
 			if (locked_on_hostgroup < 0) {
 				if (lock_hostgroup) {
@@ -2752,6 +2755,19 @@ void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_P
 		if (client_myds->myconn->local_stmts == NULL) {
 			client_myds->myconn->local_stmts = new PgSQL_STMTs_local_v14(true);
 		}
+		PgSQL_STMTs_local_v14 *local_stmts = client_myds->myconn->local_stmts;
+		std::string stmt_name = (char *)CurrentQuery.stmt_name; // create a string
+		// if the same statement name is used, we drop it
+		if (auto search = local_stmts->stmt_name_to_id.find(stmt_name); search != local_stmts->stmt_name_to_id.end()) {
+			uint64_t client_global_id = search->second;
+			auto search2 = local_stmts->stmt_id_to_name.find(client_global_id);
+			assert(search2 != local_stmts->stmt_id_to_name.end());
+			local_stmts->stmt_id_to_name.erase(search2);
+			local_stmts->stmt_name_to_id.erase(search);
+			uint64_t stmt_global_id = 0;
+			stmt_global_id = client_myds->myconn->local_stmts->find_global_stmt_id_from_client(client_global_id);
+			client_myds->myconn->local_stmts->client_close(client_global_id);
+		}
 		uint64_t hash = client_myds->myconn->local_stmts->compute_hash(
 			(char*)client_myds->myconn->userinfo->username,
 			(char*)client_myds->myconn->userinfo->dbname,
@@ -2780,13 +2796,14 @@ void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_P
 		}
 		else {
 			mybe = find_or_create_backend(current_hostgroup);
-			status = PROCESSING_STMT_PREPARE;
+			//status = PROCESSING_STMT_PREPARE;
+			status = PGSQL_PROCESSING_PARSE;
 			mybe->server_myds->connect_retries_on_failure = pgsql_thread___connect_retries_on_failure;
 			mybe->server_myds->wait_until = 0;
 			pause_until = 0;
 			mybe->server_myds->killed_at = 0;
 			mybe->server_myds->kill_type = 0;
-			mybe->server_myds->mysql_real_query.init(&pkt); // fix memory leak for PREPARE in prepared statements #796
+			mybe->server_myds->pgsql_real_query.init(&pkt); // fix memory leak for PREPARE in prepared statements #796
 			mybe->server_myds->statuses.questions++;
 			client_myds->setDSS_STATE_QUERY_SENT_NET();
 		}
@@ -3219,6 +3236,19 @@ __get_pkts_from_client:
 			}
 			break;
 
+		case PGSQL_PROCESSING_PARSE:
+			if (pkt.size == 5) {
+				const char *p = (const char *)pkt.ptr;
+				if (p[0] == 'S') {
+					status = PROCESSING_STMT_PREPARE;
+				} else {
+					assert(0); // FIXME: add error handling
+				}
+			} else {
+				assert(0); // FIXME: add error handling
+			}
+			break;
+
 		case WAITING_CLIENT_DATA:
 			// this is handled only for real traffic, not mirror
 			if (pkt.size == (0xFFFFFF + sizeof(mysql_hdr))) {
@@ -3517,7 +3547,7 @@ __get_pkts_from_client:
 										}
 									}
 								}
-								mybe->server_myds->mysql_real_query.init(&pkt);
+								mybe->server_myds->pgsql_real_query.init(&pkt);
 								mybe->server_myds->statuses.questions++;
 								client_myds->setDSS_STATE_QUERY_SENT_NET();
 							}
@@ -3735,7 +3765,7 @@ __get_pkts_from_client:
 								}
 							}
 						}
-						mybe->server_myds->mysql_real_query.init(&pkt);
+						mybe->server_myds->pgsql_real_query.init(&pkt);
 						mybe->server_myds->statuses.questions++;
 						client_myds->setDSS_STATE_QUERY_SENT_NET();
 					}
@@ -4310,7 +4340,7 @@ int PgSQL_Session::RunQuery(PgSQL_Data_Stream* myds, PgSQL_Connection* myconn) {
 	int rc = 0;
 	switch (status) {
 	case PROCESSING_QUERY:
-		rc = myconn->async_query(myds->revents, myds->mysql_real_query.QueryPtr, myds->mysql_real_query.QuerySize);
+		rc = myconn->async_query(myds->revents, myds->pgsql_real_query.QueryPtr, myds->pgsql_real_query.QuerySize);
 		break;
 	case PROCESSING_STMT_PREPARE:
 		rc = myconn->async_query(myds->revents, (char*)CurrentQuery.QueryPointer, CurrentQuery.QueryLength, &CurrentQuery.mysql_stmt);

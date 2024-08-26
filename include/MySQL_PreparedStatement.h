@@ -56,6 +56,9 @@ class MySQL_STMT_Global_info : public Base_STMT_Global_info {
 // stmt_execute_metadata_t represent metadata required to run STMT_EXECUTE
 class stmt_execute_metadata_t {
 	public:
+	// FIXME: for now we will differentiate between mysql and pgsql using this flag
+	// later we will move into the use of template
+	bool is_mysql = true;
 	uint32_t size;
 	uint32_t stmt_id;
 	uint8_t flags;

@@ -12,6 +12,8 @@
 
 template Base_STMT_Manager_v14<MySQL_STMT_Global_info>::Base_STMT_Manager_v14();
 template Base_STMT_Manager_v14<MySQL_STMT_Global_info>::~Base_STMT_Manager_v14();
+template Base_STMT_Manager_v14<PgSQL_STMT_Global_info>::Base_STMT_Manager_v14();
+template Base_STMT_Manager_v14<PgSQL_STMT_Global_info>::~Base_STMT_Manager_v14();
 template MySQL_STMT_Global_info * Base_STMT_Manager_v14<MySQL_STMT_Global_info>::find_prepared_statement_by_stmt_id(unsigned long, bool);
 template MySQL_STMT_Global_info * Base_STMT_Manager_v14<MySQL_STMT_Global_info>::find_prepared_statement_by_hash(unsigned long);
 template PgSQL_STMT_Global_info * Base_STMT_Manager_v14<PgSQL_STMT_Global_info>::find_prepared_statement_by_hash(unsigned long);
