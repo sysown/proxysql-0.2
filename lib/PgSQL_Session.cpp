@@ -2635,6 +2635,7 @@ bool PgSQL_Session::handler_again___status_RESETTING_CONNECTION(int* _rc) {
 }
 
 
+// FIXME: this should be moved into PgSQL_Protocol
 bool PgSQL_Session::is_valid_PGSQL_PARSE_pkt(PtrSize_t& pkt) {
 	const int32_t message_length = read_big_endian_int32((char *)pkt.ptr + 1);
 	if (message_length != (pkt.size -1)) {
@@ -2668,7 +2669,82 @@ bool PgSQL_Session::is_valid_PGSQL_PARSE_pkt(PtrSize_t& pkt) {
 	return true;
 }
 
+// FIXME: this should be moved into PgSQL_Protocol
+bool PgSQL_Session::is_valid_PGSQL_BIND_pkt(PtrSize_t& pkt) {
+	const int32_t message_length = read_big_endian_int32((char *)pkt.ptr + 1);
+	if (message_length != (pkt.size -1)) {
+		return false;
+	}
+	size_t bytes_left = message_length - 4;
+	const char *portal_name = (char *)pkt.ptr + 5;
+	const size_t portal_name_len = strnlen(portal_name, bytes_left);
+	if (portal_name_len == bytes_left) {
+		return false;
+	}
+	if (portal_name_len != 0) {
+		// for now we don't support portals
+		return false;
+	}
+	bytes_left -= (portal_name_len + 1);
+	if (bytes_left <= 0)
+		return false;
+	const char *stmt_name = (char *)pkt.ptr + 5 + portal_name_len + 1;
+	const size_t stmt_name_len = strnlen(stmt_name, bytes_left);
+	if (stmt_name_len == bytes_left) {
+		return false;
+	}
+	bytes_left -= (portal_name_len + 1);
+	if (bytes_left <= 0)
+		return false;
+	char * p = (char *)stmt_name + stmt_name_len + 2;
 
+	const int16_t number_params_format_codes = read_big_endian_int16(p);
+	p += sizeof(int16_t);
+	bytes_left -= sizeof(int16_t);
+	if (bytes_left <= 0)
+		return false;
+	if (number_params_format_codes != 0) {
+		return false;	// FIXME: we only handle parameters that uses the default format
+	}
+
+	const int16_t number_params_values = read_big_endian_int16(p);
+	p += sizeof(int16_t);
+	bytes_left -= sizeof(int16_t);
+	if (bytes_left <= 0)
+		return false;
+	for (int16_t i=0; i < number_params_values; i++) {
+		const int32_t param_len = read_big_endian_int32(p);
+		p += sizeof(int32_t);
+		bytes_left -= sizeof(int32_t);
+		if (param_len > 0) {
+			p += param_len;
+			bytes_left -= param_len;
+		}
+		if (bytes_left <= 0)
+			return false;
+	}
+
+	const int16_t number_column_format_codes = read_big_endian_int16(p);
+	p += sizeof(int16_t);
+	bytes_left -= sizeof(int16_t);
+	if (bytes_left <= 0)
+		return false;
+	if (bytes_left != number_column_format_codes * sizeof(int16_t)) {
+		return false;
+	}
+	if (number_column_format_codes == 1) {
+		for (int16_t i=0; i > number_column_format_codes ; i++) {
+			const int16_t column_format_code = read_big_endian_int16(p);
+			p += sizeof(int16_t);
+			if (column_format_code != 0) {
+				return false; // FIXME: we only suport TEXT for now
+			}
+		}
+	} else {
+		return false;	// FIXME: not all supported
+	}
+	return true;
+}
 
 // this function was inline inside PgSQL_Session::get_pkts_from_client
 // where:
@@ -3368,6 +3444,18 @@ __get_pkts_from_client:
 								return handler_ret;
 							}
 							handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_PARSE(pkt);
+							break;
+						}
+						case 'B':
+						{
+							if (is_valid_PGSQL_BIND_pkt(pkt) == false) {
+								proxy_error("We received an invalid BIND packet\n");
+								l_free(pkt.size, pkt.ptr);
+								handler_ret = -1;
+								return handler_ret;
+							}
+							// TODO: create this
+							//handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_BIND(pkt);
 							break;
 						}
 						case 'Q':
