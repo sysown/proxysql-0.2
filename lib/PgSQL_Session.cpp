@@ -343,6 +343,10 @@ PgSQL_Query_Info::~PgSQL_Query_Info() {
 	if (stmt_info) {
 		stmt_info=NULL;
 	}
+	if (BindPacket) {
+		free(BindPacket);
+		BindPacket = NULL;
+	}
 }
 
 void PgSQL_Query_Info::begin(unsigned char *_p, int len, bool mysql_header) {
@@ -2895,16 +2899,33 @@ void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_P
 // enum_mysql_command = _MYSQL_COM_STMT_EXECUTE
 //
 // all break were replaced with a return
-/* FIXME: completely disabled for now
-void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_EXECUTE(PtrSize_t& pkt) {
-	if (session_type != PROXYSQL_SESSION_PGSQL) { // only MySQL module supports prepared statement!!
+void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_BIND(PtrSize_t& pkt) {
+	if (session_type != PROXYSQL_SESSION_PGSQL) { // only PgSQL module supports prepared statement!!
 		l_free(pkt.size, pkt.ptr);
 		client_myds->setDSS_STATE_QUERY_SENT_NET();
-		client_myds->myprot.generate_pkt_ERR(true, NULL, NULL, 1, 1045, (char*)"28000", (char*)"Command not supported");
+		client_myds->myprot.generate_error_packet(true, false, "Prepared statements not supported", PGSQL_ERROR_CODES::ERRCODE_QUERY_CANCELED,
+			false, true);
 		client_myds->DSS = STATE_SLEEP;
 		status = WAITING_CLIENT_DATA;
 		return;
 	}
+	PgBindPacket * bindPacket = new PgBindPacket();
+	bool rc = false;
+	rc = bindPacket->parseBindPacket(pkt);
+	if (rc == false) {
+		proxy_error("We received an invalid BIND packet\n");
+		delete bindPacket;
+		l_free(pkt.size, pkt.ptr);
+		client_myds->setDSS_STATE_QUERY_SENT_NET();
+		client_myds->myprot.generate_error_packet(true, false, "Invalid BIND packet", PGSQL_ERROR_CODES::ERRCODE_QUERY_CANCELED,
+			false, true);
+		client_myds->DSS = STATE_SLEEP;
+		status = WAITING_CLIENT_DATA;
+		return;
+	}
+	CurrentQuery.BindPacket = bindPacket;
+	status = PGSQL_PROCESSING_BIND;
+/*
 	else {
 		// if we reach here, we are on MySQL module
 		bool rc_break = false;
@@ -3023,8 +3044,8 @@ void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 		mybe->server_myds->kill_type = 0;
 		client_myds->setDSS_STATE_QUERY_SENT_NET();
 	}
-}
 */
+}
 
 // this function was inline inside PgSQL_Session::get_pkts_from_client
 // ClickHouse doesn't support COM_INIT_DB , so we replace it
@@ -3325,6 +3346,55 @@ __get_pkts_from_client:
 			}
 			break;
 
+		case PGSQL_PROCESSING_BIND:
+			if (pkt.size > 5) {
+				const char *p = (const char *)pkt.ptr;
+				if (p[0] == 'D') {
+					PgDescribePacket describePacket;
+					// FIXME: parseDescribePacket perhaps should become a method of PgDescribePacket
+					bool rc = PgSQL_Protocol::parseDescribePacket(describePacket, pkt);
+					if (rc == true) {
+						// FIXME: we only check that the packet it correct, we do not verify the content
+						status = PGSQL_PROCESSING_DESCRIBE;
+					} else {
+						assert(0); // FIXME: add error handling
+					}
+					// FIXME: should we free pkt here?
+				}
+			}
+			break;
+
+		case PGSQL_PROCESSING_DESCRIBE:
+			if (pkt.size > 5) {
+				const char *p = (const char *)pkt.ptr;
+				if (p[0] == 'E') {
+					PgExecutePacket executePacket;
+					// FIXME: parseExecutePacket perhaps should become a method of PgExecutePacket
+					bool rc = PgSQL_Protocol::parseExecutePacket(executePacket, pkt);
+					if (rc == true) {
+						// FIXME: we only check that the packet it correct, we do not verify the content
+						status = PGSQL_PROCESSING_EXECUTE;
+					} else {
+						assert(0); // FIXME: add error handling
+					}
+					// FIXME: should we free pkt here?
+				}
+			}
+			break;
+
+		case PGSQL_PROCESSING_EXECUTE:
+			if (pkt.size == 5) {
+				const char *p = (const char *)pkt.ptr;
+				if (p[0] == 'S') {
+					status = PROCESSING_STMT_EXECUTE;
+				} else {
+					assert(0); // FIXME: add error handling
+				}
+			} else {
+				assert(0); // FIXME: add error handling
+			}
+			break;
+
 		case WAITING_CLIENT_DATA:
 			// this is handled only for real traffic, not mirror
 			if (pkt.size == (0xFFFFFF + sizeof(mysql_hdr))) {
@@ -3448,14 +3518,15 @@ __get_pkts_from_client:
 						}
 						case 'B':
 						{
+/*
 							if (is_valid_PGSQL_BIND_pkt(pkt) == false) {
 								proxy_error("We received an invalid BIND packet\n");
 								l_free(pkt.size, pkt.ptr);
 								handler_ret = -1;
 								return handler_ret;
 							}
-							// TODO: create this
-							//handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_BIND(pkt);
+*/
+							handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_BIND(pkt);
 							break;
 						}
 						case 'Q':

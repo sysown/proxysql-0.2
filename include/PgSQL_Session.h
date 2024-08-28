@@ -13,7 +13,7 @@
 #include "PgSQL_Variables.h"
 #include "Base_Session.h"
 
-
+class PgBindPacket;
 class PgSQL_Query_Result;
 //#include "../deps/json/json.hpp"
 //using json = nlohmann::json;
@@ -77,6 +77,7 @@ public:
 	uint64_t stmt_global_id;
 	uint64_t stmt_client_id;
 	PgSQL_STMT_Global_info* stmt_info;
+	PgBindPacket *BindPacket = NULL;
 
 	int QueryLength;
 	enum MYSQL_COM_QUERY_command MyComQueryCmd;
@@ -220,6 +221,7 @@ private:
 	bool is_valid_PGSQL_PARSE_pkt(PtrSize_t& pkt);
 	bool is_valid_PGSQL_BIND_pkt(PtrSize_t& pkt);
 	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_PARSE(PtrSize_t& pkt);
+	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_BIND(PtrSize_t& pkt);
 	//void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_EXECUTE(PtrSize_t& pkt);
 
 	// these functions have code that used to be inline, and split into functions for readibility

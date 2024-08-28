@@ -77,6 +77,55 @@ struct PG_Field {
 
 using PG_Fields = std::vector<PG_Field>;
 
+class PgBindPacket {
+public:
+	const char *portal_name;
+	const char *statement_name;
+	int num_parameters;
+	char **param_values;	// Array of pointers to parameter values
+	int *param_lengths;		// Array of lengths of parameter values
+	int *param_formats;		// Array of format codes for parameters
+	int num_result_formats;
+	int *result_formats;	// Array of format codes for result columns
+	char *ptr = NULL;
+	unsigned int pkt_size = 0;
+	void *pkt_ptr = nullptr;
+
+	PgBindPacket() : portal_name(nullptr), statement_name(nullptr), num_parameters(0),
+				param_values(nullptr), param_lengths(nullptr), param_formats(nullptr),
+				num_result_formats(0), result_formats(nullptr) {}
+
+	~PgBindPacket() {
+		delete[] param_values;
+		delete[] param_lengths;
+		delete[] param_formats;
+		delete[] result_formats;
+		if (pkt_ptr != nullptr) {
+			free(pkt_ptr);
+			pkt_ptr = nullptr;
+		}
+	}
+	bool parseBindPacket(PtrSize_t& pkt);
+};
+
+
+class PgDescribePacket {
+public:
+	char type;			// 'S' for prepared statement or 'P' for portal
+	const char* name;	// The name of the prepared statement or portal
+
+	PgDescribePacket() : type(0), name(nullptr) {}
+};
+
+class PgExecutePacket {
+public:
+	const char* portal_name;	// The name of the portal to execute
+	int max_rows;				// Maximum number of rows to return
+
+	PgExecutePacket() : portal_name(nullptr), max_rows(0) {}
+};
+
+
 class PG_pkt 
 {
 public:
@@ -266,6 +315,9 @@ public:
 	unsigned int copy_empty_query_response_to_PgSQL_Query_Result(bool send, PgSQL_Query_Result* pg_query_result, const PGresult* result);
 	unsigned int copy_ready_status_to_PgSQL_Query_Result(bool send, PgSQL_Query_Result* pg_query_result, PGTransactionStatusType txn_status);
 	unsigned int copy_buffer_to_PgSQL_Query_Result(bool send, PgSQL_Query_Result* pg_query_result, const PSresult* result);
+	//static bool parseBindPacket(PgBindPacket& bindPacket, PtrSize_t& pkt);
+	static bool parseDescribePacket(PgDescribePacket& describePacket, PtrSize_t& pkt);
+	static bool parseExecutePacket(PgExecutePacket& executePacket, PtrSize_t& pkt);
 
 private:
 	bool get_header(unsigned char* pkt, unsigned int len, pgsql_hdr* hdr);

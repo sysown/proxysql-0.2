@@ -2002,3 +2002,219 @@ void PgSQL_Query_Result::reset() {
 	pkt_count = 0;
 	result_packet_type = PGSQL_QUERY_RESULT_NO_DATA;
 }
+
+
+bool PgBindPacket::parseBindPacket(PtrSize_t& pkt) {
+	const char *packet = (const char *)pkt.ptr;
+	size_t length = pkt.size;
+	size_t offset = 0;
+
+	// Ensure packet length is sufficient for the initial 'B' identifier and the length field
+	if (length < sizeof(char) + sizeof(int32_t)) {
+		return false;
+	}
+
+	// Skip the initial 'B' identifier
+	offset += sizeof(char);
+
+	// Skip the length field
+	offset += sizeof(int32_t);
+
+	// Validate length for portal name
+	if (offset >= length) {
+		return false;
+	}
+
+	// Read the portal name
+	this->portal_name = packet + offset;
+	size_t portal_name_length = strlen(this->portal_name) + 1;
+	offset += portal_name_length;
+
+	// Validate length for statement name
+	if (offset >= length) {
+		return false;
+	}
+
+	// Read the statement name
+	this->statement_name = packet + offset;
+	size_t statement_name_length = strlen(this->statement_name) + 1;
+	offset += statement_name_length;
+
+	// Validate length for parameter format count
+	if (offset + sizeof(int16_t) > length) {
+		return false;
+	}
+
+	// Read the parameter format codes count
+	int16_t paramFormatCount = ntohs(*reinterpret_cast<const int16_t*>(packet + offset));
+	offset += sizeof(int16_t);
+
+	// Validate length for parameter format codes
+	if (offset + paramFormatCount * sizeof(int16_t) > length) {
+		return false;
+	}
+
+	this->param_formats = new int[paramFormatCount];
+	for (int i = 0; i < paramFormatCount; ++i) {
+		this->param_formats[i] = ntohs(*reinterpret_cast<const int16_t*>(packet + offset));
+		offset += sizeof(int16_t);
+	}
+
+	// Validate length for parameter value count
+	if (offset + sizeof(int16_t) > length) {
+		return false;
+	}
+
+	// Read the parameter values count
+	int16_t paramValueCount = ntohs(*reinterpret_cast<const int16_t*>(packet + offset));
+	offset += sizeof(int16_t);
+
+	this->num_parameters = paramValueCount;
+	this->param_values = new char*[paramValueCount];
+	this->param_lengths = new int[paramValueCount];
+
+	for (int i = 0; i < paramValueCount; ++i) {
+		// Validate length for each parameter value length field
+		if (offset + sizeof(int32_t) > length) {
+			return false;
+		}
+
+		int32_t valueLength = ntohl(*reinterpret_cast<const int32_t*>(packet + offset));
+		offset += sizeof(int32_t);
+
+		// Validate length for the actual parameter value
+		if (offset + valueLength > length) {
+			return false;
+		}
+
+		this->param_lengths[i] = valueLength;
+		this->param_values[i] = const_cast<char*>(packet + offset);
+		offset += valueLength;
+	}
+
+	// Validate length for result column format codes
+	if (offset + sizeof(int16_t) > length) {
+		return false;
+	}
+
+	int16_t resultFormatCount = ntohs(*reinterpret_cast<const int16_t*>(packet + offset));
+	offset += sizeof(int16_t);
+
+	// Validate length for all result column format codes
+	if (offset + resultFormatCount * sizeof(int16_t) > length) {
+		return false;
+	}
+
+	this->num_result_formats = resultFormatCount;
+	this->result_formats = new int[resultFormatCount];
+	for (int i = 0; i < resultFormatCount; ++i) {
+		this->result_formats[i] = ntohs(*reinterpret_cast<const int16_t*>(packet + offset));
+		offset += sizeof(int16_t);
+	}
+
+	// take "ownership"
+	this->pkt_size = pkt.size;
+	this->pkt_ptr = pkt.ptr;
+	return true;
+}
+
+bool PgSQL_Protocol::parseDescribePacket(PgDescribePacket& describePacket, PtrSize_t& pkt) {
+	const char *packet = (const char *)pkt.ptr;
+	size_t length = pkt.size;
+	size_t offset = 0;
+
+	// Check if the packet length is sufficient for the initial 'D' identifier and length field
+	if (length < 5) {  // 1 byte for message type + 4 bytes for message length
+		return false;
+	}
+
+	// Skip the initial 'D' identifier
+	offset += sizeof(char);
+
+	// Read the length of the packet (4 bytes, big-endian)
+	int32_t packetLength = ntohl(*reinterpret_cast<const int32_t*>(packet + offset));
+	offset += sizeof(int32_t);
+
+	// Check if the reported packet length matches the provided length
+	if (static_cast<size_t>(packetLength) != length - 1) {
+		return false;
+	}
+
+	// Check if remaining packet length is sufficient for the type and name fields
+	if (length < offset + sizeof(char) + 1) {
+		return false;  // Not enough data for type and at least null-terminated name
+	}
+
+	// Read the type ('S' for prepared statement, 'P' for portal)
+	describePacket.type = packet[offset];
+	offset += sizeof(char);
+
+	// Validate type field
+	if (describePacket.type != 'S' && describePacket.type != 'P') {
+		return false;  // Invalid type field
+	}
+
+	// Read the name (null-terminated string)
+	describePacket.name = packet + offset;
+
+	// Ensure there is a null-terminator within the packet length
+	size_t name_length = strnlen(describePacket.name, length - offset);
+	if (offset + name_length >= length) {
+		return false;  // No null-terminator found within the packet bounds
+	}
+
+	return true;  // Successfully parsed Describe packet
+}
+
+
+bool PgSQL_Protocol::parseExecutePacket(PgExecutePacket& executePacket, PtrSize_t& pkt) {
+	const char *packet = (const char *)pkt.ptr;
+	size_t length = pkt.size;
+	size_t offset = 0;
+
+	// Check if the packet length is sufficient for the initial 'E' identifier and length field
+	if (length < 5) {  // 1 byte for message type + 4 bytes for message length
+		return false;
+	}
+
+	// Skip the initial 'E' identifier
+	offset += sizeof(char);
+
+	// Read the length of the packet (4 bytes, big-endian)
+	int32_t packetLength = ntohl(*reinterpret_cast<const int32_t*>(packet + offset));
+	offset += sizeof(int32_t);
+
+	// Check if the reported packet length matches the provided length
+	if (static_cast<size_t>(packetLength) != length - 1) {
+		return false;
+	}
+
+	// Validate remaining length for portal name (at least 1 byte for null-terminated string)
+	if (offset >= length) {
+		return false;  // Not enough data for portal name
+	}
+
+	// Read the portal name (null-terminated string)
+	executePacket.portal_name = packet + offset;
+	size_t portal_name_length = strnlen(executePacket.portal_name, length - offset);
+
+	// Ensure there is a null-terminator within the packet length
+	if (offset + portal_name_length >= length) {
+		return false;  // No null-terminator found within the packet bounds
+	}
+
+	offset += portal_name_length + 1;  // Move past the null-terminated portal name
+
+	// Validate remaining length for max_rows field
+	if (offset + sizeof(int32_t) > length) {
+		return false;  // Not enough data for max_rows
+	}
+
+	// Read the max_rows (4-byte integer)
+	executePacket.max_rows = ntohl(*reinterpret_cast<const int32_t*>(packet + offset));
+
+	return true;  // Successfully parsed Execute packet
+}
+
+
+
