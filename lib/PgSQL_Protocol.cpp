@@ -2212,4 +2212,85 @@ bool PgSQL_Protocol::parseExecutePacket(PgExecutePacket& executePacket, PtrSize_
 }
 
 
+bool PgParsePacket::parseParsePacket(PtrSize_t& pkt) {
+	const char *packet = (const char *)pkt.ptr;
+	size_t length = pkt.size;
+    size_t offset = 0;
 
+    // Check if the packet length is sufficient for the initial 'P' identifier and length field
+    if (length < 5) {  // 1 byte for message type + 4 bytes for message length
+        return false;
+    }
+
+    // Skip the initial 'P' identifier
+    offset += sizeof(char);
+
+    // Read the length of the packet (4 bytes, big-endian)
+    int32_t packetLength = ntohl(*reinterpret_cast<const int32_t*>(packet + offset));
+    offset += sizeof(int32_t);
+
+    // Check if the reported packet length matches the provided length
+    if (static_cast<size_t>(packetLength) != length - 1) {
+        return false;
+    }
+
+    // Validate remaining length for statement name (at least 1 byte for null-terminated string)
+    if (offset >= length) {
+        return false;  // Not enough data for statement name
+    }
+
+    // Read the statement name (null-terminated string)
+    this->statementName = packet + offset;
+    size_t statement_name_length = strnlen(this->statementName, length - offset);
+
+    // Ensure there is a null-terminator within the packet length
+    if (offset + statement_name_length >= length) {
+        return false;  // No null-terminator found within the packet bounds
+    }
+
+    offset += statement_name_length + 1;  // Move past the null-terminated statement name
+
+    // Validate remaining length for query string (at least 1 byte for null-terminated string)
+    if (offset >= length) {
+        return false;  // Not enough data for query string
+    }
+
+    // Read the query string (null-terminated string)
+    this->query = packet + offset;
+    size_t query_length = strnlen(this->query, length - offset);
+
+    // Ensure there is a null-terminator within the packet length
+    if (offset + query_length >= length) {
+        return false;  // No null-terminator found within the packet bounds
+    }
+
+    offset += query_length + 1;  // Move past the null-terminated query string
+
+    // Validate remaining length for number of parameter types (2 bytes)
+    if (offset + sizeof(int16_t) > length) {
+        return false;  // Not enough data for numParameterTypes
+    }
+
+    // Read the number of parameter types (2-byte integer)
+    this->numParameterTypes = ntohs(*reinterpret_cast<const int16_t*>(packet + offset));
+    offset += sizeof(int16_t);
+
+    // If there are parameter types, ensure there's enough data for all of them
+    if (this->numParameterTypes > 0) {
+        if (offset + this->numParameterTypes * sizeof(int32_t) > length) {
+            return false;  // Not enough data for all parameter types
+        }
+
+        // Read the parameter types array (each is 4 bytes, big-endian)
+        this->parameterTypes = reinterpret_cast<const int32_t*>(packet + offset);
+
+        // Move past the parameter types
+        offset += this->numParameterTypes * sizeof(int32_t);
+    }
+
+	// take "ownership"
+	this->pkt_size = pkt.size;
+	this->pkt_ptr = pkt.ptr;
+    // If we reach here, the packet is valid and fully parsed
+    return true;
+}

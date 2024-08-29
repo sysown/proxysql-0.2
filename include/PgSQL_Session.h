@@ -218,8 +218,8 @@ private:
 	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_RESET(PtrSize_t&);
 	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_CLOSE(PtrSize_t&);
 	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_SEND_LONG_DATA(PtrSize_t&);
-	bool is_valid_PGSQL_PARSE_pkt(PtrSize_t& pkt);
-	bool is_valid_PGSQL_BIND_pkt(PtrSize_t& pkt);
+	//bool is_valid_PGSQL_PARSE_pkt(PtrSize_t& pkt); // deprecated
+	//bool is_valid_PGSQL_BIND_pkt(PtrSize_t& pkt);  // deprecated
 	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_PARSE(PtrSize_t& pkt);
 	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_BIND(PtrSize_t& pkt);
 	//void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_EXECUTE(PtrSize_t& pkt);

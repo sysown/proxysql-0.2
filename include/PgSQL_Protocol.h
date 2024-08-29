@@ -125,6 +125,25 @@ public:
 	PgExecutePacket() : portal_name(nullptr), max_rows(0) {}
 };
 
+class PgParsePacket {
+public:
+	const char* statementName;	// The name of the prepared statement
+	const char* query;			// The query string to be prepared
+	int16_t numParameterTypes;	// Number of parameter types specified
+	const int32_t* parameterTypes;	// Array of parameter types (can be nullptr if none)
+	unsigned int pkt_size = 0;
+	void *pkt_ptr = nullptr;
+
+	PgParsePacket() : statementName(nullptr), query(nullptr), numParameterTypes(0), parameterTypes(nullptr) {}
+
+	~PgParsePacket() {
+		if (pkt_ptr != nullptr) {
+			free(pkt_ptr);
+			pkt_ptr = nullptr;
+		}
+	}
+	bool parseParsePacket(PtrSize_t& pkt);
+};
 
 class PG_pkt 
 {
