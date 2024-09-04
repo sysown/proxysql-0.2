@@ -128,8 +128,10 @@ int ProxySQL_Test___GenerateRandomQueryInDigestTable(int n) {
 					myhash.Update(ui.schemaname,strlen(ui.schemaname));
 					myhash.Update(&hg,sizeof(hg));
 					myhash.Final(&qp.digest_total,&hash2);
-					//update_query_digest(qp, sess->current_hostgroup, ui, t, sess->thread->curtime, NULL, sess);
-					GloQPro->update_query_digest(&qp,hg, &ui,fastrand(),0,NULL,sess);
+
+					MySQL_STMT_Global_info *stmt_info = NULL;
+					GloQPro->update_query_digest(&qp, hg, &ui, fastrand(), 0, stmt_info, sess);
+
 				}
 			}
 		}

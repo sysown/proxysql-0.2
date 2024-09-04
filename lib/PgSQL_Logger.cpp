@@ -8,7 +8,7 @@ using json = nlohmann::json;
 
 #include "PgSQL_Data_Stream.h"
 #include "query_processor.h"
-#include "MySQL_PreparedStatement.h"
+#include "PgSQL_PreparedStatement.h"
 #include "PgSQL_Logger.hpp"
 
 #include <dirent.h>
@@ -60,10 +60,8 @@ PgSQL_Event::PgSQL_Event (log_event_type _et, uint32_t _thread_id, char * _usern
 	affected_rows=0;
 	last_insert_id = 0;
 	have_rows_sent=false;
-	have_gtid=false;
 	rows_sent=0;
 	client_stmt_id=0;
-	gtid = NULL;
 }
 
 void PgSQL_Event::set_client_stmt_id(uint32_t client_stmt_id) {
@@ -81,15 +79,6 @@ void PgSQL_Event::set_affected_rows(uint64_t ar, uint64_t lid) {
 void PgSQL_Event::set_rows_sent(uint64_t rs) {
 	have_rows_sent=true;
 	rows_sent=rs;
-}
-
-void PgSQL_Event::set_gtid(PgSQL_Session *sess) {
-	if (sess != NULL) {
-		if (sess->gtid_buf[0] != 0) {
-			have_gtid = true;
-			gtid = sess->gtid_buf;
-		}
-	}
 }
 
 void PgSQL_Event::set_extra_info(char *_err) {
@@ -423,9 +412,6 @@ uint64_t PgSQL_Event::write_query_format_2_json(std::fstream *f) {
 	if (have_rows_sent == true) {
 		j["rows_sent"] = rows_sent;
 	}
-	if (have_gtid == true) {
-		j["last_gtid"] = gtid;
-	}
 	j["query"] = string(query_ptr,query_len);
 	j["starttime_timestamp_us"] = start_time;
 	{
@@ -741,12 +727,14 @@ void PgSQL_Logger::log_request(PgSQL_Session *sess, PgSQL_Data_Stream *myds) {
 	char *c = NULL;
 	int ql = 0;
 	switch (sess->status) {
+/*
 		case PROCESSING_STMT_EXECUTE:
 			c = (char *)sess->CurrentQuery.stmt_info->query;
 			ql = sess->CurrentQuery.stmt_info->query_length;
 			me.set_client_stmt_id(sess->CurrentQuery.stmt_client_id);
 			break;
 		case PROCESSING_STMT_PREPARE:
+*/
 		default:
 			c = (char *)sess->CurrentQuery.QueryPointer;
 			ql = sess->CurrentQuery.QueryLength;
@@ -768,7 +756,6 @@ void PgSQL_Logger::log_request(PgSQL_Session *sess, PgSQL_Data_Stream *myds) {
 		me.set_affected_rows(sess->CurrentQuery.affected_rows, sess->CurrentQuery.last_insert_id);
 	}
 	me.set_rows_sent(sess->CurrentQuery.rows_sent);
-	me.set_gtid(sess);
 
 	int sl=0;
 	char *sa=(char *)""; // default

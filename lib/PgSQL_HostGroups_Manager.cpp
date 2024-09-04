@@ -1783,15 +1783,19 @@ void PgSQL_HostGroups_Manager::push_MyConn_to_pool(PgSQL_Connection *c, bool _lo
 	if (mysrvc->status==MYSQL_SERVER_STATUS_ONLINE) {
 		if (c->async_state_machine==ASYNC_IDLE) {
 			if (GloMTH == NULL) { goto __exit_push_MyConn_to_pool; }
+#if 0 // disabled for now
 			if (c->local_stmts->get_num_backend_stmts() > (unsigned int)GloMTH->variables.max_stmts_per_connection) {
 				proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 7, "Destroying PgSQL_Connection %p, server %s:%d with status %d because has too many prepared statements\n", c, mysrvc->address, mysrvc->port, mysrvc->status);
 //				delete c;
 				mysrvc->ConnectionsUsed->add(c); // Add the connection back to the list of used connections
 				destroy_MyConn_from_pool(c, false); // Destroy the connection from the pool
 			} else {
+#endif // 0
 				c->optimize();
 				mysrvc->ConnectionsFree->add(c);
+#if 0 // disabled for now
 			}
+#endif // 0
 		} else {
 			proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 7, "Destroying PgSQL_Connection %p, server %s:%d with status %d\n", c, mysrvc->address, mysrvc->port, mysrvc->status);
 			delete c;

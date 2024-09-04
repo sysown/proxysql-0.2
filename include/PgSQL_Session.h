@@ -12,7 +12,8 @@
 #include "PgSQL_Variables.h"
 #include "Base_Session.h"
 
-
+class PgBindPacket;
+class PgParsePacket;
 class PgSQL_Query_Result;
 //#include "../deps/json/json.hpp"
 //using json = nlohmann::json;
@@ -70,11 +71,14 @@ public:
 	unsigned long long start_time;
 	unsigned long long end_time;
 
-	MYSQL_STMT* mysql_stmt;
-	stmt_execute_metadata_t* stmt_meta;
+	MYSQL_STMT* mysql_stmt; // FIXME: to be removed
+	unsigned char *stmt_name = NULL;
+	stmt_execute_metadata_t* stmt_meta; // FIXME: to be removed
 	uint64_t stmt_global_id;
 	uint64_t stmt_client_id;
-	MySQL_STMT_Global_info* stmt_info;
+	PgSQL_STMT_Global_info* stmt_info;
+	PgBindPacket *BindPacket = NULL;
+	PgParsePacket *ParsePacket = NULL;
 
 	int QueryLength;
 	enum MYSQL_COM_QUERY_command MyComQueryCmd;
@@ -189,13 +193,11 @@ private:
 	bool handler_again___verify_init_connect();
 	bool handler_again___verify_ldap_user_variable();
 	//bool handler_again___verify_backend_autocommit();
-	bool handler_again___verify_backend_session_track_gtids();
 	bool handler_again___verify_backend_multi_statement();
 	bool handler_again___verify_backend_user_db();
 	bool handler_again___status_SETTING_INIT_CONNECT(int*);
 	bool handler_again___status_SETTING_LDAP_USER_VARIABLE(int*);
 	bool handler_again___status_SETTING_SQL_MODE(int*);
-	bool handler_again___status_SETTING_SESSION_TRACK_GTIDS(int*);
 	bool handler_again___status_CHANGING_CHARSET(int* _rc);
 	bool handler_again___status_CHANGING_SCHEMA(int*);
 	bool handler_again___status_CONNECTING_SERVER(int*);
@@ -217,14 +219,17 @@ private:
 	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_RESET(PtrSize_t&);
 	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_CLOSE(PtrSize_t&);
 	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_SEND_LONG_DATA(PtrSize_t&);
-	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_PREPARE(PtrSize_t& pkt);
-	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_EXECUTE(PtrSize_t& pkt);
+	//bool is_valid_PGSQL_PARSE_pkt(PtrSize_t& pkt); // deprecated
+	//bool is_valid_PGSQL_BIND_pkt(PtrSize_t& pkt);  // deprecated
+	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_PARSE(PtrSize_t& pkt);
+	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_BIND(PtrSize_t& pkt);
+	//void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_EXECUTE(PtrSize_t& pkt);
 
 	// these functions have code that used to be inline, and split into functions for readibility
 	int handler_ProcessingQueryError_CheckBackendConnectionStatus(PgSQL_Data_Stream* myds);
 	void SetQueryTimeout();
 	bool handler_rc0_PROCESSING_STMT_PREPARE(enum session_status& st, PgSQL_Data_Stream* myds, bool& prepared_stmt_with_no_params);
-	void handler_rc0_PROCESSING_STMT_EXECUTE(PgSQL_Data_Stream* myds);
+	//void handler_rc0_PROCESSING_STMT_EXECUTE(PgSQL_Data_Stream* myds);
 	bool handler_minus1_ClientLibraryError(PgSQL_Data_Stream* myds);
 	void handler_minus1_LogErrorDuringQuery(PgSQL_Connection* myconn);
 	bool handler_minus1_HandleErrorCodes(PgSQL_Data_Stream* myds, int& handler_ret);
@@ -232,7 +237,6 @@ private:
 	void handler_minus1_HandleBackendConnection(PgSQL_Data_Stream* myds);
 	int RunQuery(PgSQL_Data_Stream* myds, PgSQL_Connection* myconn);
 	void handler___status_WAITING_CLIENT_DATA();
-	void handler_rc0_Process_GTID(PgSQL_Connection* myconn);
 	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_INIT_DB_replace_CLICKHOUSE(PtrSize_t& pkt);
 	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_QUERY___not_mysql(PtrSize_t& pkt);
 	bool handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_QUERY_detect_SQLi();
@@ -342,12 +346,6 @@ public:
 	 *   This flag was introduced for issue #3504.
 	 */
 	bool change_user_auth_switch;
-
-	bool with_gtid;
-
-	char gtid_buf[128];
-	//uint64_t gtid_trxid;
-	int gtid_hid;
 
 //	MySQL_STMTs_meta* sess_STMTs_meta;
 //	StmtLongDataHandler* SLDH;

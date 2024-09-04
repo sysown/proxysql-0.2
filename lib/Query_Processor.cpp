@@ -11,6 +11,7 @@ using json = nlohmann::json;
 #include "cpp.h"
 
 #include "MySQL_PreparedStatement.h"
+#include "PgSQL_PreparedStatement.h"
 #include "PgSQL_Data_Stream.h"
 #include "MySQL_Data_Stream.h"
 #include "query_processor.h"
@@ -1475,37 +1476,63 @@ Query_Processor_Output * Query_Processor::process_mysql_query(S* sess, void *ptr
 	Query_Processor_Output *ret=sess->qpo;
 	ret->init();
 
-
 	SQP_par_t stmt_exec_qp;
 	SQP_par_t *qp=NULL;
 	if (qi) {
-		// NOTE: if ptr == NULL , we are calling process_mysql_query() on an STMT_EXECUTE
-		if (ptr) {
-			qp=(SQP_par_t *)&qi->QueryParserArgs;
+		if constexpr (std::is_same_v<S, MySQL_Session>) {
+			// NOTE: if ptr == NULL , we are calling process_mysql_query() on an STMT_EXECUTE
+			if (ptr) {
+				qp=(SQP_par_t *)&qi->QueryParserArgs;
+			} else {
+				qp=&stmt_exec_qp;
+				qp->digest = qi->stmt_info->digest;
+				qp->digest_text = qi->stmt_info->digest_text;
+				qp->first_comment = qi->stmt_info->first_comment;
+			}
+		} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
+			if (ptr) {
+				qp=(SQP_par_t *)&qi->QueryParserArgs;
+			} else {
+				assert(0); // FIXME
+			}
 		} else {
-			qp=&stmt_exec_qp;
-			qp->digest = qi->stmt_info->digest;
-			qp->digest_text = qi->stmt_info->digest_text;
-			qp->first_comment = qi->stmt_info->first_comment;
+			assert(0);
 		}
 	}
 #define stackbuffer_size 128
 	char stackbuffer[stackbuffer_size];
 	unsigned int len=0;
 	char *query=NULL;
-	// NOTE: if ptr == NULL , we are calling process_mysql_query() on an STMT_EXECUTE
-	if (ptr) {
-		len = size-sizeof(mysql_hdr)-1;
-		if (len < stackbuffer_size) {
-			query=stackbuffer;
+	if constexpr (std::is_same_v<S, MySQL_Session>) {
+		// NOTE: if ptr == NULL , we are calling process_mysql_query() on an STMT_EXECUTE
+		if (ptr) {
+			len = size-sizeof(mysql_hdr)-1;
+			if (len < stackbuffer_size) {
+				query=stackbuffer;
+			} else {
+				query=(char *)l_alloc(len+1);
+			}
+			memcpy(query,(char *)ptr+sizeof(mysql_hdr)+1,len);
+			query[len]=0;
 		} else {
-			query=(char *)l_alloc(len+1);
+			query = qi->stmt_info->query;
+			len = qi->stmt_info->query_length;
 		}
-		memcpy(query,(char *)ptr+sizeof(mysql_hdr)+1,len);
-		query[len]=0;
+	} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
+		if (ptr) {
+			len = qi->QueryLength;
+			if (len < stackbuffer_size) {
+				query=stackbuffer;
+			} else {
+				query=(char *)l_alloc(len+1);
+			}
+			memcpy(query, qi->QueryPointer, len);
+			query[len]=0;
+		} else {
+			assert(0); // FIXME
+		}
 	} else {
-		query = qi->stmt_info->query;
-		len = qi->stmt_info->query_length;
+		assert(0);
 	}
 	if (__sync_add_and_fetch(&version,0) > _thr_SQP_version) {
 		// update local rules;
@@ -2123,7 +2150,18 @@ unsigned long long Query_Processor::query_parser_update_counters(S* sess, enum M
 		myhash.Update(&sess->current_hostgroup,sizeof(sess->default_hostgroup));
 		myhash.Update(ca,strlen(ca));
 		myhash.Final(&qp->digest_total,&hash2);
-		update_query_digest(qp, sess->current_hostgroup, ui, t, sess->thread->curtime, NULL, sess);
+
+//		update_query_digest(qp, sess->current_hostgroup, ui, t, sess->thread->curtime, NULL, sess);
+
+		if constexpr (std::is_same_v<S, MySQL_Session>) {
+			MySQL_STMT_Global_info *stmt_info = NULL;
+			update_query_digest(qp, sess->current_hostgroup, ui, t, sess->thread->curtime, stmt_info, sess);
+		} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
+			PgSQL_STMT_Global_info *stmt_info = NULL;
+			update_query_digest(qp, sess->current_hostgroup, ui, t, sess->thread->curtime, stmt_info, sess);
+		} else {
+			assert(0);
+		}
 	}
 	if (sess->CurrentQuery.stmt_info && sess->CurrentQuery.stmt_info->digest_text) {
 		uint64_t hash2;
@@ -2136,21 +2174,38 @@ unsigned long long Query_Processor::query_parser_update_counters(S* sess, enum M
 		auto *ui=sess->client_myds->myconn->userinfo;
 		assert(ui->username);
 		assert(ui->schemaname);
-		MySQL_STMT_Global_info *stmt_info=sess->CurrentQuery.stmt_info;
 		myhash.Update(ui->username,strlen(ui->username));
-		myhash.Update(&stmt_info->digest,sizeof(qp->digest));
+		if constexpr (std::is_same_v<S, MySQL_Session>) {
+			MySQL_STMT_Global_info *stmt_info=sess->CurrentQuery.stmt_info;
+			myhash.Update(&stmt_info->digest,sizeof(qp->digest));
+		} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
+			PgSQL_STMT_Global_info *stmt_info=sess->CurrentQuery.stmt_info;
+			myhash.Update(&stmt_info->digest,sizeof(qp->digest));
+		} else {
+			assert(0);
+		}
 		myhash.Update(ui->schemaname,strlen(ui->schemaname));
 		myhash.Update(&sess->current_hostgroup,sizeof(sess->default_hostgroup));
 		myhash.Update(ca,strlen(ca));
 		myhash.Final(&qp->digest_total,&hash2);
 		//delete myhash;
-		update_query_digest(qp, sess->current_hostgroup, ui, t, sess->thread->curtime, stmt_info, sess);
+
+//		update_query_digest(qp, sess->current_hostgroup, ui, t, sess->thread->curtime, stmt_info, sess);
+
+		if constexpr (std::is_same_v<S, MySQL_Session>) {
+			MySQL_STMT_Global_info *stmt_info=sess->CurrentQuery.stmt_info;
+			update_query_digest(qp, sess->current_hostgroup, ui, t, sess->thread->curtime, stmt_info, sess);
+		} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
+			PgSQL_STMT_Global_info *stmt_info=sess->CurrentQuery.stmt_info;
+			update_query_digest(qp, sess->current_hostgroup, ui, t, sess->thread->curtime, stmt_info, sess);
+		}
 	}
 	return ret;
 }
 
-template<typename S, typename CI>
-void Query_Processor::update_query_digest(SQP_par_t *qp, int hid, CI* ui, unsigned long long t, unsigned long long n, MySQL_STMT_Global_info *_stmt_info, S* sess) {
+
+template<typename S, typename CI, typename SGI>
+void Query_Processor::update_query_digest(SQP_par_t *qp, int hid, CI* ui, unsigned long long t, unsigned long long n, SGI *_stmt_info, S * sess) {
 	pthread_rwlock_wrlock(&digest_rwlock);
 	QP_query_digest_stats *qds;
 
@@ -3433,4 +3488,3 @@ Query_Processor_Output* Query_Processor::process_mysql_query<PgSQL_Session, PgSQ
 
 template
 unsigned long long Query_Processor::query_parser_update_counters<PgSQL_Session>(PgSQL_Session*, MYSQL_COM_QUERY_command, __SQP_query_parser_t*, unsigned long long);
-

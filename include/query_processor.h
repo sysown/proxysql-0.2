@@ -365,8 +365,8 @@ class Query_Processor {
 	char * get_digest_text(SQP_par_t *qp);
 	uint64_t get_digest(SQP_par_t *qp);
 	bool is_valid_gtid(char *gtid, size_t gtid_len);
-	template<typename S, typename CI>
-	void update_query_digest(SQP_par_t *qp, int hid, CI* ui, unsigned long long t, unsigned long long n, MySQL_STMT_Global_info *_stmt_info, S* sess);
+	template<typename S, typename CI, typename SGI>
+	void update_query_digest(SQP_par_t *qp, int hid, CI* ui, unsigned long long t, unsigned long long n, SGI *_stmt_info, S * sess);
 	template<typename S>
 	unsigned long long query_parser_update_counters(S* sess, enum MYSQL_COM_QUERY_command c, SQP_par_t *qp, unsigned long long t);
 

@@ -1,0 +1,23 @@
+--- c.h	2024-05-06 20:21:25.000000000 +0000
++++ c.h	2024-09-04 10:58:03.333101134 +0000
+@@ -177,7 +177,9 @@
+ 
+ /* GCC, Sunpro and XLC support aligned, packed and noreturn */
+ #if defined(__GNUC__) || defined(__SUNPRO_C) || defined(__IBMC__)
++#ifndef PG_SYM_PROXYSQL
+ #define pg_attribute_aligned(a) __attribute__((aligned(a)))
++#endif // PG_SYM_PROXYSQL
+ #define pg_attribute_noreturn() __attribute__((noreturn))
+ #define pg_attribute_packed() __attribute__((packed))
+ #define HAVE_PG_ATTRIBUTE_NORETURN 1
+@@ -549,8 +551,9 @@
+ 			pg_attribute_aligned(MAXIMUM_ALIGNOF)
+ #endif
+ 		   ;
+-
++#ifndef PG_SYM_PROXYSQL
+ typedef unsigned PG_INT128_TYPE uint128
++#endif // PG_SYM_PROXYSQL
+ #if defined(pg_attribute_aligned)
+ 			pg_attribute_aligned(MAXIMUM_ALIGNOF)
+ #endif
