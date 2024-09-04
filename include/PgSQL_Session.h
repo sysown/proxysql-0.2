@@ -14,6 +14,7 @@
 #include "Base_Session.h"
 
 class PgBindPacket;
+class PgParsePacket;
 class PgSQL_Query_Result;
 //#include "../deps/json/json.hpp"
 //using json = nlohmann::json;
@@ -78,6 +79,7 @@ public:
 	uint64_t stmt_client_id;
 	PgSQL_STMT_Global_info* stmt_info;
 	PgBindPacket *BindPacket = NULL;
+	PgParsePacket *ParsePacket = NULL;
 
 	int QueryLength;
 	enum MYSQL_COM_QUERY_command MyComQueryCmd;

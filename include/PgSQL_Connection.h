@@ -419,8 +419,8 @@ class PgSQL_Connection_Placeholder {
 
 	int async_set_option(short event, bool mask);
 
-	void stmt_execute_start();
-	void stmt_execute_cont(short event);
+	//void stmt_execute_start();
+	//void stmt_execute_cont(short event);
 	void stmt_execute_store_result_start();
 	void stmt_execute_store_result_cont(short event);
 
@@ -514,6 +514,8 @@ public:
 		return PQprotocolVersion(pgsql_conn);
 	}
 
+	void stmt_execute_start();
+	void stmt_execute_cont(short event);
 	void stmt_prepare_start();
 	void stmt_prepare_cont(short event);
 

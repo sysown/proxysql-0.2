@@ -1,7 +1,7 @@
-
 #include <fcntl.h>
 #include <sstream>
 #include <atomic>
+
 #include "../deps/json/json.hpp"
 using json = nlohmann::json;
 #define PROXYJSON
@@ -13,6 +13,13 @@ using json = nlohmann::json;
 #include "PgSQL_Data_Stream.h"
 #include "query_processor.h"
 #include "MySQL_Variables.h"
+
+#define PG_SYM_PROXYSQL
+#include "c.h"
+#include "libpq/pqcomm.h"
+#include "libpq-fe.h"
+#include "libpq-int.h"
+
 
 
 // some of the code that follows is from mariadb client library memory allocator
@@ -727,27 +734,51 @@ void PgSQL_Connection_Placeholder::stmt_prepare_cont(short event) {
 }
 */
 
-void PgSQL_Connection_Placeholder::stmt_execute_start() {
+
+void PgSQL_Connection::stmt_execute_start() {
 	PROXY_TRACE();
 	int _rc=0;
-	assert(query.stmt->mysql); // if we reached here, we hit bug #740
-	_rc=mysql_stmt_bind_param(query.stmt, query.stmt_meta->binds); // FIXME : add error handling
-	if (_rc) {
-		proxy_error("mysql_stmt_bind_param() failed: %s", mysql_stmt_error(query.stmt));
+	assert(myds->sess != nullptr);
+	PgSQL_Session * tmpsess = myds->sess;
+	assert(tmpsess->CurrentQuery.BindPacket != nullptr);
+	PgBindPacket& bindPacket = *tmpsess->CurrentQuery.BindPacket;
+
+
+	_rc = PQsendQueryParams(pgsql_conn,
+								   bindPacket.statement_name,	// The prepared statement name
+								   bindPacket.num_parameters,	// Number of parameters
+								   nullptr,						// Parameter types (NULL means the server infers the types)
+								   bindPacket.param_values,		// Parameter values
+								   bindPacket.param_lengths,	// Parameter lengths
+								   bindPacket.param_formats,	// Parameter formats
+								   bindPacket.num_result_formats > 0 ? 1 : 0 // Use binary if result_formats array is present
+								  );
+
+	if (_rc == 0) {
+		proxy_error("PQsendQueryParams() failed"); // FIXME: more verbose output is needed
 	}
-	// if for whatever reason the previous execution failed, state is left to an inconsistent value
-	// see bug #3547
-	// here we force the state to be MYSQL_STMT_PREPARED
-	// it is a nasty hack because we shouldn't change states that should belong to the library
-	// I am not sure if this is a bug in the backend library or not
-	query.stmt->state= MYSQL_STMT_PREPARED;
-	async_exit_status = mysql_stmt_execute_start(&interr , query.stmt);
+	async_exit_status = _rc;
 }
 
-void PgSQL_Connection_Placeholder::stmt_execute_cont(short event) {
-	proxy_debug(PROXY_DEBUG_PGSQL_PROTOCOL, 6,"event=%d\n", event);
-	async_exit_status = mysql_stmt_execute_cont(&interr , query.stmt , mysql_status(event, true));
+void PgSQL_Connection::stmt_execute_cont(short event) {
+	PQconsumeInput(pgsql_conn); // TODO: error handling
+	if (PQisBusy(pgsql_conn) == 0) { // A 0 return indicates that PQgetResult can be called with assurance of not blocking
+		async_exit_status = 0; // completed
+		PGresult *res = PQgetResult(pgsql_conn);
+		if (PQresultStatus(res) == PGRES_COMMAND_OK) {
+			interr = 0;
+			PQclear(res);
+			res = PQgetResult(pgsql_conn);
+			assert(res == NULL); // there should never be more result!
+		} else {
+			interr = 1;
+			assert(0); // FIXME: TODO: error handling!!!
+		}
+	} else {
+		async_exit_status = 1; // not completed yet
+	}
 }
+
 
 void PgSQL_Connection_Placeholder::stmt_execute_store_result_start() {
 	PROXY_TRACE();
@@ -1709,10 +1740,11 @@ handler_again:
 			PROXY_TRACE2();
 			stmt_execute_start();
 			__sync_fetch_and_add(&parent->queries_sent,1);
-			__sync_fetch_and_add(&parent->bytes_sent,query.stmt_meta->size);
-			myds->sess->thread->status_variables.stvar[st_var_queries_backends_bytes_sent]+=query.stmt_meta->size;
-			myds->bytes_info.bytes_sent += query.stmt_meta->size;
-			bytes_info.bytes_sent += query.stmt_meta->size;
+			// // Disabling this, not relevant for PostgreSQL
+			//__sync_fetch_and_add(&parent->bytes_sent,query.stmt_meta->size);
+			//myds->sess->thread->status_variables.stvar[st_var_queries_backends_bytes_sent]+=query.stmt_meta->size;
+			//myds->bytes_info.bytes_sent += query.stmt_meta->size;
+			//bytes_info.bytes_sent += query.stmt_meta->size;
 			if (async_exit_status) {
 				next_event(ASYNC_STMT_EXECUTE_CONT);
 			} else {

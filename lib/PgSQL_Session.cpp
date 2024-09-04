@@ -344,8 +344,12 @@ PgSQL_Query_Info::~PgSQL_Query_Info() {
 		stmt_info=NULL;
 	}
 	if (BindPacket) {
-		free(BindPacket);
+		delete BindPacket;
 		BindPacket = NULL;
+	}
+	if (ParsePacket) {
+		delete ParsePacket;
+		ParsePacket = NULL;
 	}
 }
 
@@ -2633,7 +2637,9 @@ bool PgSQL_Session::handler_again___status_RESETTING_CONNECTION(int* _rc) {
 }
 
 
+/*
 // FIXME: this should be moved into PgSQL_Protocol
+// now moved
 bool PgSQL_Session::is_valid_PGSQL_PARSE_pkt(PtrSize_t& pkt) {
 	const int32_t message_length = read_big_endian_int32((char *)pkt.ptr + 1);
 	if (message_length != (pkt.size -1)) {
@@ -2666,8 +2672,11 @@ bool PgSQL_Session::is_valid_PGSQL_PARSE_pkt(PtrSize_t& pkt) {
 	proxy_info("Received Parse command for stmt named \"%s\" , query \"%s\" , with %d parameters\n", stmt_name, query, num_params);
 	return true;
 }
+*/
 
+/*
 // FIXME: this should be moved into PgSQL_Protocol
+// now moved
 bool PgSQL_Session::is_valid_PGSQL_BIND_pkt(PtrSize_t& pkt) {
 	const int32_t message_length = read_big_endian_int32((char *)pkt.ptr + 1);
 	if (message_length != (pkt.size -1)) {
@@ -2743,6 +2752,7 @@ bool PgSQL_Session::is_valid_PGSQL_BIND_pkt(PtrSize_t& pkt) {
 	}
 	return true;
 }
+*/
 
 // this function was inline inside PgSQL_Session::get_pkts_from_client
 // where:
@@ -2752,16 +2762,30 @@ bool PgSQL_Session::is_valid_PGSQL_BIND_pkt(PtrSize_t& pkt) {
 // all break were replaced with a return
 void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_PARSE(PtrSize_t& pkt) {
 	if (session_type != PROXYSQL_SESSION_PGSQL) { // only PgSQL module supports prepared statement!!
-		// FIXME: we should return a proper error
-		assert(0);
 		l_free(pkt.size, pkt.ptr);
 		client_myds->setDSS_STATE_QUERY_SENT_NET();
-		client_myds->myprot.generate_pkt_ERR(true, NULL, NULL, 1, 1045, (char*)"28000", (char*)"Command not supported");
+		client_myds->myprot.generate_error_packet(true, false, "Prepared statements not supported", PGSQL_ERROR_CODES::ERRCODE_QUERY_CANCELED,
+			false, true);
 		client_myds->DSS = STATE_SLEEP;
 		status = WAITING_CLIENT_DATA;
 		return;
 	}
-	else {
+	// FIXME : parsePacket is not freed at the moment, we will later pass it to CurrentQuery
+	PgParsePacket * parsePacket = new PgParsePacket();
+	{
+		bool rc = parsePacket->parseParsePacket(pkt);
+		if (rc == false) {
+			l_free(pkt.size, pkt.ptr);
+			client_myds->setDSS_STATE_QUERY_SENT_NET();
+			client_myds->myprot.generate_error_packet(true, false, "Invalid Parse packet", PGSQL_ERROR_CODES::ERRCODE_QUERY_CANCELED,
+				false, true);
+			client_myds->DSS = STATE_SLEEP;
+			status = WAITING_CLIENT_DATA;
+			delete parsePacket;
+			return;
+		}
+	}
+//	else {
 		thread->status_variables.stvar[st_var_frontend_stmt_prepare]++;
 		thread->status_variables.stvar[st_var_queries]++;
 		// if we reach here, we are not on MySQL module
@@ -2883,7 +2907,7 @@ void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_P
 		}
 		GloPgStmt->unlock();
 		return; // make sure to not return before unlocking GloMyStmt
-	}
+//	}
 }
 
 // this function was inline inside PgSQL_Session::get_pkts_from_client
@@ -3501,12 +3525,15 @@ __get_pkts_from_client:
 						switch (command) {
 						case 'P':
 						{
+/*
 							if (is_valid_PGSQL_PARSE_pkt(pkt) == false) {
 								proxy_error("We received an invalid PARSE packet\n");
 								l_free(pkt.size, pkt.ptr);
 								handler_ret = -1;
 								return handler_ret;
+
 							}
+*/
 							handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_PARSE(pkt);
 							break;
 						}

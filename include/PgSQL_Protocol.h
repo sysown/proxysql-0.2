@@ -87,7 +87,6 @@ public:
 	int *param_formats;		// Array of format codes for parameters
 	int num_result_formats;
 	int *result_formats;	// Array of format codes for result columns
-	char *ptr = NULL;
 	unsigned int pkt_size = 0;
 	void *pkt_ptr = nullptr;
 
