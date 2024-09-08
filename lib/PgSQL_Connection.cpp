@@ -745,14 +745,25 @@ void PgSQL_Connection::stmt_execute_start() {
 	PgBindPacket& bindPacket = *tmpsess->CurrentQuery.BindPacket;
 
 
-	_rc = PQsendQueryParams(pgsql_conn,
-								   bindPacket.statement_name,	// The prepared statement name
+//	const char *stmtName = bindPacket.statement_name;
+	const char *stmtName = "proxysql_ps_1"; // FIXME: hardcoded for now, during development
+
+	int resultFormat = 0;
+	if (bindPacket.num_result_formats > 0) {
+		if (bindPacket.result_formats[0] == 1) {
+			// Use binary if result_formats array is present , and element 0 has 1
+			resultFormat = 1;
+		}
+	}
+	//_rc = PQsendQueryParams(pgsql_conn,
+	_rc = PQsendQueryPrepared(pgsql_conn,
+								   stmtName,	// The prepared statement name
 								   bindPacket.num_parameters,	// Number of parameters
-								   nullptr,						// Parameter types (NULL means the server infers the types)
+							//	   nullptr,						// Parameter types (NULL means the server infers the types)
 								   bindPacket.param_values,		// Parameter values
 								   bindPacket.param_lengths,	// Parameter lengths
-								   bindPacket.param_formats,	// Parameter formats
-								   bindPacket.num_result_formats > 0 ? 1 : 0 // Use binary if result_formats array is present
+								   bindPacket.paramFormatCount == 0 ? nullptr : bindPacket.param_formats,	// Parameter formats
+								   resultFormat
 								  );
 
 	if (_rc == 0) {

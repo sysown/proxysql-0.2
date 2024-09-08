@@ -2041,7 +2041,7 @@ bool PgBindPacket::parseBindPacket(PtrSize_t& pkt) {
 	}
 
 	// Read the parameter format codes count
-	int16_t paramFormatCount = ntohs(*reinterpret_cast<const int16_t*>(packet + offset));
+	paramFormatCount = ntohs(*reinterpret_cast<const int16_t*>(packet + offset));
 	offset += sizeof(int16_t);
 
 	// Validate length for parameter format codes

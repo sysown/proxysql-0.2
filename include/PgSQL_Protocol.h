@@ -82,6 +82,7 @@ public:
 	const char *portal_name;
 	const char *statement_name;
 	int num_parameters;
+	int16_t paramFormatCount = 0;
 	char **param_values;	// Array of pointers to parameter values
 	int *param_lengths;		// Array of lengths of parameter values
 	int *param_formats;		// Array of format codes for parameters
