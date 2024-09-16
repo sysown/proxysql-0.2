@@ -229,7 +229,7 @@ private:
 	int handler_ProcessingQueryError_CheckBackendConnectionStatus(PgSQL_Data_Stream* myds);
 	void SetQueryTimeout();
 	bool handler_rc0_PROCESSING_STMT_PREPARE(enum session_status& st, PgSQL_Data_Stream* myds, bool& prepared_stmt_with_no_params);
-	//void handler_rc0_PROCESSING_STMT_EXECUTE(PgSQL_Data_Stream* myds);
+	void handler_rc0_PROCESSING_STMT_EXECUTE(PgSQL_Data_Stream* myds);
 	bool handler_minus1_ClientLibraryError(PgSQL_Data_Stream* myds);
 	void handler_minus1_LogErrorDuringQuery(PgSQL_Connection* myconn);
 	bool handler_minus1_HandleErrorCodes(PgSQL_Data_Stream* myds, int& handler_ret);

@@ -737,7 +737,7 @@ void PgSQL_Connection_Placeholder::stmt_prepare_cont(short event) {
 
 
 void PgSQL_Connection::stmt_execute_start() {
-	PROXY_TRACE();
+	PROXY_TRACE3();
 	int _rc=0;
 	assert(myds->sess != nullptr);
 	PgSQL_Session * tmpsess = myds->sess;
@@ -773,24 +773,36 @@ void PgSQL_Connection::stmt_execute_start() {
 }
 
 void PgSQL_Connection::stmt_execute_cont(short event) {
+	PROXY_TRACE3();
+	proxy_debug(PROXY_DEBUG_PGSQL_PROTOCOL, 6, "event=%d\n", event);
+	reset_error();
+	async_exit_status = PG_EVENT_NONE;
+	if (event & POLLOUT) {
+		flush();
+	}
+/*
 	PQconsumeInput(pgsql_conn); // TODO: error handling
 	if (PQisBusy(pgsql_conn) == 0) { // A 0 return indicates that PQgetResult can be called with assurance of not blocking
 		async_exit_status = 0; // completed
-		PGresult *res = PQgetResult(pgsql_conn);
-		if (PQresultStatus(res) == PGRES_COMMAND_OK) {
+		pgsql_result = PQgetResult(pgsql_conn);
+		auto rs = PQresultStatus(pgsql_result);
+		if (rs == PGRES_COMMAND_OK || rs == PGRES_TUPLES_OK) {
 			interr = 0;
-			PQclear(res);
-			res = PQgetResult(pgsql_conn);
-			assert(res == NULL); // there should never be more result!
+//			PQclear(res);
+//			res = PQgetResult(pgsql_conn);
+//			assert(res == NULL); // there should never be more result!
 		} else {
+			if (rs == PGRES_NONFATAL_ERROR) {
+				// FIXME: TODO: error handling!!!
+			}
 			interr = 1;
 			assert(0); // FIXME: TODO: error handling!!!
 		}
 	} else {
 		async_exit_status = 1; // not completed yet
 	}
+*/
 }
-
 
 void PgSQL_Connection_Placeholder::stmt_execute_store_result_start() {
 	PROXY_TRACE();
@@ -1749,7 +1761,7 @@ handler_again:
 			break;
 
 		case ASYNC_STMT_EXECUTE_START:
-			PROXY_TRACE2();
+			PROXY_TRACE3();
 			stmt_execute_start();
 			__sync_fetch_and_add(&parent->queries_sent,1);
 			// // Disabling this, not relevant for PostgreSQL
@@ -1764,12 +1776,17 @@ handler_again:
 			}
 			break;
 		case ASYNC_STMT_EXECUTE_CONT:
-			PROXY_TRACE2();
+			PROXY_TRACE3();
 			stmt_execute_cont(event);
 			if (async_exit_status) {
 				next_event(ASYNC_STMT_EXECUTE_CONT);
 			} else {
-				NEXT_IMMEDIATE(ASYNC_STMT_EXECUTE_STORE_RESULT_START);
+				if (is_error_present() || 
+					!set_single_row_mode()) {
+					NEXT_IMMEDIATE(ASYNC_QUERY_END);
+				}
+				//NEXT_IMMEDIATE(ASYNC_STMT_EXECUTE_STORE_RESULT_START);
+				NEXT_IMMEDIATE(ASYNC_USE_RESULT_START);
 			}
 			break;
 
@@ -1910,6 +1927,7 @@ handler_again:
 
 
 	case ASYNC_USE_RESULT_START:
+		PROXY_TRACE3();
 		fetch_result_start();
 		if (async_exit_status == PG_EVENT_NONE) {
 			if (is_error_present()) {
@@ -2373,12 +2391,14 @@ void PgSQL_Connection::stmt_prepare_cont(short event) {
 
 void PgSQL_Connection::fetch_result_start() {
 	PROXY_TRACE();
+	PROXY_TRACE3();
 	reset_error();
 	async_exit_status = PG_EVENT_NONE;
 }
 
 void PgSQL_Connection::fetch_result_cont(short event) {
 	PROXY_TRACE();
+	PROXY_TRACE3();
 	async_exit_status = PG_EVENT_NONE;
 
 	// Avoid fetching a new result if one is already available. 
@@ -2433,6 +2453,7 @@ void PgSQL_Connection::fetch_result_cont(short event) {
 }
 
 void PgSQL_Connection::flush() {
+	PROXY_TRACE3();
 	reset_error();
 	int res = PQflush(pgsql_conn);
 

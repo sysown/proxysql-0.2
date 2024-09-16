@@ -4270,11 +4270,11 @@ bool PgSQL_Session::handler_rc0_PROCESSING_STMT_PREPARE(enum session_status& st,
 }
 
 // this function used to be inline
-/*
-// FIXME: completely disabled for now
 void PgSQL_Session::handler_rc0_PROCESSING_STMT_EXECUTE(PgSQL_Data_Stream* myds) {
 	thread->status_variables.stvar[st_var_backend_stmt_execute]++;
-	PROXY_TRACE2();
+	PROXY_TRACE3();
+// FIXME: disabled for now
+/*
 	if (CurrentQuery.mysql_stmt) {
 		// See issue #1574. Metadata needs to be updated in case of need also
 		// during STMT_EXECUTE, so a failure in the prepared statement
@@ -4285,13 +4285,13 @@ void PgSQL_Session::handler_rc0_PROCESSING_STMT_EXECUTE(PgSQL_Data_Stream* myds)
 		GloPgStmt->wrlock();
 		// Update the global prepared statement metadata
 		PgSQL_STMT_Global_info* stmt_info = GloPgStmt->find_prepared_statement_by_stmt_id(CurrentQuery.stmt_global_id, false);
-// FIXME: disabled for now
-//		stmt_info->update_metadata(CurrentQuery.mysql_stmt);
+		stmt_info->update_metadata(CurrentQuery.mysql_stmt);
 		// Unlock the global statement manager
 		GloPgStmt->unlock();
 		// ********************************************************************
 	}
 	MySQL_Stmt_Result_to_MySQL_wire(CurrentQuery.mysql_stmt, myds->myconn);
+*/
 	LogQuery(myds);
 	if (CurrentQuery.stmt_meta) {
 		if (CurrentQuery.stmt_meta->pkt) {
@@ -4322,7 +4322,6 @@ void PgSQL_Session::handler_rc0_PROCESSING_STMT_EXECUTE(PgSQL_Data_Stream* myds)
 	}
 	CurrentQuery.mysql_stmt = NULL;
 }
-*/
 
 // this function used to be inline.
 // now it returns:
@@ -4860,11 +4859,10 @@ handler_again:
 					}
 				}
 				break;
-/*
 				case PROCESSING_STMT_EXECUTE:
+					PROXY_TRACE3();
 					handler_rc0_PROCESSING_STMT_EXECUTE(myds);
 					break;
-*/
 				default:
 					// LCOV_EXCL_START
 					assert(0);
@@ -4889,6 +4887,7 @@ handler_again:
 					}
 				}
 
+				PROXY_TRACE3();
 				RequestEnd(myds);
 				finishQuery(myds, myconn, prepared_stmt_with_no_params);
 			}
@@ -7338,7 +7337,7 @@ void PgSQL_Session::RequestEnd(PgSQL_Data_Stream* myds) {
 		qdt = CurrentQuery.get_digest_text();
 	}
 	else {
-		qdt = CurrentQuery.stmt_info->digest_text;
+		//qdt = CurrentQuery.stmt_info->digest_text;
 	}
 
 	if (qdt && myds && myds->myconn) {

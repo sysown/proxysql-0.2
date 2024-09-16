@@ -1,3 +1,4 @@
+
 #ifndef __CLASS_CLIENT_SESSION_H
 #define __CLASS_CLIENT_SESSION_H
 
