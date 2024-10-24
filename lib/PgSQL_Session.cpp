@@ -4369,12 +4369,12 @@ void PgSQL_Session::handler___status_CONNECTING_CLIENT___STATE_SERVER_HANDSHAKE(
 			(
 				client_myds->encrypted == false
 				&&
-				strncmp(client_myds->myconn->userinfo->username, mysql_thread___monitor_username, strlen(mysql_thread___monitor_username)) == 0
+				strncmp(client_myds->myconn->userinfo->username, pgsql_thread___monitor_username, strlen(pgsql_thread___monitor_username)) == 0
 				)
 			) // Do not delete this line. See bug #492
 		) {
 		if (session_type == PROXYSQL_SESSION_ADMIN) {
-			if ((default_hostgroup < 0) || (strncmp(client_myds->myconn->userinfo->username, mysql_thread___monitor_username, strlen(mysql_thread___monitor_username)) == 0)) {
+			if ((default_hostgroup < 0) || (strncmp(client_myds->myconn->userinfo->username, pgsql_thread___monitor_username, strlen(pgsql_thread___monitor_username)) == 0)) {
 				if (default_hostgroup == STATS_HOSTGROUP) {
 					session_type = PROXYSQL_SESSION_STATS;
 				}

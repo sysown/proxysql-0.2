@@ -785,14 +785,14 @@ EXECUTION_STATE PgSQL_Protocol::process_handshake_response_packet(unsigned char*
 			||
 			((*myds)->sess->session_type == PROXYSQL_SESSION_SQLITE)
 			) {
-			if (strcmp((const char*)user, mysql_thread___monitor_username) == 0) {
+			if (strcmp((const char*)user, pgsql_thread___monitor_username) == 0) {
 				(*myds)->sess->default_hostgroup = STATS_HOSTGROUP;
 				(*myds)->sess->default_schema = strdup((char*)"main"); // just the pointer is passed
 				(*myds)->sess->schema_locked = false;
 				(*myds)->sess->transaction_persistent = false;
 				(*myds)->sess->session_fast_forward = false;
 				(*myds)->sess->user_max_connections = 0;
-				password = l_strdup(mysql_thread___monitor_password);
+				password = l_strdup(pgsql_thread___monitor_password);
 			}
 		}
 

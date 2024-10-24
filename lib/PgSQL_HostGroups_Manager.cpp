@@ -3600,7 +3600,9 @@ void PgSQL_HostGroups_Manager::read_only_action(char *hostname, int port, int re
  * @param pgsql_servers List of servers having hostname, port and read only value.
  * 
  */
-void PgSQL_HostGroups_Manager::read_only_action_v2(const std::list<read_only_server_t>& pgsql_servers) {
+void PgSQL_HostGroups_Manager::read_only_action_v2(
+	const std::list<read_only_server_t>& pgsql_servers, bool writer_is_also_reader
+) {
 
 	bool update_pgsql_servers_table = false;
 
@@ -3637,7 +3639,7 @@ void PgSQL_HostGroups_Manager::read_only_action_v2(const std::list<read_only_ser
 				proxy_debug(PROXY_DEBUG_MONITOR, 5, "Server '%s:%d' found with 'read_only=0', but not found as writer\n", hostname.c_str(), port);
 				host_server_mapping->copy_if_not_exists(HostGroup_Server_Mapping::Type::WRITER, HostGroup_Server_Mapping::Type::READER);
 
-				if (mysql_thread___monitor_writer_is_also_reader == false) {
+				if (writer_is_also_reader == false) {
 					// remove node from reader
 					host_server_mapping->clear(HostGroup_Server_Mapping::Type::READER);
 				}
@@ -3683,7 +3685,7 @@ void PgSQL_HostGroups_Manager::read_only_action_v2(const std::list<read_only_ser
 					// copy all reader nodes to writer
 					host_server_mapping->copy_if_not_exists(HostGroup_Server_Mapping::Type::WRITER, HostGroup_Server_Mapping::Type::READER);
 
-					if (mysql_thread___monitor_writer_is_also_reader == false) {
+					if (writer_is_also_reader == false) {
 						// remove node from reader
 						host_server_mapping->clear(HostGroup_Server_Mapping::Type::READER);
 					}
