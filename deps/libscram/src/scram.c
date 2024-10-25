@@ -43,7 +43,7 @@ void scram_reset_error() {
 	errorBuffer[0] = '\0';
 }
 
-size_t strlcat(char* dst, const char* src, size_t siz)
+static size_t my_strlcat(char* dst, const char* src, size_t siz)
 {
 	char* d = dst;
 	const char* s = src;
@@ -434,7 +434,7 @@ char *build_client_final_message(ScramState *scram_state,
 				    client_proof))
 		goto failed;
 
-	len = strlcat(buf, ",p=", sizeof(buf));
+	len = my_strlcat(buf, ",p=", sizeof(buf));
 	enclen = pg_b64_enc_len(sizeof(client_proof));
 	enclen = pg_b64_encode((char *) client_proof,
 			       SCRAM_KEY_LEN,
