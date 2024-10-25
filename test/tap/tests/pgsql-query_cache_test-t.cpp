@@ -148,7 +148,7 @@ bool checkMetricDelta(const std::string& metric_name, int expected, BinaryOp op)
 	return result;
 }
 
-std::map<std::string, int> getQueryCacheMertrics(PGconn* proxy_admin) {
+std::map<std::string, int> getQueryCacheMetrics(PGconn* proxy_admin) {
 	const char* query = "SELECT Variable_Name, Variable_Value FROM stats_pgsql_global WHERE Variable_Name LIKE 'Query_Cache%';";
     diag("Running: %s", query);
     PGresult* res = PQexec(proxy_admin, query);
@@ -238,7 +238,7 @@ void execute_multi_threaded_purge_test(PGconn* admin_conn, PGconn* conn) {
 
     usleep(5000000);
 
-    metrics.before = getQueryCacheMertrics(admin_conn);
+    metrics.before = getQueryCacheMetrics(admin_conn);
 
     for (unsigned int i = 0; i < NUM_THREADS; i++) {
         mythreads[i] = std::thread(run_pgsleep_thread, &timer_results[i]);
@@ -256,7 +256,7 @@ void execute_multi_threaded_purge_test(PGconn* admin_conn, PGconn* conn) {
     }
 
     usleep(5000000);
-    metrics.after = getQueryCacheMertrics(admin_conn);
+    metrics.after = getQueryCacheMetrics(admin_conn);
 
     printQueryCacheMetrics();
 
@@ -290,12 +290,12 @@ void execute_basic_test(PGconn* admin_conn, PGconn* conn) {
         }))
         return;
 
-    metrics.before = getQueryCacheMertrics(admin_conn);
+    metrics.before = getQueryCacheMetrics(admin_conn);
 
     if (!executeQueries(conn, { "SELECT 1" }))
         return;
 
-    metrics.after = getQueryCacheMertrics(admin_conn);
+    metrics.after = getQueryCacheMetrics(admin_conn);
 
     printQueryCacheMetrics();
 
@@ -314,7 +314,7 @@ void execute_basic_test(PGconn* admin_conn, PGconn* conn) {
     if (!executeQueries(conn, { "SELECT 1" }))
         return;
 
-    metrics.after = getQueryCacheMertrics(admin_conn);
+    metrics.after = getQueryCacheMetrics(admin_conn);
 
     printQueryCacheMetrics();
 
@@ -334,7 +334,7 @@ void execute_basic_test(PGconn* admin_conn, PGconn* conn) {
     if (!executeQueries(conn, { "SELECT 1" }))
         return;
 
-    metrics.after = getQueryCacheMertrics(admin_conn);
+    metrics.after = getQueryCacheMetrics(admin_conn);
 
     printQueryCacheMetrics();
 
@@ -357,7 +357,7 @@ void execute_basic_test(PGconn* admin_conn, PGconn* conn) {
 
     usleep(5000000);
 
-    metrics.after = getQueryCacheMertrics(admin_conn);
+    metrics.after = getQueryCacheMetrics(admin_conn);
 
     printQueryCacheMetrics();
 
@@ -395,7 +395,7 @@ void execute_data_manipulation_test(PGconn* admin_conn, PGconn* conn) {
     if (!executeQueries(conn, { "CREATE TABLE IF NOT EXISTS test_table(id INT PRIMARY KEY, name TEXT);" }))
         return;
 
-    metrics.before = getQueryCacheMertrics(admin_conn);
+    metrics.before = getQueryCacheMetrics(admin_conn);
 
     // INSERT
     if (!executeQueries(conn, { "INSERT INTO test_table(id, name) VALUES (1, 'test')" }))
@@ -409,7 +409,7 @@ void execute_data_manipulation_test(PGconn* admin_conn, PGconn* conn) {
     if (!executeQueries(conn, { "UPDATE test_table SET name = 'updated' WHERE id = 1" }))
         return;
 
-    metrics.after = getQueryCacheMertrics(admin_conn);
+    metrics.after = getQueryCacheMetrics(admin_conn);
 
     printQueryCacheMetrics();
 
@@ -447,12 +447,12 @@ void execute_threshold_resultset_size_test(PGconn* admin_conn, PGconn* conn) {
         }))
         return;
 
-    metrics.before = getQueryCacheMertrics(admin_conn);
+    metrics.before = getQueryCacheMetrics(admin_conn);
 
     if (!executeQueries(conn, { "SELECT REPEAT('X', 8197)" }))
         return;
 
-    metrics.after = getQueryCacheMertrics(admin_conn);
+    metrics.after = getQueryCacheMetrics(admin_conn);
 
     printQueryCacheMetrics();
 
@@ -478,7 +478,7 @@ void execute_threshold_resultset_size_test(PGconn* admin_conn, PGconn* conn) {
     if (!executeQueries(conn, { "SELECT REPEAT('X', 8197)" }))
         return;
 
-    metrics.after = getQueryCacheMertrics(admin_conn);
+    metrics.after = getQueryCacheMetrics(admin_conn);
 
     printQueryCacheMetrics();
 
@@ -497,7 +497,7 @@ void execute_threshold_resultset_size_test(PGconn* admin_conn, PGconn* conn) {
     if (!executeQueries(conn, { "SELECT REPEAT('X', 8197)" }))
         return;
 
-    metrics.after = getQueryCacheMertrics(admin_conn);
+    metrics.after = getQueryCacheMetrics(admin_conn);
 
     printQueryCacheMetrics();
 
@@ -532,12 +532,12 @@ void execute_multi_statement_test(PGconn* admin_conn, PGconn* conn) {
         }))
         return;
 
-    metrics.before = getQueryCacheMertrics(admin_conn);
+    metrics.before = getQueryCacheMetrics(admin_conn);
 
     if (!executeQueries(conn, { "SELECT 1; SELECT 2; SELECT 3;" }))
         return;
 
-    metrics.after = getQueryCacheMertrics(admin_conn);
+    metrics.after = getQueryCacheMetrics(admin_conn);
 
     printQueryCacheMetrics();
 
@@ -556,7 +556,7 @@ void execute_multi_statement_test(PGconn* admin_conn, PGconn* conn) {
     if (!executeQueries(conn, { "SELECT 1; SELECT 2; SELECT 3;" }))
         return;
 
-    metrics.after = getQueryCacheMertrics(admin_conn);
+    metrics.after = getQueryCacheMetrics(admin_conn);
 
     printQueryCacheMetrics();
 
@@ -589,12 +589,12 @@ void execute_transaction_status_test(PGconn* admin_conn, PGconn* conn) {
         }))
         return;
 
-    metrics.before = getQueryCacheMertrics(admin_conn);
+    metrics.before = getQueryCacheMetrics(admin_conn);
 
     if (!executeQueries(conn, { "SELECT 1" }))
         return;
 
-    metrics.after = getQueryCacheMertrics(admin_conn);
+    metrics.after = getQueryCacheMetrics(admin_conn);
 
     printQueryCacheMetrics();
 
@@ -615,7 +615,7 @@ void execute_transaction_status_test(PGconn* admin_conn, PGconn* conn) {
     ok(PQtransactionStatus(conn) == PQTRANS_IDLE, "Connection is in IDLE state, Exp:%d : Act:%d", 
         PQTRANS_IDLE, PQtransactionStatus(conn));
 
-    metrics.after = getQueryCacheMertrics(admin_conn);
+    metrics.after = getQueryCacheMetrics(admin_conn);
 
     printQueryCacheMetrics();
 
@@ -642,7 +642,7 @@ void execute_transaction_status_test(PGconn* admin_conn, PGconn* conn) {
     ok(PQtransactionStatus(conn) == PQTRANS_INTRANS, "Connection is in TRANSACTION STATE AFTER CACHE HIT, Exp:%d : Act:%d",
         PQTRANS_INTRANS, PQtransactionStatus(conn));
 
-    metrics.after = getQueryCacheMertrics(admin_conn);
+    metrics.after = getQueryCacheMetrics(admin_conn);
 
     printQueryCacheMetrics();
 
@@ -679,12 +679,12 @@ void execute_query_cache_store_empty_result_test(PGconn* admin_conn, PGconn* con
 		}))
 		return;
 
-	metrics.before = getQueryCacheMertrics(admin_conn);
+	metrics.before = getQueryCacheMetrics(admin_conn);
 
 	if (!executeQueries(conn, {"SELECT 1 WHERE 1!=1"}))
 		return;
 
-	metrics.after = getQueryCacheMertrics(admin_conn);
+	metrics.after = getQueryCacheMetrics(admin_conn);
 
     printQueryCacheMetrics();
 
@@ -709,7 +709,7 @@ void execute_query_cache_store_empty_result_test(PGconn* admin_conn, PGconn* con
 	if (!executeQueries(conn, { "SELECT 1 WHERE 1!=1" }))
 		return;
 
-	metrics.after = getQueryCacheMertrics(admin_conn);
+	metrics.after = getQueryCacheMetrics(admin_conn);
 
     printQueryCacheMetrics();
 
@@ -727,7 +727,7 @@ void execute_query_cache_store_empty_result_test(PGconn* admin_conn, PGconn* con
 	if (!executeQueries(conn, { "SELECT 1 WHERE 1!=1" }))
 		return;
 
-	metrics.after = getQueryCacheMertrics(admin_conn);
+	metrics.after = getQueryCacheMetrics(admin_conn);
 
     printQueryCacheMetrics();
 
@@ -749,12 +749,12 @@ void execute_query_cache_store_empty_result_test(PGconn* admin_conn, PGconn* con
         }))
         return;
 
-    metrics.before = getQueryCacheMertrics(admin_conn);
+    metrics.before = getQueryCacheMetrics(admin_conn);
 
     if (!executeQueries(conn, { "SELECT 1 WHERE 1!=1" }))
         return;
 
-    metrics.after = getQueryCacheMertrics(admin_conn);
+    metrics.after = getQueryCacheMetrics(admin_conn);
 
     printQueryCacheMetrics();
 
@@ -778,7 +778,7 @@ void execute_query_cache_store_empty_result_test(PGconn* admin_conn, PGconn* con
     if (!executeQueries(conn, { "SELECT 1 WHERE 1!=1" }))
         return;
 
-    metrics.after = getQueryCacheMertrics(admin_conn);
+    metrics.after = getQueryCacheMetrics(admin_conn);
 
     printQueryCacheMetrics();
 
@@ -796,7 +796,7 @@ void execute_query_cache_store_empty_result_test(PGconn* admin_conn, PGconn* con
 	if (!executeQueries(conn, { "SELECT 1 WHERE 1!=1" }))
 		return;
 
-	metrics.after = getQueryCacheMertrics(admin_conn);
+	metrics.after = getQueryCacheMetrics(admin_conn);
 
     printQueryCacheMetrics();
 
