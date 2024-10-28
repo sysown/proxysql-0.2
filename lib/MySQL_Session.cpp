@@ -2813,7 +2813,7 @@ bool MySQL_Session::handler_again___status_CONNECTING_SERVER(int *_rc) {
 				thread->status_variables.stvar[st_var_max_connect_timeout_err]++;
 			}
 			client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,9001,(char *)"HY000", errmsg.c_str(), true);
-			RequestEnd(mybe->server_myds);
+			RequestEnd(mybe->server_myds, errmsg.c_str());
 
 			string hg_status {};
 			generate_status_one_hostgroup(current_hostgroup, hg_status);
@@ -2946,21 +2946,22 @@ bool MySQL_Session::handler_again___status_CONNECTING_SERVER(int *_rc) {
 				} else {
 __exit_handler_again___status_CONNECTING_SERVER_with_err:
 					int myerr=mysql_errno(myconn->mysql);
+					string errmsg = "";
 					if (myerr) {
 						char sqlstate[10];
+						errmsg = string(mysql_error(myconn->mysql));
 						sprintf(sqlstate,"%s",mysql_sqlstate(myconn->mysql));
-						client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,mysql_errno(myconn->mysql),sqlstate,mysql_error(myconn->mysql),true);
+						client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,mysql_errno(myconn->mysql),sqlstate, errmsg.c_str(), true);
 					} else {
-						char buf[256];
-						sprintf(buf,"Max connect failure while reaching hostgroup %d", current_hostgroup);
-						client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,9002,(char *)"HY000",buf,true);
+						errmsg = "Max connect failure while reaching hostgroup " + to_string(current_hostgroup);
+						client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,9002,(char *)"HY000", errmsg.c_str(), true);
 						if (thread) {
 							thread->status_variables.stvar[st_var_max_connect_timeout_err]++;
 						}
 					}
 					if (session_fast_forward == SESSION_FORWARD_TYPE_NONE) {
 						// see bug #979
-						RequestEnd(myds);
+						RequestEnd(myds, errmsg.c_str());
 					}
 					while (previous_status.size()) {
 						st=previous_status.top();
