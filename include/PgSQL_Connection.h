@@ -69,6 +69,10 @@ enum PgSQL_Param_Name {
 	PG_SERVICE,  // Service name to use for additional parameters
 	PG_TARGET_SESSION_ATTRS,  // Determines whether the session must have certain properties to be acceptable
 	PG_LOAD_BALANCE_HOSTS,  // Controls the order in which the client tries to connect to the available hosts and addresses
+	// Environment Options
+	PG_DATESTYLE,  // Sets the value of the DateStyle parameter
+	PG_TIMEZONE,  // Sets the value of the TimeZone parameter
+	PG_GEQO,  // Enables or disables the use of the GEQO query optimizer
 
 	PG_PARAM_SIZE
 };
@@ -114,7 +118,11 @@ static const char* PgSQL_Param_Name_Str[] = {
 	"gssdelegation",
 	"service",
 	"target_session_attrs",
-	"load_balance_hosts"
+	"load_balance_hosts",
+	// Environment Options
+	"datestyle",
+	"timezone",
+	"geqo"
 };
 
 struct Param_Name_Validation {
@@ -172,7 +180,10 @@ static const Param_Name_Validation* PgSQL_Param_Name_Accepted_Values[PG_PARAM_SI
 	nullptr,
 	nullptr,
 	&target_session_attrs,
-	&load_balance_hosts
+	&load_balance_hosts,
+	nullptr,
+	nullptr,
+	nullptr
 };
 
 #define PG_EVENT_NONE	 0x00
@@ -211,6 +222,7 @@ public:
 	}
 
 	bool set_value(PgSQL_Param_Name key, const char* val) {
+		if (key == -1) return false;
 		if (validate(key, val)) {
 			if (param_value[key]) {
 				free(param_value[key]);
@@ -249,8 +261,9 @@ public:
 				break;
 			}
 		}
-
-		assert(key != -1);
+		if (key == -1) {
+			proxy_warning("Unrecognized connection option. Please report this as a bug for future enhancements:%s\n", name);
+		}
 		return key;
 	}
 
