@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
         BAIL_OUT("MySQL admin init failed.");
     }
 
-    if (!mysql_real_connect(proxysql_admin, cl.host, cl.admin_username, cl.admin_password, nullptr, cl.admin_port, nullptr, 0)) {
+    if (!mysql_real_connect(proxysql_admin, cl.admin_host, cl.admin_username, cl.admin_password, nullptr, cl.admin_port, nullptr, 0)) {
         BAIL_OUT("Failed to connect to ProxySQL Admin: %s", mysql_error(proxysql_admin));
     }
 
