@@ -13,6 +13,3 @@ In ProxySQL 2.5.x , libssl was upgraded from version 3.0.8 to 3.1.0
 
 Do not upgrade without extensive testing.
 
-See note about `struct bio_st` in MySQL_Data_Stream.cpp .
-
-Run `verify-bio_st-match.sh` to confirm compatibility.
