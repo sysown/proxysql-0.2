@@ -314,7 +314,7 @@ amd64-fedora: fedora38 fedora38-clang fedora38-dbg fedora39 fedora39-clang fedor
 amd64-opensuse: opensuse15 opensuse15-clang opensuse15-dbg
 amd64-ubuntu: ubuntu18 ubuntu18-dbg ubuntu20 ubuntu20-clang ubuntu20-dbg ubuntu22 ubuntu22-clang ubuntu22-dbg ubuntu24 ubuntu24-clang ubuntu24-dbg
 amd64-pkglist:
-	@make -nk amd64-packages 2>/dev/null | grep -Po '(?<=binaries/)proxysql\S+'
+	@make -nk amd64-packages 2>/dev/null | grep -Po '(?<=binaries/)proxysql\S+$$'
 
 arm64-%: SYS_ARCH := aarch64
 arm64-packages: arm64-centos arm64-debian arm64-ubuntu arm64-fedora arm64-opensuse arm64-almalinux
@@ -325,7 +325,7 @@ arm64-fedora: fedora38 fedora39 fedora40 fedora41
 arm64-opensuse: opensuse15
 arm64-ubuntu: ubuntu18 ubuntu20 ubuntu22 ubuntu24
 arm64-pkglist:
-	@make -nk arm64-packages 2>/dev/null | grep -Po '(?<=binaries/)proxysql\S+'
+	@make -nk arm64-packages 2>/dev/null | grep -Po '(?<=binaries/)proxysql\S+$$'
 
 almalinux%: build-almalinux% ;
 centos%: build-centos% ;
