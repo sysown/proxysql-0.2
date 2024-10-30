@@ -1197,7 +1197,7 @@ bool MySQL_Session::handler_special_queries(PtrSize_t *pkt) {
 		status=WAITING_CLIENT_DATA;
 
 		if (mirror==false) {
-			RequestEnd(NULL);
+			RequestEnd(NULL, err_info.second);
 		}
 		l_free(pkt->size,pkt->ptr);
 
@@ -1396,9 +1396,10 @@ bool MySQL_Session::handler_special_queries(PtrSize_t *pkt) {
 	if ( (pkt->size >= 22 + 5) && (strncasecmp((char *)"LOAD DATA LOCAL INFILE",(char *)pkt->ptr+5, 22)==0) ) {
 		if (mysql_thread___enable_load_data_local_infile == false) {
 			client_myds->DSS=STATE_QUERY_SENT_NET;
-			client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1047,(char *)"HY000",(char *)"Unsupported 'LOAD DATA LOCAL INFILE' command",true);
+			string errmsg = "Unsupported 'LOAD DATA LOCAL INFILE' command";
+			client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1047,(char *)"HY000", errmsg.c_str(), true);
 			if (mirror==false) {
-				RequestEnd(NULL);
+				RequestEnd(NULL, errmsg.c_str());
 			} else {
 				client_myds->DSS=STATE_SLEEP;
 				status=WAITING_CLIENT_DATA;
@@ -3223,7 +3224,7 @@ void MySQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 					sprintf(buf, err_msg, current_hostgroup, locked_on_hostgroup, nqn.c_str(), end);
 					client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,client_myds->pkt_sid+1,9005,(char *)"HY000",buf, true);
 					thread->status_variables.stvar[st_var_hostgroup_locked_queries]++;
-					RequestEnd(NULL);
+					RequestEnd(NULL, buf);
 					free(buf);
 					l_free(pkt.size,pkt.ptr);
 					return;
@@ -3396,7 +3397,7 @@ void MySQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 					sprintf(buf, err_msg, current_hostgroup, locked_on_hostgroup, nqn.c_str(), end);
 					client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,client_myds->pkt_sid+1,9005,(char *)"HY000",buf, true);
 					thread->status_variables.stvar[st_var_hostgroup_locked_queries]++;
-					RequestEnd(NULL);
+					RequestEnd(NULL, buf);
 					free(buf);
 					l_free(pkt.size,pkt.ptr);
 					return;
@@ -4143,7 +4144,7 @@ __get_pkts_from_client:
 												sprintf(buf, err_msg, current_hostgroup, locked_on_hostgroup, nqn.c_str(), end);
 												client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,client_myds->pkt_sid+1,9005,(char *)"HY000",buf, true);
 												thread->status_variables.stvar[st_var_hostgroup_locked_queries]++;
-												RequestEnd(NULL);
+												RequestEnd(NULL, buf);
 												free(buf);
 												l_free(pkt.size,pkt.ptr);
 												break;
@@ -5843,8 +5844,9 @@ void MySQL_Session::handler_WCD_SS_MCQ_qpo_error_msg(PtrSize_t *pkt) {
 void MySQL_Session::handler_WCD_SS_MCQ_qpo_LargePacket(PtrSize_t *pkt) {
 	// ER_NET_PACKET_TOO_LARGE
 	client_myds->DSS=STATE_QUERY_SENT_NET;
-	client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,client_myds->pkt_sid+1,1153,(char *)"08S01",(char *)"Got a packet bigger than 'max_allowed_packet' bytes", true);
-	RequestEnd(NULL);
+	string errmsg = "Got a packet bigger than 'max_allowed_packet' bytes";
+	client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,client_myds->pkt_sid+1,1153,(char *)"08S01", errmsg.c_str(), true);
+	RequestEnd(NULL, errmsg.c_str());
 	l_free(pkt->size,pkt->ptr);
 }
 
@@ -6849,7 +6851,7 @@ __exit_set_destination_hostgroup:
 				sprintf(buf,"ProxySQL Error: connection is locked to hostgroup %d but trying to reach hostgroup %d", locked_on_hostgroup, current_hostgroup);
 				client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,client_myds->pkt_sid+1,9006,(char *)"Y0000",buf);
 				thread->status_variables.stvar[st_var_hostgroup_locked_queries]++;
-				RequestEnd(NULL);
+				RequestEnd(NULL, buf);
 				l_free(pkt->size,pkt->ptr);
 				return true;
 			}
