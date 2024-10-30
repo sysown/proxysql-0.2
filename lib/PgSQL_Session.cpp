@@ -6185,7 +6185,7 @@ void PgSQL_Session::MySQL_Stmt_Result_to_MySQL_wire(MYSQL_STMT* stmt, PgSQL_Conn
 		//query_result->init_with_stmt(myconn);
 		CurrentQuery.rows_sent = query_result->get_num_rows();
 		const auto _affected_rows = query_result->get_affected_rows();
-		if (_affected_rows != -1) {
+		if (_affected_rows != static_cast<unsigned long long>(-1)) {
 			CurrentQuery.affected_rows = _affected_rows;
 			CurrentQuery.have_affected_rows = true;
 		}
@@ -6234,7 +6234,7 @@ void PgSQL_Session::PgSQL_Result_to_PgSQL_wire(PgSQL_Connection* _conn, PgSQL_Da
 		bool is_tuple = query_result->get_result_packet_type() == (PGSQL_QUERY_RESULT_TUPLE | PGSQL_QUERY_RESULT_COMMAND | PGSQL_QUERY_RESULT_READY); 
 		CurrentQuery.rows_sent = query_result->get_num_rows();
 		const auto _affected_rows = query_result->get_affected_rows();
-		if (_affected_rows != -1) {
+		if (_affected_rows != static_cast<unsigned long long>(-1)) {
 			 CurrentQuery.affected_rows = _affected_rows;
 			 CurrentQuery.have_affected_rows = true;
 		}
