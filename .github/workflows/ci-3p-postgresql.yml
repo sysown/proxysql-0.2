@@ -94,7 +94,7 @@ jobs:
         
         cd proxysql_3p_testing/
         #git sparse-checkout list
-        ./setup.sh test_postgresql
+        ./setup.sh test_postgresql/postgresql
         
         # use cached build
         rm -rf ./proxysql && mv ../proxysql .
