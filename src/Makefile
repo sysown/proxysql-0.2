@@ -81,9 +81,23 @@ CURL_PATH := $(DEPS_PATH)/curl/curl
 CURL_IDIR := $(CURL_PATH)/include
 CURL_LDIR := $(CURL_PATH)/lib/.libs
 
-SSL_PATH := $(DEPS_PATH)/libssl/openssl/
-SSL_IDIR := $(SSL_PATH)/include
-SSL_LDIR := $(SSL_PATH)
+libssl_path := $(shell find /usr /usr/local /opt -name "libssl.so" 2>/dev/null | head -n 1)
+
+ifneq ($(libssl_path),)
+    SSL_LDIR := $(dir $(libssl_path))
+    $(info Found OpenSSL libs at $(SSL_LDIR))
+else
+    $(error Warning: OpenSSL library not found. exiting, please install openssl.)
+endif
+
+ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl/*" 2>/dev/null | head -n 1)
+
+ifneq ($(ssl_header_path),)
+    SSL_IDIR := $(shell dirname $(ssl_header_path))
+    $(info Found OpenSSL headers at $(SSL_IDIR))
+else
+    $(error Warning: OpenSSL headers not found. exiting, please install openssl.)
+endif
 
 EV_PATH := $(DEPS_PATH)/libev/libev/
 EV_IDIR := $(EV_PATH)
