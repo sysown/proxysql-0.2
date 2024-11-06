@@ -1586,10 +1586,16 @@ cleanup:
 	return res;
 }
 
-json fetch_internal_session(MYSQL* proxy) {
-	int rc = mysql_query_t(proxy, "PROXYSQL INTERNAL SESSION");
+json fetch_internal_session(MYSQL* proxy, bool verbose) {
+	int rc = 0;
 
-	if (rc ) {
+	if (verbose) {
+		rc = mysql_query_t(proxy, "PROXYSQL INTERNAL SESSION");
+	} else {
+		rc = mysql_query(proxy, "PROXYSQL INTERNAL SESSION");
+	}
+
+	if (rc) {
 		return json {};
 	} else {
 		MYSQL_RES* myres = mysql_store_result(proxy);
@@ -1599,6 +1605,33 @@ json fetch_internal_session(MYSQL* proxy) {
 
 		return j_session;
 	}
+}
+
+pair<string, string> split_line_by_last(const string& ln, char c) {
+	size_t pos = ln.find_last_of(c);
+
+	if (pos == string::npos) {
+		return { ln, "" };
+	} else {
+		const string f { ln.substr(0, pos) };
+		const string s { ln.substr(pos + 1) };
+
+		return { f, s };
+	}
+}
+
+map<string, double> parse_prometheus_metrics(const string& s) {
+	const vector<string> lines { split(s, '\n') };
+	map<string, double> metrics_map {};
+
+	for (const string ln : lines) {
+		if (ln.empty() == false && ln[0] != '#') {
+			pair<string, string> p_line_val { split_line_by_last(ln, ' ') };
+			metrics_map.insert({p_line_val.first, stod(p_line_val.second)});
+		}
+	}
+
+	return metrics_map;
 }
 
 struct cols_table_info_t {

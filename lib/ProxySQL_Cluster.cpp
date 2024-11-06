@@ -47,6 +47,7 @@ extern MySQL_Authentication* GloMyAuth;
 void * ProxySQL_Cluster_Monitor_thread(void *args) {
 	pthread_attr_t thread_attr;
 	size_t tmp_stack_size=0;
+	set_thread_name("ClusterMonitor");
 	if (!pthread_attr_init(&thread_attr)) {
 		if (!pthread_attr_getstacksize(&thread_attr , &tmp_stack_size )) {
 			__sync_fetch_and_add(&GloVars.statuses.stack_memory_cluster_threads,tmp_stack_size);
@@ -241,6 +242,7 @@ void * ProxySQL_Cluster_Monitor_thread(void *args) {
 				}
 			} else {
 				proxy_warning("Cluster: unable to connect to peer %s:%d . Error: %s\n", node->hostname, node->port, mysql_error(conn));
+				node->remove_dns_record();
 				node->resolve_hostname();
 				mysql_close(conn);
 				conn = mysql_init(NULL);
@@ -4481,3 +4483,11 @@ void ProxySQL_Node_Address::resolve_hostname() {
 		}
 	}
 }
+
+void ProxySQL_Node_Address::remove_dns_record() {
+	// make sure hostname is not NULL and port is not 0 (UNIX socket)
+	if (hostname && port) {
+		MySQL_Monitor::remove_dns_record_from_dns_cache(hostname);
+	}
+}
+

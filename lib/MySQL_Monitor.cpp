@@ -63,11 +63,18 @@ template<typename T, bool check_monitor_enabled_flag = true>
 class ConsumerThread : public Thread {
 	wqueue<WorkItem<T>*>& m_queue;
 	int thrn;
+	char thr_name[16];
 	public:
-	ConsumerThread(wqueue<WorkItem<T>*>& queue, int _n) : m_queue(queue) {
+	ConsumerThread(wqueue<WorkItem<T>*>& queue, int _n, char thread_name[16]=NULL) : m_queue(queue) {
 		thrn=_n;
+		if (thread_name && thread_name[0]) {
+			snprintf(thr_name, sizeof(thr_name), "%.16s", thread_name);
+		} else {
+			snprintf(thr_name, sizeof(thr_name), "%.12s%03d", typeid(T).name(), thrn);
+		}
 	}
 	void* run() {
+		set_thread_name(thr_name);
 		// Remove 1 item at a time and process it. Blocks if no items are
 		// available to process.
 		for (int i = 0; (thrn ? i < thrn : 1); i++) {
@@ -729,6 +736,7 @@ void * monitor_connect_pthread(void *arg) {
 	bool cache=false;
 	mallctl("thread.tcache.enabled", NULL, NULL, &cache, sizeof(bool));
 #endif
+	set_thread_name("MonitorConnect");
 	while (GloMTH==NULL) {
 		usleep(50000);
 	}
@@ -742,6 +750,7 @@ void * monitor_ping_pthread(void *arg) {
 	bool cache=false;
 	mallctl("thread.tcache.enabled", NULL, NULL, &cache, sizeof(bool));
 #endif
+	set_thread_name("MonitorPing");
 	while (GloMTH==NULL) {
 		usleep(50000);
 	}
@@ -755,6 +764,7 @@ void * monitor_read_only_pthread(void *arg) {
 	bool cache=false;
 	mallctl("thread.tcache.enabled", NULL, NULL, &cache, sizeof(bool));
 #endif
+	set_thread_name("MonitorReadOnly");
 	while (GloMTH==NULL) {
 		usleep(50000);
 	}
@@ -768,6 +778,7 @@ void * monitor_group_replication_pthread(void *arg) {
 	bool cache=false;
 	mallctl("thread.tcache.enabled", NULL, NULL, &cache, sizeof(bool));
 #endif
+	set_thread_name("MonitorGR");
 	while (GloMTH==NULL) {
 		usleep(50000);
 	}
@@ -782,6 +793,7 @@ void * monitor_galera_pthread(void *arg) {
 	bool cache=false;
 	mallctl("thread.tcache.enabled", NULL, NULL, &cache, sizeof(bool));
 #endif
+	set_thread_name("MonitorGalera");
 	while (GloMTH==NULL) {
 		usleep(50000);
 	}
@@ -795,6 +807,7 @@ void * monitor_aws_aurora_pthread(void *arg) {
 //	bool cache=false;
 //	mallctl("thread.tcache.enabled", NULL, NULL, &cache, sizeof(bool));
 //#endif
+	set_thread_name("MonitorAurora");
 	while (GloMTH==NULL) {
 		usleep(50000);
 	}
@@ -808,6 +821,7 @@ void * monitor_replication_lag_pthread(void *arg) {
 	bool cache=false;
 	mallctl("thread.tcache.enabled", NULL, NULL, &cache, sizeof(bool));
 #endif
+	set_thread_name("MonitReplicLag");
 	while (GloMTH==NULL) {
 		usleep(50000);
 	}
@@ -821,6 +835,7 @@ void* monitor_dns_cache_pthread(void* arg) {
 	bool cache = false;
 	mallctl("thread.tcache.enabled", NULL, NULL, &cache, sizeof(bool));
 #endif
+	set_thread_name("MonitorDNSCache");
 	while (GloMTH == NULL) {
 		usleep(50000);
 	}
@@ -1549,6 +1564,10 @@ bool MySQL_Monitor_State_Data::create_new_connection() {
 			myrc=mysql_real_connect(mysql, "localhost", mysql_thread___monitor_username, mysql_thread___monitor_password, NULL, 0, hostname, 0);
 		}
 		if (myrc==NULL) {
+			// port == 0 means we are connecting to a unix socket
+			if (port) {
+				MySQL_Monitor::remove_dns_record_from_dns_cache(hostname);
+			}
 			mysql_error_msg=strdup(mysql_error(mysql));
 			int myerrno=mysql_errno(mysql);
 			MyHGM->p_update_mysql_error_counter(p_mysql_error_type::proxysql, hostgroup_id, hostname, port, myerrno);
@@ -4027,6 +4046,7 @@ struct mon_thread_info_t {
 
 void* monitor_GR_thread_HG(void *arg) {
 	uint32_t wr_hg = *(static_cast<uint32_t*>(arg));
+	set_thread_name("MonitorGRwrHG");
 	proxy_info("Started Monitor thread for Group Replication writer HG %u\n", wr_hg);
 
 	// Quick exit during shutdown/restart
@@ -5013,7 +5033,7 @@ __monitor_run:
 	}
 	ConsumerThread<MySQL_Monitor_State_Data> **threads= (ConsumerThread<MySQL_Monitor_State_Data> **)malloc(sizeof(ConsumerThread<MySQL_Monitor_State_Data> *)*num_threads);
 	for (unsigned int i=0;i<num_threads; i++) {
-		threads[i] = new ConsumerThread<MySQL_Monitor_State_Data>(*queue, 0);
+		threads[i] = new ConsumerThread<MySQL_Monitor_State_Data>(*queue, 0, "MyMonStateData");
 		threads[i]->start(2048,false);
 	}
 	started_threads += num_threads;
@@ -5083,7 +5103,7 @@ __monitor_run:
 					threads= (ConsumerThread<MySQL_Monitor_State_Data> **)realloc(threads, sizeof(ConsumerThread<MySQL_Monitor_State_Data> *)*num_threads);
 					started_threads += (num_threads - old_num_threads);
 					for (unsigned int i = old_num_threads ; i < num_threads ; i++) {
-						threads[i] = new ConsumerThread<MySQL_Monitor_State_Data>(*queue, 0);
+						threads[i] = new ConsumerThread<MySQL_Monitor_State_Data>(*queue, 0, "MyMonStateData");
 						threads[i]->start(2048,false);
 					}
 				}
@@ -5112,7 +5132,7 @@ __monitor_run:
 					threads= (ConsumerThread<MySQL_Monitor_State_Data> **)realloc(threads, sizeof(ConsumerThread<MySQL_Monitor_State_Data> *)*num_threads);
 					started_threads += new_threads;
 					for (unsigned int i = old_num_threads ; i < num_threads ; i++) {
-						threads[i] = new ConsumerThread<MySQL_Monitor_State_Data>(*queue, 0);
+						threads[i] = new ConsumerThread<MySQL_Monitor_State_Data>(*queue, 0, "MyMonStateData");
 						threads[i]->start(2048,false);
 					}
 				}
@@ -5132,7 +5152,7 @@ __monitor_run:
 					aux_threads = qsize;
 					started_threads += aux_threads;
 					for (unsigned int i=0; i<qsize; i++) {
-						threads_aux[i] = new ConsumerThread<MySQL_Monitor_State_Data>(*queue, 245);
+						threads_aux[i] = new ConsumerThread<MySQL_Monitor_State_Data>(*queue, 245, "MyMonStateData");
 						threads_aux[i]->start(2048,false);
 					}
 					for (unsigned int i=0; i<qsize; i++) {
@@ -5885,6 +5905,7 @@ void * monitor_AWS_Aurora_thread_HG(void *arg) {
 	unsigned int min_lag_ms = 0;
 	unsigned int lag_num_checks = 1;
 	//unsigned int i = 0;
+	set_thread_name("MonitorAuroraHG");
 	proxy_info("Started Monitor thread for AWS Aurora writer HG %u\n", wHG);
 
 	unsigned int MySQL_Monitor__thread_MySQL_Thread_Variables_version;
@@ -6653,6 +6674,15 @@ bool MySQL_Monitor::update_dns_cache_from_mysql_conn(const MYSQL* mysql)
 	return result;
 }
 
+void MySQL_Monitor::remove_dns_record_from_dns_cache(const std::string& hostname) {
+
+	// if IP was provided, no need to update dns cache
+	if (hostname.empty() || validate_ip(hostname))
+		return;
+
+	_remove_dns_record_from_dns_cache(hostname);
+}
+
 bool MySQL_Monitor::_dns_cache_update(const std::string &hostname, std::vector<std::string>&& ip_address) {
 	static thread_local std::shared_ptr<DNS_Cache> dns_cache_thread;
 
@@ -6667,6 +6697,18 @@ bool MySQL_Monitor::_dns_cache_update(const std::string &hostname, std::vector<s
 	}
 
 	return false;
+}
+
+void MySQL_Monitor::_remove_dns_record_from_dns_cache(const std::string& hostname) {
+	static thread_local std::shared_ptr<DNS_Cache> dns_cache_thread;
+
+	if (!dns_cache_thread && GloMyMon)
+		dns_cache_thread = GloMyMon->dns_cache;
+
+	if (dns_cache_thread) {
+		dns_cache_thread->remove(trim(hostname));
+		proxy_debug(PROXY_DEBUG_MYSQL_CONNECTION, 5, "Direct DNS cache record removed. (Hostname:[%s])\n", hostname.c_str());
+	}
 }
 
 void MySQL_Monitor::trigger_dns_cache_update() {
@@ -6697,7 +6739,7 @@ bool DNS_Cache::add(const std::string& hostname, std::vector<std::string>&& ips)
 
 bool DNS_Cache::add_if_not_exist(const std::string& hostname, std::vector<std::string>&& ips) {
 	if (!enabled) return false;
-
+	bool item_added = false;
 	int rc = pthread_rwlock_wrlock(&rwlock_);
 	assert(rc == 0);
 	if (records.find(hostname) == records.end()) {
@@ -6705,11 +6747,12 @@ bool DNS_Cache::add_if_not_exist(const std::string& hostname, std::vector<std::s
 		auto& ip_addr = records[hostname];
 		ip_addr.ips = std::move(ips);
 		__sync_fetch_and_and(&ip_addr.counter, 0);
+		item_added = true;
 	}
 	rc = pthread_rwlock_unlock(&rwlock_);
 	assert(rc == 0);
 
-	if (GloMyMon)
+	if (item_added && GloMyMon)
 		__sync_fetch_and_add(&GloMyMon->dns_cache_record_updated, 1);
 
 	return true;

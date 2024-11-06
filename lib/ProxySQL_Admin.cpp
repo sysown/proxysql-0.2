@@ -3766,10 +3766,18 @@ void admin_session_handler(MySQL_Session *sess, void *_pa, PtrSize_t *pkt) {
 
 	if (query_no_space_length) {
 		// fix bug #925
-		while (query_no_space[query_no_space_length-1]==';' || query_no_space[query_no_space_length-1]==' ') {
+		while (query_no_space_length &&
+			(query_no_space[query_no_space_length-1]==';' || query_no_space[query_no_space_length-1]==' ')) {
 			query_no_space_length--;
 			query_no_space[query_no_space_length]=0;
 		}
+	}
+
+	if (query_no_space_length == 0) {
+		proxy_warning("Empty query\n");
+		SPA->send_MySQL_ERR(&sess->client_myds->myprot, (char*)"Empty query");
+		run_query = false;
+		goto __run_query;
 	}
 
 	// add global mutex, see bug #1188
@@ -5728,6 +5736,7 @@ static void * admin_main_loop(void *arg)
 	int *callback_func=((struct _main_args *)arg)->callback_func;
 	volatile int *shutdown=((struct _main_args *)arg)->shutdown;
 	char *socket_names[MAX_ADMIN_LISTENERS];
+	set_thread_name("Admin");
 	for (i=0;i<MAX_ADMIN_LISTENERS;i++) { socket_names[i]=NULL; }
 	pthread_attr_t attr;
   pthread_attr_init(&attr);
@@ -10431,11 +10440,9 @@ int ProxySQL_Admin::stats___save_mysql_query_digest_to_sqlite(
 	while (resultset ? i != resultset->rows_count : it != digest_umap->end()) {
 		QP_query_digest_stats *qds = (QP_query_digest_stats *)(resultset ? NULL : it->second);
 		SQLite3_row *row  = resultset ? resultset->rows[i] : NULL;
-		string digest_hex_str;
+		char digest_hex_str[20]; // 2+sizeof(unsigned long long)*2+2
 		if (!resultset) {
-			std::ostringstream digest_stream;
-			digest_stream << "0x" << std::hex << qds->digest;
-			digest_hex_str = digest_stream.str();
+			sprintf(digest_hex_str, "0x%016llX", (long long unsigned int)qds->digest);
 		}
 		int idx=row_idx%32;
 		if (row_idx<max_bulk_row_idx) { // bulk
@@ -10443,7 +10450,7 @@ int ProxySQL_Admin::stats___save_mysql_query_digest_to_sqlite(
 			rc=(*proxy_sqlite3_bind_text)(statement32, (idx*14)+2, resultset ? row->fields[0] : qds->schemaname, -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, statsdb);
 			rc=(*proxy_sqlite3_bind_text)(statement32, (idx*14)+3, resultset ? row->fields[1] : qds->username, -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, statsdb);
 			rc=(*proxy_sqlite3_bind_text)(statement32, (idx*14)+4, resultset ? row->fields[2] : qds->client_address, -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, statsdb);
-			rc=(*proxy_sqlite3_bind_text)(statement32, (idx*14)+5, resultset ? row->fields[3] : digest_hex_str.c_str(), -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, statsdb);
+			rc=(*proxy_sqlite3_bind_text)(statement32, (idx*14)+5, resultset ? row->fields[3] : digest_hex_str, -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, statsdb);
 			rc=(*proxy_sqlite3_bind_text)(statement32, (idx*14)+6, resultset ? row->fields[4] : qds->get_digest_text(digest_text_umap), -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, statsdb);
 			rc=(*proxy_sqlite3_bind_int64)(statement32, (idx*14)+7, resultset ? atoll(row->fields[5]) : qds->count_star); ASSERT_SQLITE_OK(rc, statsdb);
 			{
@@ -10469,7 +10476,7 @@ int ProxySQL_Admin::stats___save_mysql_query_digest_to_sqlite(
 			rc=(*proxy_sqlite3_bind_text)(statement1, 2, resultset ? row->fields[0] : qds->schemaname, -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, statsdb);
 			rc=(*proxy_sqlite3_bind_text)(statement1, 3, resultset ? row->fields[1] : qds->username, -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, statsdb);
 			rc=(*proxy_sqlite3_bind_text)(statement1, 4, resultset ? row->fields[2] : qds->client_address, -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, statsdb);
-			rc=(*proxy_sqlite3_bind_text)(statement1, 5, resultset ? row->fields[3] : digest_hex_str.c_str(), -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, statsdb);
+			rc=(*proxy_sqlite3_bind_text)(statement1, 5, resultset ? row->fields[3] : digest_hex_str, -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, statsdb);
 			rc=(*proxy_sqlite3_bind_text)(statement1, 6, resultset ? row->fields[4] : qds->get_digest_text(digest_text_umap), -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, statsdb);
 			rc=(*proxy_sqlite3_bind_int64)(statement1, 7, resultset ? atoll(row->fields[5]) : qds->count_star); ASSERT_SQLITE_OK(rc, statsdb);
 			{

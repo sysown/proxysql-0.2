@@ -85,6 +85,7 @@ static int wait_for_mysql(MYSQL *mysql, int status) {
 //static void * HGCU_thread_run() {
 static void * HGCU_thread_run() {
 	PtrArray *conn_array=new PtrArray();
+	set_thread_name("MyHGCU");
 	while(1) {
 		MySQL_Connection *myconn= NULL;
 		myconn = (MySQL_Connection *)MyHGM->queue.remove();
@@ -569,7 +570,7 @@ hg_metrics_map = std::make_tuple(
 		std::make_tuple (
 			p_hg_dyn_gauge::connection_pool_status,
 			"proxysql_connpool_conns_status",
-			"The status of the backend server (1 - ONLINE, 2 - SHUNNED, 3 - OFFLINE_SOFT, 4 - OFFLINE_HARD).",
+			"The status of the backend server (1 - ONLINE, 2 - SHUNNED, 3 - OFFLINE_SOFT, 4 - OFFLINE_HARD, 5 - SHUNNED_REPLICATION_LAG).",
 			metric_tags {}
 		)
 	}
@@ -2536,6 +2537,15 @@ MySQL_Connection * MySQL_HostGroups_Manager::get_MyConn_from_pool(unsigned int _
 }
 
 void MySQL_HostGroups_Manager::destroy_MyConn_from_pool(MySQL_Connection *c, bool _lock) {
+	// 'libmariadbclient' only performs a cleanup of SSL error queue during connect when making use of
+	// 'auth_caching_sha2_client|auth_sha256_client' during connect. If any SSL errors took place during the
+	// previous operation, we must cleanup the queue to avoid polluting other backend conns.
+	int myerr=mysql_errno(c->mysql);
+	if (myerr >= 2000 && myerr < 3000 && c->mysql->options.use_ssl) {
+		proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 5, "Client error %d detected on SSL connection, cleaning SSL error queue\n", myerr);
+		ERR_clear_error();
+	}
+
 	bool to_del=true; // the default, legacy behavior
 	MySrvC *mysrvc=(MySrvC *)c->parent;
 	if (mysrvc->get_status() == MYSQL_SERVER_STATUS_ONLINE && c->send_quit && queue.size() < __sync_fetch_and_add(&GloMTH->variables.connpoll_reset_queue_length, 0)) {
@@ -3305,12 +3315,13 @@ void MySQL_HostGroups_Manager::p_update_connection_pool_update_counter(
 		counter_id->second->Increment(value - cur_val);
 	} else {
 		auto& new_counter = status.p_dyn_counter_array[idx];
-		m_map.insert(
+		const auto& new_counter_it = m_map.insert(
 			{
 				endpoint_id,
 				std::addressof(new_counter->Add(labels))
 			}
 		);
+		new_counter_it.first->second->Increment(value);
 	}
 }
 
@@ -3323,12 +3334,13 @@ void MySQL_HostGroups_Manager::p_update_connection_pool_update_gauge(
 		counter_id->second->Set(value);
 	} else {
 		auto& new_counter = status.p_dyn_gauge_array[idx];
-		m_map.insert(
+		const auto& new_gauge_it = m_map.insert(
 			{
 				endpoint_id,
 				std::addressof(new_counter->Add(labels))
 			}
 		);
+		new_gauge_it.first->second->Set(value);
 	}
 }
 
@@ -5053,7 +5065,13 @@ bool Galera_Info::update(int b, int r, int o, int mw, int mtb, bool _a, int _w, 
 	return ret;
 }
 
+/**
+ * @brief Dumps to stderr the current info for the monitored Galera hosts ('Galera_Hosts_Map').
+ * @details No action if `mysql_thread___hostgroup_manager_verbose=0`.
+ */
 void print_galera_nodes_last_status() {
+	if (!mysql_thread___hostgroup_manager_verbose) return;
+
 	std::unique_ptr<SQLite3_result> result { new SQLite3_result(13) };
 
 	result->add_column_definition(SQLITE_TEXT,"hostname");

@@ -42,6 +42,11 @@
 
 #include <uuid/uuid.h>
 
+#ifdef DEBUG
+#include "proxy_protocol_info.h"
+#endif // DEBUG
+
+
 /*
 extern "C" MySQL_LDAP_Authentication * create_MySQL_LDAP_Authentication_func() {
 	return NULL;
@@ -78,6 +83,7 @@ static pthread_mutex_t *lockarray;
 static void * waitpid_thread(void *arg) {
 	pid_t *cpid_ptr=(pid_t *)arg;
 	int status;
+	set_thread_name("waitpid");
 	waitpid(*cpid_ptr, &status, 0);
 	free(cpid_ptr);
 	return NULL;
@@ -195,6 +201,7 @@ static char * main_check_latest_version() {
  * @return NULL.
  */
 void * main_check_latest_version_thread(void *arg) {
+	set_thread_name("CheckLatestVers");
 	// Fetch the latest version information
 	char * latest_version = main_check_latest_version();
 	// we check for potential invalid data , see issue #4042
@@ -1373,14 +1380,14 @@ bool ProxySQL_daemonize_phase2() {
  * @note This function does not return if an error occurs; it exits the process.
  */
 void call_execute_on_exit_failure() {
+	// Log a message indicating the attempt to call the external script
+	proxy_info("Trying to call external script after exit failure: %s\n", GloVars.execute_on_exit_failure ? GloVars.execute_on_exit_failure : "(null)");
+
 	// Check if the global variable execute_on_exit_failure is NULL
 	if (GloVars.execute_on_exit_failure == NULL) {
 		// Exit the function if the variable is not set
 		return;
 	}
-
-	// Log a message indicating the attempt to call the external script
-	proxy_error("Trying to call external script after exit failure: %s\n", GloVars.execute_on_exit_failure);
 
 	// Fork a child process
 	pid_t cpid;
@@ -1467,6 +1474,16 @@ bool ProxySQL_daemonize_phase3() {
 			proxy_info("ProxySQL SHA1 checksum: %s\n", binary_sha1);
 		}
 		call_execute_on_exit_failure();
+		// automatic reload of TLS certificates after a crash , see #4658
+		std::string msg;
+		ProxySQL_create_or_load_TLS(false, msg);
+		//  Honor --initial after a crash , see #4659
+		if (GloVars.__cmd_proxysql_initial==true) {
+			std::cerr << "Renaming database file " << GloVars.admindb << endl;
+			char *newpath=(char *)malloc(strlen(GloVars.admindb)+8);
+			sprintf(newpath,"%s.bak",GloVars.admindb);
+			rename(GloVars.admindb,newpath);	// FIXME: should we check return value, or ignore whatever it successed or not?
+		}
 		parent_close_error_log();
 		return false;
 	}
@@ -1967,6 +1984,17 @@ int main(int argc, const char * argv[]) {
 		if (rc) { exit(EXIT_FAILURE); }
 	}
 
+
+#ifdef DEBUG
+	{
+		// This run some ProxyProtocolInfo tests.
+		// It will assert() if any test fails
+		ProxyProtocolInfo ppi;
+		ppi.run_tests();
+	}
+#endif // DEBUG
+
+
 	{
 		MYSQL *my = mysql_init(NULL);
 		mysql_close(my);
@@ -1976,6 +2004,13 @@ int main(int argc, const char * argv[]) {
 //		std::cerr << "Main init phase0 completed in ";
 #endif
 	}
+#ifdef DEBUG
+	{
+		// Automated testing
+		SetParser parser("");
+		parser.test_parse_USE_query();
+	}
+#endif // DEBUG
 	{
 		cpu_timer t;
 		ProxySQL_Main_process_global_variables(argc, argv);

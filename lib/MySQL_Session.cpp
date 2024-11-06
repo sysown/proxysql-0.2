@@ -209,13 +209,7 @@ bool Session_Regex::match(char *m) {
 KillArgs::KillArgs(char* u, char* p, char* h, unsigned int P, unsigned int _hid, unsigned long i, int kt, int _use_ssl, MySQL_Thread* _mt) :
 	KillArgs(u, p, h, P, _hid, i, kt, _use_ssl, _mt, NULL) {
 	// resolving DNS if available in Cache
-	if (h && P) {
-		const std::string& ip = MySQL_Monitor::dns_lookup(h, false);
-
-		if (ip.empty() == false) {
-			ip_addr = strdup(ip.c_str());
-		}
-	}
+	resolve_hostname();
 }
 
 KillArgs::KillArgs(char* u, char* p, char* h, unsigned int P, unsigned int _hid, unsigned long i, int kt, int _use_ssl, MySQL_Thread *_mt, char *ip) {
@@ -250,6 +244,25 @@ const char* KillArgs::get_host_address() const {
 	return host_address;
 }
 
+void KillArgs::resolve_hostname() {
+	if (ip_addr) {
+		free(ip_addr);
+		ip_addr = NULL;
+	}
+	if (hostname && port) {
+		const std::string& ip = MySQL_Monitor::dns_lookup(hostname, false);
+
+		if (ip.empty() == false) {
+			ip_addr = strdup(ip.c_str());
+		}
+	}
+}
+
+void KillArgs::remove_dns_record() {
+	if (hostname && port) {
+		MySQL_Monitor::remove_dns_record_from_dns_cache(hostname);
+	}
+}
 
 /**
  * @brief Thread function to kill a query or connection on a MySQL server.
@@ -264,6 +277,7 @@ void* kill_query_thread(void *arg) {
 	KillArgs *ka=(KillArgs *)arg;
 	//! It initializes a new MySQL_Thread object to handle MySQL-related operations.
 	std::unique_ptr<MySQL_Thread> mysql_thr(new MySQL_Thread());
+	set_thread_name("KillQuery");
 	//! Retrieves the current time and refreshes thread variables.
 	mysql_thr->curtime=monotonic_time();
 	mysql_thr->refresh_variables();
@@ -324,6 +338,8 @@ void* kill_query_thread(void *arg) {
 		ret=mysql_real_connect(mysql,"localhost",ka->username,ka->password,NULL,0,ka->hostname,0);
 	}
 	if (!ret) {
+		ka->remove_dns_record();
+		//ka->resolve_hostname();
 		int myerr = mysql_errno(mysql);
 		if (ssl_params != NULL && myerr == 2026) {
 			proxy_error("Failed to connect to server %s:%d to run KILL %s %lu.  SSL Params: %s , %s , %s , %s , %s , %s , %s , %s\n",
@@ -6141,30 +6157,31 @@ void MySQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 	if (session_type == PROXYSQL_SESSION_MYSQL) {
 		__sync_fetch_and_add(&MyHGM->status.frontend_use_db, 1);
 		string nq=string((char *)pkt->ptr+sizeof(mysql_hdr)+1,pkt->size-sizeof(mysql_hdr)-1);
-		RE2::GlobalReplace(&nq,(char *)"(?U)/\\*.*\\*/",(char *)" ");
-		char *sn_tmp = (char *)nq.c_str();
-		while (sn_tmp < ( nq.c_str() + nq.length() - 4 ) && *sn_tmp == ' ')
-			sn_tmp++;
-		//char *schemaname=strdup(nq.c_str()+4);
-		char *schemaname=strdup(sn_tmp+3);
-		char *schemanameptr=trim_spaces_and_quotes_in_place(schemaname);
-		// handle cases like "USE `schemaname`
-		if(schemanameptr[0]=='`' && schemanameptr[strlen(schemanameptr)-1]=='`') {
-			schemanameptr[strlen(schemanameptr)-1]='\0';
-			schemanameptr++;
-		}
-		client_myds->myconn->userinfo->set_schemaname(schemanameptr,strlen(schemanameptr));
-		free(schemaname);
-		if (mirror==false) {
+		SetParser parser(nq);
+		string errmsg = "";
+		string schemaname = parser.parse_USE_query(errmsg);
+		if (schemaname != "") {
+			client_myds->myconn->userinfo->set_schemaname((char *)schemaname.c_str(),schemaname.length());
+			if (mirror==false) {
+				RequestEnd(NULL);
+			}
+			l_free(pkt->size,pkt->ptr);
+			client_myds->setDSS_STATE_QUERY_SENT_NET();
+			unsigned int nTrx=NumActiveTransactions();
+			uint16_t setStatus = (nTrx ? SERVER_STATUS_IN_TRANS : 0 );
+			if (autocommit) setStatus |= SERVER_STATUS_AUTOCOMMIT;
+			client_myds->myprot.generate_pkt_OK(true,NULL,NULL,1,0,0,setStatus,0,NULL);
+			GloMyLogger->log_audit_entry(PROXYSQL_MYSQL_INITDB, this, NULL);
+		} else {
+			l_free(pkt->size,pkt->ptr);
+			client_myds->setDSS_STATE_QUERY_SENT_NET();
+			std::string msg = "Unable to parse: " + nq;
+			if (errmsg != "") {
+				msg = errmsg + ": " + nq;
+			}
+			client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,client_myds->pkt_sid+1,1148,(char *)"42000", msg.c_str());
 			RequestEnd(NULL);
 		}
-		l_free(pkt->size,pkt->ptr);
-		client_myds->setDSS_STATE_QUERY_SENT_NET();
-		unsigned int nTrx=NumActiveTransactions();
-		uint16_t setStatus = (nTrx ? SERVER_STATUS_IN_TRANS : 0 );
-		if (autocommit) setStatus |= SERVER_STATUS_AUTOCOMMIT;
-		client_myds->myprot.generate_pkt_OK(true,NULL,NULL,1,0,0,setStatus,0,NULL);
-		GloMyLogger->log_audit_entry(PROXYSQL_MYSQL_INITDB, this, NULL);
 		client_myds->DSS=STATE_SLEEP;
 	} else {
 		l_free(pkt->size,pkt->ptr);
@@ -6482,7 +6499,10 @@ bool MySQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 			RE2::GlobalReplace(&nq,(char *)"^/\\*!\\d\\d\\d\\d\\d SET(.*)\\*/",(char *)"SET\\1");
 			RE2::GlobalReplace(&nq,(char *)"(?U)/\\*.*\\*/",(char *)"");
 			// remove trailing space and semicolon if present. See issue#4380
-			nq.erase(nq.find_last_not_of(" ;") + 1);
+			size_t pos = nq.find_last_not_of(" ;");
+			if (pos != nq.npos) {
+				nq.erase(pos + 1); // remove trailing spaces and semicolumns
+			}
 /*
 			// we do not threat SET SQL_LOG_BIN as a special case
 			if (match_regexes && match_regexes[0]->match(dig)) {
