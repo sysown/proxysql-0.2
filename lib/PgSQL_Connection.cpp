@@ -1535,6 +1535,7 @@ PgSQL_Connection::PgSQL_Connection() {
 	query_result = NULL;
 	query_result_reuse = NULL;
 	new_result = true;
+	is_copy_out = false;
 	reset_error();
 }
 
@@ -1609,7 +1610,7 @@ PG_ASYNC_ST PgSQL_Connection::handler(short event) {
 #if ENABLE_TIMER
 	Timer timer(myds->sess->thread->Timers.Connections_Handlers);
 #endif // ENABLE_TIMER
-	unsigned long long processed_bytes = 0;	// issue #527 : this variable will store the amount of bytes processed during this event
+	uint64_t processed_bytes = 0;	// issue #527 : this variable will store the amount of bytes processed during this event
 	if (pgsql_conn == NULL) {
 		// it is the first time handler() is being called
 		async_state_machine = ASYNC_CONNECT_START;
@@ -1804,6 +1805,12 @@ handler_again:
 				case PGRES_SINGLE_TUPLE:
 					break;
 				case PGRES_COPY_OUT:
+					if (handle_copy_out(result.get(), &processed_bytes) == false) {
+						next_event(ASYNC_USE_RESULT_CONT);
+						return async_state_machine; // Threashold for result size reached. Pause temporarily
+					}
+					NEXT_IMMEDIATE(ASYNC_USE_RESULT_CONT);
+					break;
 				case PGRES_COPY_IN:
 				case PGRES_COPY_BOTH:
 					// NOT IMPLEMENTED
@@ -1920,6 +1927,7 @@ handler_again:
 		}
 		// should be NULL
 		assert(!pgsql_result);
+		assert(!is_copy_out);
 		break;
 	case ASYNC_RESET_SESSION_START:
 		reset_session_start();
@@ -2188,19 +2196,21 @@ void PgSQL_Connection::fetch_result_cont(short event) {
 	// This situation can happen when a multi-statement query has been executed.
 	if (pgsql_result)
 		return;
-
-	switch (PShandleRowData(pgsql_conn, &ps_result)) {
-	case 0:
-		result_type = 2;
-		return;
-	case 1:
-		// we already have data available in buffer
-		if (PQisBusy(pgsql_conn) == 0) {
-			result_type = 1;
-			pgsql_result = PQgetResult(pgsql_conn);
+	
+	if (is_copy_out == false) {
+		switch (PShandleRowData(pgsql_conn, new_result, &ps_result)) {
+		case 0:
+			result_type = 2;
 			return;
+		case 1:
+			// we already have data available in buffer
+			if (PQisBusy(pgsql_conn) == 0) {
+				result_type = 1;
+				pgsql_result = PQgetResult(pgsql_conn);
+				return;
+			}
+			break;
 		}
-		break;
 	}
 
 	if (PQconsumeInput(pgsql_conn) == 0) {
@@ -2217,7 +2227,7 @@ void PgSQL_Connection::fetch_result_cont(short event) {
 		return;
 	}
 
-	switch (PShandleRowData(pgsql_conn, &ps_result)) {
+	switch (PShandleRowData(pgsql_conn, new_result, &ps_result)) {
 	case 0:
 		result_type = 2;
 		return;
@@ -2935,4 +2945,48 @@ const char* PgSQL_Connection::get_pg_transaction_status_str() {
 		return "UNKNOWN";
 	}
 	return "INVALID";
+}
+
+bool PgSQL_Connection::handle_copy_out(const PGresult* result, uint64_t* processed_bytes) {
+
+	if (new_result == true) {
+		const unsigned int bytes_recv = query_result->add_copy_out_response_start(result);
+		update_bytes_recv(bytes_recv);
+		new_result = false;
+		is_copy_out = true;
+	}
+
+	char* buffer = NULL;
+	int copy_data_len = 0;
+
+	while ((copy_data_len = PQgetCopyData(pgsql_conn, &buffer, 1)) > 0) {
+		const unsigned int bytes_recv = query_result->add_copy_out_row(buffer, copy_data_len);
+		update_bytes_recv(bytes_recv);
+		PQfreemem(buffer);
+		buffer = NULL;
+		*processed_bytes += bytes_recv;	// issue #527 : this variable will store the amount of bytes processed during this event
+		if (
+			(*processed_bytes > (unsigned int)pgsql_thread___threshold_resultset_size * 8)
+			||
+			(pgsql_thread___throttle_ratio_server_to_client && pgsql_thread___throttle_max_bytes_per_second_to_client && (*processed_bytes > (uint64_t)pgsql_thread___throttle_max_bytes_per_second_to_client / 10 * (uint64_t)pgsql_thread___throttle_ratio_server_to_client))
+			) 
+		{
+			return false;
+		}
+	}
+
+	if (copy_data_len == -1) {
+		const unsigned int bytes_recv = query_result->add_copy_out_response_end();
+		update_bytes_recv(bytes_recv);
+		is_copy_out = false;
+	} else if (copy_data_len < 0) {
+		const PGresult* result = PQgetResultFromPGconn(pgsql_conn);
+		if (result || is_error_present() == false) {
+			set_error_from_result(result);
+			proxy_error("PQgetCopyData failed. %s\n", get_error_code_with_message().c_str());
+		}
+		is_copy_out = false;
+	}
+
+	return true;
 }

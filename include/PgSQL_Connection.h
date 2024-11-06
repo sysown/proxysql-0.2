@@ -655,10 +655,16 @@ public:
 	PgSQL_Query_Result* query_result;
 	PgSQL_Query_Result* query_result_reuse;
 	bool new_result;
+	bool is_copy_out;
 	//PgSQL_SrvC* parent;
 	//PgSQL_Connection_userinfo* userinfo;
 	//PgSQL_Data_Stream* myds;
 	//int fd;
+
+private:
+	// Handles the COPY OUT response from the server.
+	// Returns true if it consumes all buffer data, or false if the threshold for result size is reached
+	bool handle_copy_out(const PGresult* result, uint64_t* processed_bytes);
 };
 
 #endif /* __CLASS_PGSQL_CONNECTION_H */

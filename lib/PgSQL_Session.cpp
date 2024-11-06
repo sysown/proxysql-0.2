@@ -961,7 +961,7 @@ bool PgSQL_Session::handler_special_queries(PtrSize_t* pkt) {
 	}
 	// Unsupported Features:
 	// COPY
-	if (pkt->size > (5 + 5) && strncasecmp((char*)"COPY ", (char*)pkt->ptr + 5, 5) == 0) {
+	/*if (pkt->size > (5 + 5) && strncasecmp((char*)"COPY ", (char*)pkt->ptr + 5, 5) == 0) {
 		client_myds->DSS = STATE_QUERY_SENT_NET;
 		client_myds->myprot.generate_error_packet(true, true, "Feature not supported", PGSQL_ERROR_CODES::ERRCODE_FEATURE_NOT_SUPPORTED,
 			false, true);
@@ -975,7 +975,7 @@ bool PgSQL_Session::handler_special_queries(PtrSize_t* pkt) {
 		}
 		l_free(pkt->size, pkt->ptr);
 		return true;
-	}
+	}*/
 	//
 	if (pkt->size > (5 + 18) && strncasecmp((char*)"PROXYSQL INTERNAL ", (char*)pkt->ptr + 5, 18) == 0) {
 		return_proxysql_internal(pkt);
@@ -6231,7 +6231,7 @@ void PgSQL_Session::PgSQL_Result_to_PgSQL_wire(PgSQL_Connection* _conn, PgSQL_Da
 	if (query_result && query_result->get_result_packet_type() != PGSQL_QUERY_RESULT_NO_DATA) {
 		bool transfer_started = query_result->is_transfer_started();
 		// if there is an error, it will be false so results are not cached
-		bool is_tuple = query_result->get_result_packet_type() == (PGSQL_QUERY_RESULT_TUPLE | PGSQL_QUERY_RESULT_COMMAND | PGSQL_QUERY_RESULT_READY); 
+		bool is_tuple = query_result->get_result_packet_type() == (PGSQL_QUERY_RESULT_TUPLE | PGSQL_QUERY_RESULT_COMMAND | PGSQL_QUERY_RESULT_READY);
 		CurrentQuery.rows_sent = query_result->get_num_rows();
 		const auto _affected_rows = query_result->get_affected_rows();
 		if (_affected_rows != static_cast<unsigned long long>(-1)) {
