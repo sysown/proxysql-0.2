@@ -127,7 +127,7 @@ coredumper/coredumper/src/libcoredumper.a:
 	cd coredumper/coredumper && CC=${CC} CXX=${CXX} ${MAKE}
 coredumper: coredumper/coredumper/src/libcoredumper.a
 
-curl/curl/lib/.libs/libcurl.a: $(SSL_LDIR)/libssl.a
+curl/curl/lib/.libs/libcurl.a:
 	cd curl && rm -rf curl-*/ || true
 	cd curl && tar -zxf curl-*.tar.gz
 #	cd curl/curl && ./configure --disable-debug --disable-ftp --disable-ldap --disable-ldaps --disable-rtsp --disable-proxy --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smb --disable-smtp --disable-gopher --disable-manual --disable-ipv6 --disable-sspi --disable-crypto-auth --disable-ntlm-wb --disable-tls-srp --without-nghttp2 --without-libidn2 --without-libssh2 --without-brotli --with-ssl=$(shell pwd)/../../libssl/openssl/ && CC=${CC} CXX=${CXX} ${MAKE}
@@ -201,7 +201,7 @@ jemalloc/jemalloc/lib/libjemalloc.a:
 jemalloc: jemalloc/jemalloc/lib/libjemalloc.a
 
 
-mariadb-client-library/mariadb_client/libmariadb/libmariadbclient.a: $(SSL_LDIR)/libssl.a
+mariadb-client-library/mariadb_client/libmariadb/libmariadbclient.a:
 	cd mariadb-client-library && rm -rf mariadb-connector-c-*/ || true
 	cd mariadb-client-library && tar -zxf mariadb-connector-c-3.3.8-src.tar.gz
 	cd mariadb-client-library/mariadb_client && patch -p0 < ../plugin_auth_CMakeLists.txt.patch
@@ -311,7 +311,7 @@ pcre/pcre/.libs/libpcre.a:
 
 pcre: pcre/pcre/.libs/libpcre.a
 
-postgresql/postgresql/src/interfaces/libpq/libpq.a : $(SSL_LDIR)/libssl.a
+postgresql/postgresql/src/interfaces/libpq/libpq.a :
 	cd postgresql && rm -rf postgresql-*/ || true
 	cd postgresql && tar -zxf postgresql-*.tar.gz
 	cd postgresql/postgresql && patch -p0 < ../get_result_from_pgconn.patch
@@ -323,7 +323,7 @@ postgresql/postgresql/src/interfaces/libpq/libpq.a : $(SSL_LDIR)/libssl.a
 
 postgresql: postgresql/postgresql/src/interfaces/libpq/libpq.a
 
-libusual/libusual/.libs/libusual.a: $(SSL_LDIR)/libssl.a
+libusual/libusual/.libs/libusual.a:
 	cd libusual && rm -rf libusual-*/ || true
 	cd libusual && tar -zxf libusual-*.tar.gz
 	cd libusual/libusual && ./autogen.sh
@@ -332,7 +332,7 @@ libusual/libusual/.libs/libusual.a: $(SSL_LDIR)/libssl.a
 
 libusual: libusual/libusual/.libs/libusual.a
 
-libscram/lib/libscram.a: $(SSL_LDIR)/libssl.a postgresql/postgresql/src/interfaces/libpq/libpq.a 
+libscram/lib/libscram.a:postgresql/postgresql/src/interfaces/libpq/libpq.a 
 	cd libscram && rm -rf lib/* || true
 	cd libscram && CC=${CC} CXX=${CXX} ${MAKE} LIBOPENSSL_DIR="$(SSL_LDIR)" POSTGRESQL_DIR="$(shell pwd)/postgresql/postgresql/"
 
