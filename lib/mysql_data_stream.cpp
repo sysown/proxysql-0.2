@@ -519,7 +519,7 @@ int MySQL_Data_Stream::read_from_net() {
 		}
 		char buf[MY_SSL_BUFFER];
 		int ssl_recv_bytes = recv(fd, buf, sizeof(buf), 0);
-		proxy_debug(PROXY_DEBUG_NET, 7, "Session=%p: recv() read %d bytes. num_write: %lu ,  num_read: %lu\n", sess, ssl_recv_bytes,  rbio_ssl->num_write , rbio_ssl->num_read);
+		proxy_debug(PROXY_DEBUG_NET, 7, "Session=%p: recv() read %d bytes. num_write: %lu ,  num_read: %lu\n", sess, ssl_recv_bytes,  BIO_number_written(rbio_ssl) , BIO_number_read(rbio_ssl));
 
 		if (ssl_recv_bytes > 0 || BIO_number_written(rbio_ssl) > BIO_number_read(rbio_ssl)) {
 			char buf2[MY_SSL_BUFFER];
