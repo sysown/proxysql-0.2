@@ -124,7 +124,7 @@ void execute_tests(bool with_ssl) {
 
 int main(int argc, char** argv) {
 
-    plan(7); // Total number of tests planned
+    plan(4); // Total number of tests planned
 
     if (cl.getEnv())
         return exit_status();
