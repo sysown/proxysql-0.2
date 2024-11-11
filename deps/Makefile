@@ -87,9 +87,6 @@ else
     $(error Warning: OpenSSL headers not found. exiting, please install openssl.)
 endif
 
-curl_lib_path:
-	ln -fs $(SSL_LDIR)/ lib # curl wants this path
-
 libhttpserver/libhttpserver/build/src/.libs/libhttpserver.a: libmicrohttpd/libmicrohttpd/src/microhttpd/.libs/libmicrohttpd.a re2/re2/obj/libre2.a
 	cd libhttpserver && rm -rf libhttpserver-*/ || true
 	cd libhttpserver && tar -zxf libhttpserver-*.tar.gz

@@ -355,7 +355,6 @@ void ProxySQL_Main_init_SSL_module() {
 		proxy_error("%s\n", SSL_alert_desc_string_long(rc));
 	}
 	init_locks();
-
 	SSL_METHOD *ssl_method;
 	OpenSSL_add_all_algorithms();
 	SSL_load_error_strings();
