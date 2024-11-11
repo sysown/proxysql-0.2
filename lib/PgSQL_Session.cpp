@@ -4369,12 +4369,12 @@ void PgSQL_Session::handler___status_CONNECTING_CLIENT___STATE_SERVER_HANDSHAKE(
 			(
 				client_myds->encrypted == false
 				&&
-				strncmp(client_myds->myconn->userinfo->username, mysql_thread___monitor_username, strlen(mysql_thread___monitor_username)) == 0
+				strncmp(client_myds->myconn->userinfo->username, pgsql_thread___monitor_username, strlen(pgsql_thread___monitor_username)) == 0
 				)
 			) // Do not delete this line. See bug #492
 		) {
 		if (session_type == PROXYSQL_SESSION_ADMIN) {
-			if ((default_hostgroup < 0) || (strncmp(client_myds->myconn->userinfo->username, mysql_thread___monitor_username, strlen(mysql_thread___monitor_username)) == 0)) {
+			if ((default_hostgroup < 0) || (strncmp(client_myds->myconn->userinfo->username, pgsql_thread___monitor_username, strlen(pgsql_thread___monitor_username)) == 0)) {
 				if (default_hostgroup == STATS_HOSTGROUP) {
 					session_type = PROXYSQL_SESSION_STATS;
 				}
@@ -6182,7 +6182,7 @@ void PgSQL_Session::MySQL_Stmt_Result_to_MySQL_wire(MYSQL_STMT* stmt, PgSQL_Conn
 		//query_result->init_with_stmt(myconn);
 		CurrentQuery.rows_sent = query_result->get_num_rows();
 		const auto _affected_rows = query_result->get_affected_rows();
-		if (_affected_rows != -1) {
+		if (_affected_rows != static_cast<unsigned long long>(-1)) {
 			CurrentQuery.affected_rows = _affected_rows;
 			CurrentQuery.have_affected_rows = true;
 		}
@@ -6232,7 +6232,7 @@ void PgSQL_Session::PgSQL_Result_to_PgSQL_wire(PgSQL_Connection* _conn, PgSQL_Da
 		const uint64_t num_rows  = query_result->get_num_rows();
 		const uint64_t resultset_size = query_result->get_resultset_size();
 		const auto _affected_rows = query_result->get_affected_rows();
-		if (_affected_rows != -1) {
+		if (_affected_rows != static_cast<unsigned long long>(-1)) {
 			 CurrentQuery.affected_rows = _affected_rows;
 			 CurrentQuery.have_affected_rows = true;
 		}
