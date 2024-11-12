@@ -1197,7 +1197,7 @@ bool MySQL_Session::handler_special_queries(PtrSize_t *pkt) {
 		status=WAITING_CLIENT_DATA;
 
 		if (mirror==false) {
-			RequestEnd(NULL, err_info.second);
+			RequestEnd(NULL, err_info.first, err_info.second);
 		}
 		l_free(pkt->size,pkt->ptr);
 
@@ -1397,9 +1397,10 @@ bool MySQL_Session::handler_special_queries(PtrSize_t *pkt) {
 		if (mysql_thread___enable_load_data_local_infile == false) {
 			client_myds->DSS=STATE_QUERY_SENT_NET;
 			string errmsg = "Unsupported 'LOAD DATA LOCAL INFILE' command";
-			client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1047,(char *)"HY000", errmsg.c_str(), true);
+			client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1047,(char *)"08S01", errmsg.c_str(), true);
 			if (mirror==false) {
-				RequestEnd(NULL, errmsg.c_str());
+				MyHGM->add_mysql_errors(current_hostgroup, (char *)"", 0, client_myds->myconn->userinfo->username, (client_myds->addr.addr ? client_myds->addr.addr : (char *)"unknown" ), client_myds->myconn->userinfo->schemaname, 1047, (char *)errmsg.c_str());
+				RequestEnd(NULL, 1047, errmsg.c_str());
 			} else {
 				client_myds->DSS=STATE_SLEEP;
 				status=WAITING_CLIENT_DATA;
@@ -2814,7 +2815,8 @@ bool MySQL_Session::handler_again___status_CONNECTING_SERVER(int *_rc) {
 				thread->status_variables.stvar[st_var_max_connect_timeout_err]++;
 			}
 			client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,9001,(char *)"HY000", errmsg.c_str(), true);
-			RequestEnd(mybe->server_myds, errmsg.c_str());
+			MyHGM->add_mysql_errors(current_hostgroup, (char *)"", 0, client_myds->myconn->userinfo->username, (client_myds->addr.addr ? client_myds->addr.addr : (char *)"unknown" ), client_myds->myconn->userinfo->schemaname, 9001, (char *)errmsg.c_str());
+			RequestEnd(mybe->server_myds, 9001, errmsg.c_str());
 
 			string hg_status {};
 			generate_status_one_hostgroup(current_hostgroup, hg_status);
@@ -2962,7 +2964,8 @@ __exit_handler_again___status_CONNECTING_SERVER_with_err:
 					}
 					if (session_fast_forward == SESSION_FORWARD_TYPE_NONE) {
 						// see bug #979
-						RequestEnd(myds, errmsg.c_str());
+						MyHGM->add_mysql_errors(current_hostgroup, (char *)"", 0, client_myds->myconn->userinfo->username, (client_myds->addr.addr ? client_myds->addr.addr : (char *)"unknown" ), client_myds->myconn->userinfo->schemaname, 9002, (char *)errmsg.c_str());
+						RequestEnd(myds, 9002, errmsg.c_str());
 					}
 					while (previous_status.size()) {
 						st=previous_status.top();
@@ -3224,7 +3227,7 @@ void MySQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 					sprintf(buf, err_msg, current_hostgroup, locked_on_hostgroup, nqn.c_str(), end);
 					client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,client_myds->pkt_sid+1,9005,(char *)"HY000",buf, true);
 					thread->status_variables.stvar[st_var_hostgroup_locked_queries]++;
-					RequestEnd(NULL, buf);
+					RequestEnd(NULL, 9005, buf);
 					free(buf);
 					l_free(pkt.size,pkt.ptr);
 					return;
@@ -3397,7 +3400,7 @@ void MySQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 					sprintf(buf, err_msg, current_hostgroup, locked_on_hostgroup, nqn.c_str(), end);
 					client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,client_myds->pkt_sid+1,9005,(char *)"HY000",buf, true);
 					thread->status_variables.stvar[st_var_hostgroup_locked_queries]++;
-					RequestEnd(NULL, buf);
+					RequestEnd(NULL, 9005, buf);
 					free(buf);
 					l_free(pkt.size,pkt.ptr);
 					return;
@@ -4144,7 +4147,7 @@ __get_pkts_from_client:
 												sprintf(buf, err_msg, current_hostgroup, locked_on_hostgroup, nqn.c_str(), end);
 												client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,client_myds->pkt_sid+1,9005,(char *)"HY000",buf, true);
 												thread->status_variables.stvar[st_var_hostgroup_locked_queries]++;
-												RequestEnd(NULL, buf);
+												RequestEnd(NULL, 9005, buf);
 												free(buf);
 												l_free(pkt.size,pkt.ptr);
 												break;
@@ -5095,7 +5098,7 @@ handler_again:
 								return handler_ret;
 							}
 							handler_minus1_GenerateErrorMessage(myds, myconn, wrong_pass);
-							RequestEnd(myds);
+							RequestEnd(myds, myerr);
 							handler_minus1_HandleBackendConnection(myds, myconn);
 						}
 					} else {
@@ -5233,6 +5236,7 @@ bool MySQL_Session::handler_again___status_SHOW_WARNINGS(MySQL_Data_Stream* myds
 		myds->revents,(char *)"SHOW WARNINGS", strlen((char *)"SHOW WARNINGS")
 	);
 	if (rc == 0 || rc == -1) {
+		int myerr = 0;
 		// Cleanup the connection resulset from 'SHOW WARNINGS' for the next query.
 		if (myconn->MyRS != NULL) {
 			delete myconn->MyRS;
@@ -5240,13 +5244,13 @@ bool MySQL_Session::handler_again___status_SHOW_WARNINGS(MySQL_Data_Stream* myds
 		}
 
 		if (rc == -1) {
-			int myerr = mysql_errno(myconn->mysql);
+			myerr = mysql_errno(myconn->mysql);
 			proxy_error(
 				"'SHOW WARNINGS' failed to be executed over backend connection with error: '%d'\n", myerr
 			);
 		}
 
-		RequestEnd(myds);
+		RequestEnd(myds, myerr);
 		finishQuery(myds,myconn,prepared_stmt_with_no_params);
 
 		return false;
@@ -5741,7 +5745,7 @@ void MySQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 				msg = errmsg + ": " + nq;
 			}
 			client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,client_myds->pkt_sid+1,1148,(char *)"42000", msg.c_str());
-			RequestEnd(NULL);
+			RequestEnd(NULL, 1148, msg.c_str());
 		}
 		client_myds->DSS=STATE_SLEEP;
 	} else {
@@ -5827,7 +5831,8 @@ void MySQL_Session::handler_WCD_SS_MCQ_qpo_OK_msg(PtrSize_t *pkt) {
 void MySQL_Session::handler_WCD_SS_MCQ_qpo_error_msg(PtrSize_t *pkt) {
 	client_myds->DSS=STATE_QUERY_SENT_NET;
 	client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,client_myds->pkt_sid+1,1148,(char *)"42000",qpo->error_msg);
-	RequestEnd(NULL);
+	MyHGM->add_mysql_errors(current_hostgroup, (char *)"", 0, client_myds->myconn->userinfo->username, (client_myds->addr.addr ? client_myds->addr.addr : (char *)"unknown" ), client_myds->myconn->userinfo->schemaname, 1148, (char *)qpo->error_msg);
+	RequestEnd(NULL, 1148, qpo->error_msg);
 	l_free(pkt->size,pkt->ptr);
 }
 
@@ -5846,7 +5851,8 @@ void MySQL_Session::handler_WCD_SS_MCQ_qpo_LargePacket(PtrSize_t *pkt) {
 	client_myds->DSS=STATE_QUERY_SENT_NET;
 	string errmsg = "Got a packet bigger than 'max_allowed_packet' bytes";
 	client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,client_myds->pkt_sid+1,1153,(char *)"08S01", errmsg.c_str(), true);
-	RequestEnd(NULL, errmsg.c_str());
+	MyHGM->add_mysql_errors(current_hostgroup, (char *)"", 0, client_myds->myconn->userinfo->username, (client_myds->addr.addr ? client_myds->addr.addr : (char *)"unknown" ), client_myds->myconn->userinfo->schemaname, 1153, (char *)errmsg.c_str());
+	RequestEnd(NULL, 1153, errmsg.c_str());
 	l_free(pkt->size,pkt->ptr);
 }
 
@@ -6851,7 +6857,7 @@ __exit_set_destination_hostgroup:
 				sprintf(buf,"ProxySQL Error: connection is locked to hostgroup %d but trying to reach hostgroup %d", locked_on_hostgroup, current_hostgroup);
 				client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,client_myds->pkt_sid+1,9006,(char *)"Y0000",buf);
 				thread->status_variables.stvar[st_var_hostgroup_locked_queries]++;
-				RequestEnd(NULL, buf);
+				RequestEnd(NULL, 9006, buf);
 				l_free(pkt->size,pkt->ptr);
 				return true;
 			}
@@ -7411,25 +7417,25 @@ unsigned long long MySQL_Session::IdleTime() {
 
 // this is called either from RequestEnd(), or at the end of executing
 // prepared statements
-void MySQL_Session::LogQuery(MySQL_Data_Stream *myds, const char * errmsg) {
+void MySQL_Session::LogQuery(MySQL_Data_Stream *myds, const unsigned int myerrno, const char * errmsg) {
 	// we need to access statistics before calling CurrentQuery.end()
 	// so we track the time here
 	CurrentQuery.end_time=thread->curtime;
 
 	if (qpo) {
 		if (qpo->log==1) {
-			GloMyLogger->log_request(this, myds, errmsg);	// we send for logging only if logging is enabled for this query
+			GloMyLogger->log_request(this, myds, myerrno, errmsg);	// we send for logging only if logging is enabled for this query
 		} else {
 			if (qpo->log==-1) {
 				if (mysql_thread___eventslog_default_log==1) {
-					GloMyLogger->log_request(this, myds, errmsg);	// we send for logging only if enabled by default
+					GloMyLogger->log_request(this, myds, myerrno, errmsg);	// we send for logging only if enabled by default
 				}
 			}
 		}
 	}
 }
 
-void MySQL_Session::RequestEnd(MySQL_Data_Stream *myds, const char * errmsg) {
+void MySQL_Session::RequestEnd(MySQL_Data_Stream *myds, const unsigned int myerrno, const char * errmsg) {
 	// check if multiplexing needs to be disabled
 	char *qdt = NULL;
 
@@ -7450,7 +7456,7 @@ void MySQL_Session::RequestEnd(MySQL_Data_Stream *myds, const char * errmsg) {
 			break;
 		default:
 			if (session_fast_forward == SESSION_FORWARD_TYPE_NONE) {
-				LogQuery(myds, errmsg);
+				LogQuery(myds, myerrno, errmsg);
 			}
 			break;
 	}

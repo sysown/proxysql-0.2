@@ -65,6 +65,7 @@ MySQL_Event::MySQL_Event (log_event_type _et, uint32_t _thread_id, char * _usern
 	client_stmt_id=0;
 	gtid = NULL;
 	errmsg = nullptr;
+	myerrno = 0;
 	free_on_delete = false; // by default, this is false. This because pointers do not belong to this object
 }
 
@@ -168,8 +169,10 @@ void MySQL_Event::set_gtid(MySQL_Session *sess) {
 	}
 }
 
-void MySQL_Event::set_errmsg(const char * _errmsg) {
-	errmsg = strdup(_errmsg);
+void MySQL_Event::set_errmsg(const unsigned int _myerrno, const char * _errmsg) {
+	myerrno = _myerrno;
+	if (_errmsg != nullptr)
+		errmsg = strdup(_errmsg);
 }
 
 void MySQL_Event::set_extra_info(char *_err) {
@@ -506,6 +509,7 @@ uint64_t MySQL_Event::write_query_format_2_json(std::fstream *f) {
 	if (have_gtid == true) {
 		j["last_gtid"] = gtid;
 	}
+	j["errno"] = myerrno;
 	if (errmsg != nullptr) {
 		j["error"] = errmsg;
 	}
@@ -760,7 +764,7 @@ void MySQL_Logger::audit_set_datadir(char *s) {
 	flush_log();
 };
 
-void MySQL_Logger::log_request(MySQL_Session *sess, MySQL_Data_Stream *myds, const char * errmsg) {
+void MySQL_Logger::log_request(MySQL_Session *sess, MySQL_Data_Stream *myds, const unsigned int myerrno, const char * errmsg) {
 	int elmhs = mysql_thread___eventslog_buffer_history_size;
 	if (elmhs == 0) {
 		if (events.enabled==false) return;
@@ -857,8 +861,8 @@ void MySQL_Logger::log_request(MySQL_Session *sess, MySQL_Data_Stream *myds, con
 	}
 	me.set_rows_sent(sess->CurrentQuery.rows_sent);
 	me.set_gtid(sess);
-	if (errmsg != nullptr) {
-		me.set_errmsg(errmsg);
+	if (myerrno != 0) {
+		me.set_errmsg(myerrno, errmsg);
 	}
 
 	int sl=0;
@@ -1223,13 +1227,13 @@ void MySQL_Logger::insertMysqlEventsIntoDb(SQLite3DB * db, const std::string& ta
 	sqlite3_stmt *statement32=NULL;
 	char *query1=NULL;
 	char *query32=NULL;
-	const int numcols = 18;
+	const int numcols = 19;
 	std::string query1s = "";
 	std::string query32s = "";
 
-	std::string coldefs = "(thread_id, username, schemaname, start_time, end_time, query_digest, query, server, client, event_type, hid, extra_info, affected_rows, last_insert_id, rows_sent, client_stmt_id, gtid, error)";
+	std::string coldefs = "(thread_id, username, schemaname, start_time, end_time, query_digest, query, server, client, event_type, hid, extra_info, affected_rows, last_insert_id, rows_sent, client_stmt_id, gtid, errno, error)";
 
-	query1s  = "INSERT INTO " + tableName + coldefs + " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)";
+	query1s  = "INSERT INTO " + tableName + coldefs + " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)";
 	query32s = "INSERT INTO " + tableName + coldefs + " VALUES " + generate_multi_rows_query(32, numcols);
 
 	query1  = (char *)query1s.c_str();
@@ -1269,7 +1273,8 @@ void MySQL_Logger::insertMysqlEventsIntoDb(SQLite3DB * db, const std::string& ta
 			rc = (*proxy_sqlite3_bind_int64)(statement32, (idx*numcols)+15, event->rows_sent); ASSERT_SQLITE_OK(rc, db);
 			rc = (*proxy_sqlite3_bind_int)(statement32, (idx*numcols)+16, event->client_stmt_id); ASSERT_SQLITE_OK(rc, db);
 			rc = (*proxy_sqlite3_bind_text)(statement32, (idx*numcols)+17, event->gtid, -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, db);
-			rc = (*proxy_sqlite3_bind_text)(statement32, (idx*numcols)+18, event->errmsg, -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, db);
+			rc = (*proxy_sqlite3_bind_int)(statement32, (idx*numcols)+18, event->myerrno); ASSERT_SQLITE_OK(rc, db);
+			rc = (*proxy_sqlite3_bind_text)(statement32, (idx*numcols)+19, event->errmsg, -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, db);
 			if (idx==31) {
 				SAFE_SQLITE3_STEP2(statement32);
 				rc=(*proxy_sqlite3_clear_bindings)(statement32); ASSERT_SQLITE_OK(rc, db);
@@ -1295,7 +1300,8 @@ void MySQL_Logger::insertMysqlEventsIntoDb(SQLite3DB * db, const std::string& ta
 			rc = (*proxy_sqlite3_bind_int64)(statement1, 15, event->rows_sent); ASSERT_SQLITE_OK(rc, db);
 			rc = (*proxy_sqlite3_bind_int)(statement1, 16, event->client_stmt_id); ASSERT_SQLITE_OK(rc, db);
 			rc = (*proxy_sqlite3_bind_text)(statement1, 17, event->gtid, -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, db);
-			rc = (*proxy_sqlite3_bind_text)(statement1, 18, event->errmsg, -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, db);
+			rc = (*proxy_sqlite3_bind_int)(statement1, 18, event->myerrno); ASSERT_SQLITE_OK(rc, db);
+			rc = (*proxy_sqlite3_bind_text)(statement1, 19, event->errmsg, -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, db);
 			SAFE_SQLITE3_STEP2(statement1);
 			rc=(*proxy_sqlite3_clear_bindings)(statement1); ASSERT_SQLITE_OK(rc, db);
 			rc=(*proxy_sqlite3_reset)(statement1); ASSERT_SQLITE_OK(rc, db);
