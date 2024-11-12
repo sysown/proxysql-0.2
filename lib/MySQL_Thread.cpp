@@ -6013,7 +6013,7 @@ bool MySQL_Thread::set_backend_to_be_skipped_if_frontend_is_slow(MySQL_Data_Stre
 		// we pause receiving from backend at mysql_thread___threshold_resultset_size * 8
 		// but assuming that client isn't completely blocked, we will stop checking for data
 		// only at mysql_thread___threshold_resultset_size * 4
-		if (buffered_data > (unsigned int)mysql_thread___threshold_resultset_size*4) {
+		if (buffered_data > overflow_safe_multiply<4,unsigned int>(mysql_thread___threshold_resultset_size)) {
 			mypolls.fds[n].events = 0;
 			return true;
 		}

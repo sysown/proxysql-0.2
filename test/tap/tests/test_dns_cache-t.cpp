@@ -109,7 +109,10 @@ bool check_result(const std::string& key, const std::map<std::string, double>& p
 		COMPARE fn;
 		bool res = fn(after_metric_val, prev_metric_val);
 
-		ok(res, "'%s' metric result success.",key.c_str());
+		std::string bin_op_name = typeid(COMPARE).name();
+		bin_op_name = bin_op_name.substr(3, bin_op_name.size() - 6);
+
+		ok(res, "'%s' metric result should be '%s' %f. %f",key.c_str(), bin_op_name.c_str(), after_metric_val, prev_metric_val);
 	}
 
 	return true;
@@ -161,14 +164,14 @@ int main(int argc, char** argv) {
 	DECLARE_PREV_AFTER_METRICS();
 
 	std::vector<std::vector<std::function<bool()>>> dns_cache_check_steps = {
-	STEP_START
+	STEP_START // Step: 0
 			EXECUTE_QUERY("SET mysql-monitor_enabled='false'", proxysql_admin, false),
-			EXECUTE_QUERY("SET mysql-monitor_local_dns_cache_refresh_interval=1000", proxysql_admin, false),
+			EXECUTE_QUERY("SET mysql-monitor_local_dns_cache_refresh_interval=500", proxysql_admin, false),
 			EXECUTE_QUERY("SET mysql-monitor_local_dns_cache_ttl=5000", proxysql_admin, false),
 			EXECUTE_QUERY("LOAD MYSQL VARIABLES TO RUNTIME", proxysql_admin, false),
 			DELAY_SEC(2)
 	STEP_END,
-	STEP_START
+	STEP_START // Step: 1
 			UPDATE_PREV_METRICS(proxysql_admin),
 			EXECUTE_QUERY("INSERT INTO mysql_servers (hostgroup_id,hostname,port,max_replication_lag,max_connections,comment) VALUES (999,'0.0.0.0',7861,0,1000,'dummy mysql server')", proxysql_admin, false),
 			EXECUTE_QUERY("LOAD MYSQL SERVERS TO RUNTIME", proxysql_admin, false),
@@ -178,7 +181,7 @@ int main(int argc, char** argv) {
 			CHECK_RESULT(std::equal_to<double>, "proxysql_mysql_monitor_dns_cache_lookup_success"),
 			CHECK_RESULT(std::equal_to<double>, "proxysql_mysql_monitor_dns_cache_queried")
 	STEP_END,
-	STEP_START
+	STEP_START // Step: 2
 			UPDATE_PREV_METRICS(proxysql_admin),
 			LOOP_FUNC(EXECUTE_QUERY("DO 1", proxysql, true), 2),
 			DELAY_SEC(2),
@@ -187,7 +190,7 @@ int main(int argc, char** argv) {
 			CHECK_RESULT(std::equal_to<double>, "proxysql_mysql_monitor_dns_cache_lookup_success"),
 			CHECK_RESULT(std::equal_to<double>, "proxysql_mysql_monitor_dns_cache_queried")
 	STEP_END,
-	STEP_START
+	STEP_START // Step: 3
 			UPDATE_PREV_METRICS(proxysql_admin),
 			LOOP_FUNC(EXECUTE_QUERY("DO 1", proxysql, true), 2),
 			DELAY_SEC(2),
@@ -196,7 +199,7 @@ int main(int argc, char** argv) {
 			CHECK_RESULT(std::equal_to<double>, "proxysql_mysql_monitor_dns_cache_lookup_success"),
 			CHECK_RESULT(std::equal_to<double>, "proxysql_mysql_monitor_dns_cache_queried")
 	STEP_END,
-	STEP_START
+	STEP_START // Step: 4
 			UPDATE_PREV_METRICS(proxysql_admin),
 			EXECUTE_QUERY("INSERT INTO mysql_servers (hostgroup_id,hostname,port,max_replication_lag,max_connections,comment) VALUES (999,'google.com',7861,0,1000,'dummy mysql server')", proxysql_admin, false),
 			EXECUTE_QUERY("LOAD MYSQL SERVERS TO RUNTIME", proxysql_admin, false),
@@ -208,7 +211,7 @@ int main(int argc, char** argv) {
 			CHECK_RESULT(std::greater<double>, "proxysql_mysql_monitor_dns_cache_lookup_success"),
 			CHECK_RESULT(std::greater<double>, "proxysql_mysql_monitor_dns_cache_queried")
 	STEP_END,
-	STEP_START
+	STEP_START // Step: 5
 			UPDATE_PREV_METRICS(proxysql_admin),
 			EXECUTE_QUERY("INSERT INTO mysql_servers (hostgroup_id,hostname,port,max_replication_lag,max_connections,comment) VALUES (999,' yahoo.com ',7861,0,1000,'dummy mysql server')", proxysql_admin, false),
 			EXECUTE_QUERY("LOAD MYSQL SERVERS TO RUNTIME", proxysql_admin, false),
@@ -220,7 +223,17 @@ int main(int argc, char** argv) {
 			CHECK_RESULT(std::greater<double>, "proxysql_mysql_monitor_dns_cache_lookup_success"),
 			CHECK_RESULT(std::greater<double>, "proxysql_mysql_monitor_dns_cache_queried")
 	STEP_END,
-	STEP_START
+	STEP_START // Step: 6
+			UPDATE_PREV_METRICS(proxysql_admin),
+			EXECUTE_QUERY("INSERT INTO mysql_servers (hostgroup_id,hostname,port,max_replication_lag,max_connections,comment) VALUES (999,'amazon.com ',7861,0,1000,'dummy mysql server')", proxysql_admin, false),
+			EXECUTE_QUERY("LOAD MYSQL SERVERS TO RUNTIME", proxysql_admin, false),
+			DELAY_SEC(2),
+			UPDATE_AFTER_METRICS(proxysql_admin),
+			CHECK_RESULT(std::greater<double>, "proxysql_mysql_monitor_dns_cache_record_updated"),
+			CHECK_RESULT(std::equal_to<double>, "proxysql_mysql_monitor_dns_cache_lookup_success"),
+			CHECK_RESULT(std::equal_to<double>, "proxysql_mysql_monitor_dns_cache_queried")
+	STEP_END,
+	STEP_START // Step: 7
 			UPDATE_PREV_METRICS(proxysql_admin),
 //			EXECUTE_QUERY("DELETE FROM mysql_servers WHERE hostgroup_id=999", proxysql_admin, false),
 			EXECUTE_QUERY("DELETE FROM mysql_servers", proxysql_admin, false),
@@ -231,7 +244,7 @@ int main(int argc, char** argv) {
 			CHECK_RESULT(std::equal_to<double>, "proxysql_mysql_monitor_dns_cache_lookup_success"),
 			CHECK_RESULT(std::equal_to<double>, "proxysql_mysql_monitor_dns_cache_queried")
 	STEP_END,
-	STEP_START
+	STEP_START // Step: 8
 			UPDATE_PREV_METRICS(proxysql_admin),
 			EXECUTE_QUERY("INSERT INTO mysql_servers (hostgroup_id,hostname,port,max_replication_lag,max_connections,comment) VALUES (999,'INVALID_DOMAIN',7861,0,1000,'dummy mysql server')", proxysql_admin, false),
 			EXECUTE_QUERY("LOAD MYSQL SERVERS TO RUNTIME", proxysql_admin, false),
@@ -243,7 +256,7 @@ int main(int argc, char** argv) {
 			CHECK_RESULT(std::equal_to<double>, "proxysql_mysql_monitor_dns_cache_lookup_success"),
 			CHECK_RESULT(std::greater<double>, "proxysql_mysql_monitor_dns_cache_queried")
 	STEP_END,
-	STEP_START
+	STEP_START // Step: 9
 			//disable dns cache
 			EXECUTE_QUERY("SET mysql-monitor_local_dns_cache_refresh_interval=0", proxysql_admin, false),
 			EXECUTE_QUERY("LOAD MYSQL VARIABLES TO RUNTIME", proxysql_admin, false),
