@@ -38,7 +38,7 @@ endif
 STDCPP := -std=c++$(shell echo $(CPLUSPLUS) | cut -c3-4) -DCXX$(shell echo $(CPLUSPLUS) | cut -c3-4)
 
 
-targets := libconfig libdaemon jemalloc mariadb_client re2 sqlite3 pcre lz4 cityhash microhttpd curl ev libhttpserver libinjection prometheus-cpp postgresql libusual libscram
+targets := check_openssl_version libconfig libdaemon jemalloc mariadb_client re2 sqlite3 pcre lz4 cityhash microhttpd curl ev libhttpserver libinjection prometheus-cpp postgresql libusual libscram
 ifeq ($(SYS_KERN),Linux)
 	targets += coredumper
 endif
@@ -86,6 +86,17 @@ ifneq ($(ssl_header_path),)
 else
     $(error Warning: OpenSSL headers not found. exiting, please install openssl.)
 endif
+
+OPENSSL_VERSION_3 = 3.0.0
+
+check_openssl_version:
+	@current_version=$$(openssl version | awk '{print $$2}'); \
+	echo "Installed OpenSSL version: $$current_version"; \
+	compare_result=`printf "%s\n%s" "$(OPENSSL_VERSION_3)" "$$current_version" | sort -V | head -n 1`; \
+	if [ "$$compare_result" != "$(OPENSSL_VERSION_3)" ]; then \
+		echo "Error: Installed OpenSSL version must be $(OPENSSL_VERSION_3) or higher, Please upgrade OpenSSL."; \
+		exit 1; \
+	fi
 
 libhttpserver/libhttpserver/build/src/.libs/libhttpserver.a: libmicrohttpd/libmicrohttpd/src/microhttpd/.libs/libmicrohttpd.a re2/re2/obj/libre2.a
 	cd libhttpserver && rm -rf libhttpserver-*/ || true
