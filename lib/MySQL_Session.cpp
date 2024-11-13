@@ -632,7 +632,7 @@ MySQL_Session::MySQL_Session() {
 	user_attributes=NULL;
 	schema_locked=false;
 	session_fast_forward=false;
-	started_sending_data_to_client=false;
+	//started_sending_data_to_client=false;
 	handler_function=NULL;
 	client_myds=NULL;
 	to_process=0;
@@ -7476,7 +7476,7 @@ void MySQL_Session::RequestEnd(MySQL_Data_Stream *myds) {
 			CurrentQuery.end();
 		}
 	}
-	started_sending_data_to_client=false;
+	//started_sending_data_to_client=false;
 	previous_hostgroup = current_hostgroup;
 }
 
