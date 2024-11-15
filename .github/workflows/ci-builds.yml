@@ -52,11 +52,11 @@ jobs:
         include:
 #          - dist: 'centos7'
 #            type: ''
-          - dist: 'debian10'
-            type: ''
+#          - dist: 'debian10'
+#            type: ''
           # debian11 is needed for 3p testing
-          - dist: 'debian11'
-            type: ''
+#          - dist: 'debian11'
+#            type: ''
           # debian12 is needed for 3p testing
           - dist: 'debian12'
             type: ''
