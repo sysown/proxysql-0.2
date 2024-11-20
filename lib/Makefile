@@ -47,11 +47,17 @@ COREDUMPER_IDIR := $(COREDUMPER_DIR)/include
 CURL_DIR := $(DEPS_PATH)/curl/curl
 CURL_IDIR := $(CURL_DIR)/include
 
-ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl/*" 2>/dev/null | head -n 1)
+DISTRO := $(shell lsb_release -si 2>/dev/null || grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
+
+ifeq ($(DISTRO), almalinux)
+	ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl3/*" 2>/dev/null | head -n 1)
+else
+	ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl/*" 2>/dev/null | head -n 1)
+endif
 
 ifneq ($(ssl_header_path),)
-    SSL_IDIR := $(shell dirname $(ssl_header_path))
-    $(info Found OpenSSL headers at $(SSL_IDIR))
+	SSL_IDIR := $(shell dirname $(shell dirname $(ssl_header_path)))
+    $(info Found yash OpenSSL headers at $(SSL_IDIR))
 else
     $(error Warning: OpenSSL headers not found. exiting, please install openssl.)
 endif

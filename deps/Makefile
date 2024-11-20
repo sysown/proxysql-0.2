@@ -69,28 +69,36 @@ endif
 
 libinjection: libinjection/libinjection/src/libinjection.a
 
-libssl_path := $(shell find /usr /usr/local /opt -name "libssl.so" 2>/dev/null | head -n 1)
+DISTRO := $(shell lsb_release -si 2>/dev/null || grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
+OPENSSL_VERSION_3 := 3.0.0
 
-ifneq ($(libssl_path),)
-    SSL_LDIR := $(dir $(libssl_path))
-    $(info Found OpenSSL libs at $(SSL_LDIR))
+ifeq ($(DISTRO), almalinux)
+	ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl3/*" 2>/dev/null | head -n 1)
+	LIB_SSL_PATH := $(shell find /usr /usr/local /opt -name "libssl.so.3" 2>/dev/null | head -n 1)
+	LIB_CRYPTO_PATH := $(shell find /usr /usr/local /opt -name "libcrypto.so.3" 2>/dev/null | head -n 1)
+    SSL_LDIR := $(dir $(LIB_SSL_PATH))
 else
-    $(error Warning: OpenSSL library not found. exiting, please install openssl.)
+	ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl/*" 2>/dev/null | head -n 1)
+	LIB_SSL_PATH := $(shell find /usr /usr/local /opt -name "libssl.so" 2>/dev/null | head -n 1)
+	LIB_CRYPTO_PATH := $(shell find /usr /usr/local /opt -name "libcrypto.so" 2>/dev/null | head -n 1)
+    SSL_LDIR := $(dir $(LIB_SSL_PATH))
 endif
 
-ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl/*" 2>/dev/null | head -n 1)
-
 ifneq ($(ssl_header_path),)
-    SSL_IDIR := $(shell dirname $(ssl_header_path))
+	SSL_IDIR := $(shell dirname $(shell dirname $(ssl_header_path)))
     $(info Found OpenSSL headers at $(SSL_IDIR))
+    $(info OpenSSL lib full path is $(LIB_SSL_PATH))
+    $(info OpenSSL libs directory is $(SSL_LDIR))	
 else
     $(error Warning: OpenSSL headers not found. exiting, please install openssl.)
 endif
 
-OPENSSL_VERSION_3 = 3.0.0
-
 check_openssl_version:
-	@current_version=$$(openssl version | awk '{print $$2}'); \
+	@if [ "$(DISTRO)" = "almalinux" ]; then \
+		@current_version=$$(openssl3 version | awk '{print $$2}'); \
+	else \
+		@current_version=$$(openssl version | awk '{print $$2}'); \
+	fi; \
 	echo "Installed OpenSSL version: $$current_version"; \
 	compare_result=`printf "%s\n%s" "$(OPENSSL_VERSION_3)" "$$current_version" | sort -V | head -n 1`; \
 	if [ "$$compare_result" != "$(OPENSSL_VERSION_3)" ]; then \
@@ -143,8 +151,8 @@ curl/curl/lib/.libs/libcurl.a:
 ifeq ($(SYS_KERN),Darwin)
 	cd curl/curl && patch configure < ../configure.patch
 endif
-	cd curl/curl && ./configure --disable-debug --disable-ftp --disable-ldap --disable-ldaps --disable-rtsp --disable-proxy --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smb --disable-smtp --disable-gopher --disable-manual --disable-ipv6 --disable-sspi --disable-ntlm-wb --disable-tls-srp --without-nghttp2 --without-libidn2 --without-libssh2 --without-brotli --without-librtmp --without-libpsl --without-zstd --with-ssl --enable-shared=yes
-	cd curl/curl && LD_LIBRARY_PATH=$(SSL_LDIR) CFLAGS=-fPIC CC=${CC} CXX=${CXX} ${MAKE}
+	cd curl/curl && CPPFLAGS="-I$(SSL_IDIR)" ./configure --disable-debug --disable-ftp --disable-ldap --disable-ldaps --disable-rtsp --disable-proxy --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smb --disable-smtp --disable-gopher --disable-manual --disable-ipv6 --disable-sspi --disable-ntlm-wb --disable-tls-srp --without-nghttp2 --without-libidn2 --without-libssh2 --without-brotli --without-librtmp --without-libpsl --without-zstd --with-ssl --enable-shared=yes
+	cd curl/curl && CFLAGS=-fPIC CC=${CC} CXX=${CXX} ${MAKE}
 
 curl: curl/curl/lib/.libs/libcurl.a
 
@@ -213,7 +221,7 @@ mariadb-client-library/mariadb_client/libmariadb/libmariadbclient.a:
 	cd mariadb-client-library && rm -rf mariadb-connector-c-*/ || true
 	cd mariadb-client-library && tar -zxf mariadb-connector-c-3.3.8-src.tar.gz
 	cd mariadb-client-library/mariadb_client && patch -p0 < ../plugin_auth_CMakeLists.txt.patch
-	cd mariadb-client-library/mariadb_client && cmake . -Wno-dev -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOPENSSL_ROOT_DIR=$(SSL_LDIR) -DOPENSSL_LIBRARIES=$(SSL_LDIR) -DICONV_LIBRARIES=$(brew --prefix libiconv)/lib -DICONV_INCLUDE=$(brew --prefix libiconv)/include .
+	cd mariadb-client-library/mariadb_client && cmake . -Wno-dev -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOPENSSL_ROOT_DIR=$(SSL_IDIR) -DOPENSSL_LIBRARIES=$(SSL_LDIR) -DICONV_LIBRARIES=$(brew --prefix libiconv)/lib -DICONV_INCLUDE=$(brew --prefix libiconv)/include .
 ifeq ($(PROXYDEBUG),1)
 	cd mariadb-client-library/mariadb_client && patch -p0 < ../ma_context.h.patch
 else ifeq ($(USEVALGRIND),1)
@@ -335,14 +343,14 @@ libusual/libusual/.libs/libusual.a:
 	cd libusual && rm -rf libusual-*/ || true
 	cd libusual && tar -zxf libusual-*.tar.gz
 	cd libusual/libusual && ./autogen.sh
-	cd libusual/libusual && ./configure --with-openssl="$(SSL_LDIR)" --disable-shared
+	cd libusual/libusual &&  CPPFLAGS="-I$(SSL_IDIR)" ./configure --with-openssl="$(SSL_LDIR)" --disable-shared
 	cd libusual/libusual && CC=${CC} CXX=${CXX} ${MAKE}
 
 libusual: libusual/libusual/.libs/libusual.a
 
 libscram/lib/libscram.a:postgresql/postgresql/src/interfaces/libpq/libpq.a 
 	cd libscram && rm -rf lib/* || true
-	cd libscram && CC=${CC} CXX=${CXX} ${MAKE} LIBOPENSSL_DIR="$(SSL_LDIR)" POSTGRESQL_DIR="$(shell pwd)/postgresql/postgresql/"
+	cd libscram && CC=${CC} CXX=${CXX} ${MAKE} LIBOPENSSL_DIR="$(SSL_IDIR)" POSTGRESQL_DIR="$(shell pwd)/postgresql/postgresql/"
 
 libscram: libscram/lib/libscram.a
 
