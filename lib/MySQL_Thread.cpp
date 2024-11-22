@@ -1204,7 +1204,11 @@ int MySQL_Threads_Handler::listener_del(const char *iface) {
 		}
 		for (i=0;i<num_threads;i++) {
 			MySQL_Thread *thr=(MySQL_Thread *)mysql_threads[i].worker;
-			while(__sync_fetch_and_add(&thr->mypolls.pending_listener_del,0));
+			while(__sync_fetch_and_add(&thr->mypolls.pending_listener_del,0)) {
+				// Since 'listeners_stop' is performed in 'maintenance_loops' by the
+				// workers this active-wait is likely to take some time.
+				usleep(std::min(std::max(mysql_thread___poll_timeout/20, 10000), 40000));
+			}
 		}
 		MLM->del(idx);
 #ifdef SO_REUSEPORT
