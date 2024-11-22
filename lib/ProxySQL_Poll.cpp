@@ -64,7 +64,6 @@ ProxySQL_Poll::ProxySQL_Poll() {
 	len=0;
 	pending_listener_add=0;
 	pending_listener_del=0;
-	bootstrapping_listeners = true;
 	size=MIN_POLL_LEN;
 	fds=(struct pollfd *)malloc(size*sizeof(struct pollfd));
 	myds=(MySQL_Data_Stream **)malloc(size*sizeof(MySQL_Data_Stream *));
