@@ -219,28 +219,26 @@ public:
 		if (sess != NULL && sess->session_fast_forward) {
 			// if frontend and backend connection use SSL we will set
 			// encrypted = true and we will start using the SSL structure
-			// directly from P_MARIADB_TLS structure.
+			// directly from PGconn SSL structure.
 			//
 			// For futher details:
 			// - without ssl: we use the file descriptor from pgsql connection
 			// - with ssl: we use the SSL structure from pgsql connection
-			if (myconn->pgsql && myconn->ret_mysql) {
-				if (myconn->pgsql->options.use_ssl == 1) {
-					encrypted = true;
-					if (ssl == NULL) {
-						// check the definition of P_MARIADB_TLS
-//						P_MARIADB_TLS* matls = (P_MARIADB_TLS*)myconn->pgsql->net.pvio->ctls;
-//						ssl = (SSL*)matls->ssl;
-//						rbio_ssl = BIO_new(BIO_s_mem());
-//						wbio_ssl = BIO_new(BIO_s_mem());
-//						SSL_set_bio(ssl, rbio_ssl, wbio_ssl);
-					}
+			if (myconn->is_connected() && myconn->get_pg_ssl_in_use()) {
+				encrypted = true;
+				if (ssl == NULL) {
+					SSL* ssl_obj = myconn->get_pg_ssl_object();
+					if (ssl_obj == NULL) assert(0); // Should not be null
+					ssl = ssl_obj;
+					rbio_ssl = BIO_new(BIO_s_mem());
+					wbio_ssl = BIO_new(BIO_s_mem());
+					SSL_set_bio(ssl, rbio_ssl, wbio_ssl);
 				}
 			}
 		}
 	}
 
-	// safe way to detach a MySQL Connection
+	// safe way to detach a PgSQL Connection
 	void detach_connection() {
 		assert(myconn);
 		myconn->statuses.pgconnpoll_put++;

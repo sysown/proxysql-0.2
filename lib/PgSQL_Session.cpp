@@ -2806,11 +2806,11 @@ __get_pkts_from_client:
 				proxy_debug(PROXY_DEBUG_MYSQL_CONNECTION, 5, "Session=%p , client_myds=%p . Statuses: WAITING_CLIENT_DATA - STATE_SLEEP\n", this, client_myds);
 				if (session_fast_forward) { // if it is fast forward
 					// If this is a 'fast_forward' session that hasn't yet received a backend connection, we don't
-					// forward 'COM_QUIT' packets, since this will make the act of obtaining a connection pointless.
-					// Instead, we intercept the 'COM_QUIT' packet and end the 'PgSQL_Session'.
-					unsigned char command = *(static_cast<unsigned char*>(pkt.ptr) + sizeof(mysql_hdr));
-					if (command == _MYSQL_COM_QUIT) {
-						proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "Got COM_QUIT packet\n");
+					// forward 'QUIT' packets, since this will make the act of obtaining a connection pointless.
+					// Instead, we intercept the 'QUIT' packet and end the 'PgSQL_Session'.
+					unsigned char command = *(static_cast<unsigned char*>(pkt.ptr));
+					if (command == 'X') {
+						proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "Got QUIT packet\n");
 						if (GloPgSQL_Logger) { GloPgSQL_Logger->log_audit_entry(PROXYSQL_MYSQL_AUTH_QUIT, this, NULL); }
 						l_free(pkt.size, pkt.ptr);
 						handler_ret = -1;
@@ -2848,10 +2848,10 @@ __get_pkts_from_client:
 						return 0;
 					}
 				}
-				c = *((unsigned char*)pkt.ptr + sizeof(mysql_hdr));
+				c = *((unsigned char*)pkt.ptr);
 				if (client_myds != NULL) {
 					if (session_type == PROXYSQL_SESSION_ADMIN || session_type == PROXYSQL_SESSION_STATS) {
-						c = *((unsigned char*)pkt.ptr + 0);
+						c = *((unsigned char*)pkt.ptr);
 						if (c == 'Q') {
 							handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_QUERY___not_mysql(pkt);
 						} else if (c == 'X') {
@@ -2875,7 +2875,7 @@ __get_pkts_from_client:
 						}
 					}
 					else {
-						char command = c = *((unsigned char*)pkt.ptr + 0);
+						char command = c = *((unsigned char*)pkt.ptr);
 						switch (command) {
 						case 'Q':
 						{

@@ -1677,6 +1677,23 @@ handler_again:
 		if (!is_connected()) 
 			assert(0); // shouldn't ever reach here, we have messed up the state machine
 		
+		if (get_pg_ssl_in_use()) {
+			if (myds && myds->sess && myds->sess->session_fast_forward) {
+				assert(myds->ssl == NULL);
+				SSL* ssl_obj = get_pg_ssl_object();
+				if (ssl_obj != NULL) {
+					myds->encrypted = true;
+					myds->ssl = ssl_obj;
+					myds->rbio_ssl = BIO_new(BIO_s_mem());
+					myds->wbio_ssl = BIO_new(BIO_s_mem());
+					SSL_set_bio(myds->ssl, myds->rbio_ssl, myds->wbio_ssl);
+				}
+				else {
+					// it means that ProxySQL tried to use SSL to connect to the backend
+					// but the backend didn't support SSL				
+				}
+			}
+		}
 		__sync_fetch_and_add(&PgHGM->status.server_connections_connected, 1);
 		__sync_fetch_and_add(&parent->connect_OK, 1);
 		//MySQL_Monitor::update_dns_cache_from_mysql_conn(pgsql);
