@@ -42,7 +42,7 @@ jobs:
       dists: ${{ steps.select.outputs.dists }}
     steps:
     - name: Select distros
-    - id: select
+      id: select
       run: |
         fn_get_targets () {
           # make -n amd64-packages | grep -i binaries/proxysql | wc -l
