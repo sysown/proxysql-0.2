@@ -556,7 +556,7 @@ PgSQL_Session::PgSQL_Session() {
 	default_schema = NULL;
 	user_attributes = NULL;
 	schema_locked = false;
-	session_fast_forward = false;
+	session_fast_forward = SESSION_FORWARD_TYPE_NONE;
 	//started_sending_data_to_client = false;
 	handler_function = NULL;
 	client_myds = NULL;
@@ -2053,7 +2053,7 @@ bool PgSQL_Session::handler_again___status_CONNECTING_SERVER(int* _rc) {
 			st = previous_status.top();
 			previous_status.pop();
 			myds->wait_until = 0;
-			if (session_fast_forward == true) {
+			if (session_fast_forward) {
 				// we have a successful connection and session_fast_forward enabled
 				// set DSS=STATE_SLEEP or it will believe it have to use MARIADB client library
 				myds->DSS = STATE_SLEEP;
@@ -2117,7 +2117,7 @@ bool PgSQL_Session::handler_again___status_CONNECTING_SERVER(int* _rc) {
 						thread->status_variables.stvar[st_var_max_connect_timeout_err]++;
 					}
 				}
-				if (session_fast_forward == false) {
+				if (session_fast_forward == SESSION_FORWARD_TYPE_NONE) {
 					// see bug #979
 					RequestEnd(myds);
 				}
@@ -2804,7 +2804,7 @@ __get_pkts_from_client:
 					}
 				}
 				proxy_debug(PROXY_DEBUG_MYSQL_CONNECTION, 5, "Session=%p , client_myds=%p . Statuses: WAITING_CLIENT_DATA - STATE_SLEEP\n", this, client_myds);
-				if (session_fast_forward == true) { // if it is fast forward
+				if (session_fast_forward) { // if it is fast forward
 					// If this is a 'fast_forward' session that hasn't yet received a backend connection, we don't
 					// forward 'COM_QUIT' packets, since this will make the act of obtaining a connection pointless.
 					// Instead, we intercept the 'COM_QUIT' packet and end the 'PgSQL_Session'.
@@ -2883,7 +2883,7 @@ __get_pkts_from_client:
 							if (session_type == PROXYSQL_SESSION_PGSQL) {
 								bool rc_break = false;
 								bool lock_hostgroup = false;
-								if (session_fast_forward == false) {
+								if (session_fast_forward == SESSION_FORWARD_TYPE_NONE) {
 									// Note: CurrentQuery sees the query as sent by the client.
 									// shortly after, the packets it used to contain the query will be deallocated
 									CurrentQuery.begin((unsigned char*)pkt.ptr, pkt.size, true);
@@ -3107,7 +3107,7 @@ __get_pkts_from_client:
 					if (session_type == PROXYSQL_SESSION_PGSQL) {
 						bool rc_break = false;
 						bool lock_hostgroup = false;
-						if (session_fast_forward == false) {
+						if (session_fast_forward == SESSION_FORWARD_TYPE_NONE) {
 							// Note: CurrentQuery sees the query as sent by the client.
 							// shortly after, the packets it used to contain the query will be deallocated
 							CurrentQuery.begin((unsigned char*)pkt.ptr, pkt.size, true);
@@ -3753,7 +3753,7 @@ int PgSQL_Session::handler() {
 	//unsigned char c;
 
 //	FIXME: Sessions without frontend are an ugly hack
-	if (session_fast_forward == false) {
+	if (session_fast_forward == SESSION_FORWARD_TYPE_NONE) {
 		if (client_myds == NULL) {
 			// if we are here, probably we are trying to ping backends
 			proxy_debug(PROXY_DEBUG_MYSQL_CONNECTION, 5, "Processing session %p without client_myds\n", this);
@@ -6044,7 +6044,7 @@ void PgSQL_Session::handler___client_DSS_QUERY_SENT___server_DSS_NOT_INITIALIZED
 			}
 		}
 	}
-	if (session_fast_forward == false && qpo->create_new_conn == false) {
+	if (session_fast_forward == SESSION_FORWARD_TYPE_NONE && qpo->create_new_conn == false) {
 #ifndef STRESSTEST_POOL
 		mc = thread->get_MyConn_local(mybe->hostgroup_id, this, NULL, 0, (int)qpo->max_lag_ms);
 #endif // STRESSTEST_POOL
@@ -6156,7 +6156,7 @@ void PgSQL_Session::handler___client_DSS_QUERY_SENT___server_DSS_NOT_INITIALIZED
 		mybe->server_myds->myds_type = MYDS_BACKEND;
 		mybe->server_myds->DSS = STATE_READY;
 
-		if (session_fast_forward == true) {
+		if (session_fast_forward) {
 			status = FAST_FORWARD;
 			mybe->server_myds->myconn->reusable = false; // the connection cannot be usable anymore
 		}
@@ -6493,7 +6493,7 @@ void PgSQL_Session::RequestEnd(PgSQL_Data_Stream* myds) {
 		// if a prepared statement is executed, LogQuery was already called
 		break;
 	default:
-		if (session_fast_forward == false) {
+		if (session_fast_forward == SESSION_FORWARD_TYPE_NONE) {
 			LogQuery(myds);
 		}
 		break;
@@ -6509,7 +6509,7 @@ void PgSQL_Session::RequestEnd(PgSQL_Data_Stream* myds) {
 		}
 		myds->free_mysql_real_query();
 	}
-	if (session_fast_forward == false) {
+	if (session_fast_forward == SESSION_FORWARD_TYPE_NONE) {
 		// reset status of the session
 		status = WAITING_CLIENT_DATA;
 		if (client_myds) {
@@ -6548,7 +6548,7 @@ void PgSQL_Session::Memory_Stats() {
 			internal += client_myds->PSarrayIN->total_size();
 		}
 		if (client_myds->PSarrayIN) {
-			if (session_fast_forward == true) {
+			if (session_fast_forward) {
 				internal += client_myds->PSarrayOUT->total_size();
 			} else {
 				internal += client_myds->PSarrayOUT->total_size(PGSQL_RESULTSET_BUFLEN);

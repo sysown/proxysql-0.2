@@ -771,9 +771,9 @@ EXECUTION_STATE PgSQL_Protocol::process_handshake_response_packet(unsigned char*
 		(*myds)->sess->user_attributes = attributes; // just the pointer is passed
 		//(*myds)->sess->schema_locked = schema_locked;
 		(*myds)->sess->transaction_persistent = transaction_persistent;
-		(*myds)->sess->session_fast_forward = false; // default
+		(*myds)->sess->session_fast_forward = SESSION_FORWARD_TYPE_NONE; // default
 		if ((*myds)->sess->session_type == PROXYSQL_SESSION_PGSQL) {
-			(*myds)->sess->session_fast_forward = fast_forward;
+			(*myds)->sess->session_fast_forward = fast_forward ? SESSION_FORWARD_TYPE_PERMANENT : SESSION_FORWARD_TYPE_NONE;
 		}
 		(*myds)->sess->user_max_connections = max_connections;
 	} else {
@@ -790,7 +790,7 @@ EXECUTION_STATE PgSQL_Protocol::process_handshake_response_packet(unsigned char*
 				(*myds)->sess->default_schema = strdup((char*)"main"); // just the pointer is passed
 				(*myds)->sess->schema_locked = false;
 				(*myds)->sess->transaction_persistent = false;
-				(*myds)->sess->session_fast_forward = false;
+				(*myds)->sess->session_fast_forward = SESSION_FORWARD_TYPE_NONE;
 				(*myds)->sess->user_max_connections = 0;
 				password = l_strdup(mysql_thread___monitor_password);
 			}
@@ -1106,7 +1106,7 @@ void PgSQL_Protocol::generate_error_packet(bool send, bool ready, const char* ms
 		case STATE_OK:
 			break;
 		case STATE_SLEEP:
-			if ((*myds)->sess->session_fast_forward == true) { // see issue #733
+			if ((*myds)->sess->session_fast_forward) { // see issue #733
 				break;
 			}
 		default:
