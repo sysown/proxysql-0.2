@@ -9,6 +9,7 @@ on:
 
 env:
   SHA: ${{ inputs.trigger && fromJson(inputs.trigger).event.workflow_run.head_sha || github.sha }}
+  BRANCH: ${{ github.ref_name }}
   BIN_PKG:
 
 jobs:
@@ -19,12 +20,12 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # gh release delete-asset ${SHA}-head
-        gh release delete ${SHA}-head --repo ${{ github.repository }} --cleanup-tag || true
-        gh release create ${SHA}-head --repo ${{ github.repository }} --title ${SHA}-head --draft --prerelease --notes-file - << EOF
+        # gh release delete-asset ${BRANCH}-head
+        gh release delete ${BRANCH}-head --repo ${{ github.repository }} --cleanup-tag || true
+        gh release create ${BRANCH}-head --repo ${{ github.repository }} --title ${BRANCH}-head --draft --prerelease --notes-file - << EOF
         ## Development Snapshot
         
-        GH-Action Package-Build on PR merge into ${SHA}
+        GH-Action Package-Build on ${BRANCH} merge
         
         Version : **${GIT_VERSION}**
         
@@ -118,10 +119,10 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         if [[ "${{ matrix.dist }}" = "centos9" ]] && [[ "${{ matrix.type }}" = "" ]]; then
-        gh release edit ${SHA}-head --draft --prerelease --repo ${{ github.repository }} --tag ${SHA}-head --title "${SHA}-head - ${GIT_VERSION}" --notes-file - << EOF
+        gh release edit ${BRANCH}-head --draft --prerelease --repo ${{ github.repository }} --tag ${BRANCH}-head --title "${BRANCH}-head - ${GIT_VERSION}" --notes-file - << EOF
         ## Development Snapshot
         
-        GH-Action Package-Build on PR merge into ${SHA}
+        GH-Action Package-Build on ${BRANCH} merge
         
         Version : **${GIT_VERSION}**
         
@@ -169,10 +170,10 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         GIT_VERSION=$(gh release --repo ${{ github.repository }} view ${SHA}-head | tr -d '*' | grep -Po "(?<=Version : ).*")
-        gh release edit ${SHA}-head --draft --prerelease --repo ${{ github.repository }} --tag ${SHA}-head --notes-file - << EOF
+        gh release edit ${BRANCH}-head --draft --prerelease --repo ${{ github.repository }} --tag ${BRANCH}-head --notes-file - << EOF
         ## Development Snapshot
         
-        GH-Action Package-Build on PR merge into ${SHA}
+        GH-Action Package-Build on ${BRANCH} merge
         
         Version : **${GIT_VERSION}**
         
