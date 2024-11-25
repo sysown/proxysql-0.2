@@ -1244,7 +1244,7 @@ void PgSQL_Data_Stream::reset_connection() {
 			myconn->last_time_used = sess->thread->curtime;
 			return_MySQL_Connection_To_Pool();
 		} else {
-			if (sess && sess->session_fast_forward == false) {
+			if (sess && sess->session_fast_forward == SESSION_FORWARD_TYPE_NONE) {
 				destroy_MySQL_Connection_From_Pool(true);
 			} else {
 				destroy_MySQL_Connection_From_Pool(false);
