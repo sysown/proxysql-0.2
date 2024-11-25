@@ -58,7 +58,7 @@ jobs:
             fi
           done
         }
-        echo "dists=$(fn_get_targets amd64-packages | jq -Rcs 'split(" ")')" >> $GITHUB_OUTPUT 
+        echo "dists=$(fn_get_targets amd64-packages | sed 's/-clang//g; s/-dbg//g' | uniq | sort | jq -Rcs 'split("\n")')" >> $GITHUB_OUTPUT 
 
   build:
     runs-on: ubuntu-22.04
