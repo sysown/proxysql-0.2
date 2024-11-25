@@ -145,10 +145,10 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # git tag --force -a ${SHA}-head -m 'GH-Actions - Development Snapshot Build'
+        # git tag --force -a ${BRANCH}-head -m 'GH-Actions - Development Snapshot Build'
         # git push origin --tags
-        # gh release upload ${SHA}-head --repo ${{ github.repository }} --clobber binaries/proxysql*${{ matrix.dist }}*[mb]
-        gh release upload ${SHA}-head --repo ${{ github.repository }} --clobber ${{ env.BIN_PKG }}
+        # gh release upload ${BRANCH}-head --repo ${{ github.repository }} --clobber binaries/proxysql*${{ matrix.dist }}*[mb]
+        gh release upload ${BRANCH}-head --repo ${{ github.repository }} --clobber ${{ env.BIN_PKG }}
  
     - uses: LouisBrunner/checks-action@v2.0.0
       if: always()
@@ -169,7 +169,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        GIT_VERSION=$(gh release --repo ${{ github.repository }} view ${SHA}-head | tr -d '*' | grep -Po "(?<=Version : ).*")
+        GIT_VERSION=$(gh release --repo ${{ github.repository }} view ${BRANCH}-head | tr -d '*' | grep -Po "(?<=Version : ).*")
         gh release edit ${BRANCH}-head --draft --prerelease --repo ${{ github.repository }} --tag ${BRANCH}-head --notes-file - << EOF
         ## Development Snapshot
         
