@@ -65,7 +65,6 @@ class PgSQL_Data_Stream
 private:
 	int array2buffer();
 	int buffer2array();
-	void generate_compressed_packet();
 	enum pgsql_sslstatus do_ssl_handshake();
 	void queue_encrypted_bytes(const char* buf, size_t len);
 public:
