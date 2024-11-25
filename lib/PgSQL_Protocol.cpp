@@ -1438,7 +1438,7 @@ unsigned int PgSQL_Protocol::copy_row_description_to_PgSQL_Query_Result(bool sen
 unsigned int PgSQL_Protocol::copy_row_to_PgSQL_Query_Result(bool send, PgSQL_Query_Result* pg_query_result, const PGresult* result) {
 	assert(pg_query_result);
 	assert(result);
-	assert(pg_query_result->num_fields);
+	//assert(pg_query_result->num_fields);
 
 	const unsigned int numRows = PQntuples(result);
 	unsigned int total_size = 0;
@@ -1825,24 +1825,15 @@ unsigned int PgSQL_Protocol::copy_out_response_start_to_PgSQL_Query_Result(bool 
 	}
 
 	PG_pkt pgpkt(_ptr, size);
-	uint8_t format = 0; // Format: Text
 	pgpkt.put_char('H');
 	pgpkt.put_uint32(size - 1);
-	pgpkt.put_char(format);
+	pgpkt.put_char(PQbinaryTuples(result) ? 1 : 0);
 	pgpkt.put_uint16(fields_cnt);
 
 	for (int i = 0; i < fields_cnt; i++) {
 		int format_code = PQfformat(result, i);
 		pgpkt.put_uint16(format_code);
-
-		if (format_code != 0)
-			format = format_code;
 	}
-
-	if (format != 0) {
-		_ptr[1 + 4] = format;
-	}
-
 
 	if (send == true) {
 		// not supported
