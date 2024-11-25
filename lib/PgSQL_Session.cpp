@@ -343,7 +343,7 @@ PgSQL_Query_Info::~PgSQL_Query_Info() {
 	}
 }
 
-void PgSQL_Query_Info::begin(unsigned char *_p, int len, bool mysql_header) {
+void PgSQL_Query_Info::begin(unsigned char *_p, int len, bool header) {
 	PgQueryCmd=PGSQL_QUERY___NONE;
 	QueryPointer=NULL;
 	QueryLength=0;
@@ -352,7 +352,7 @@ void PgSQL_Query_Info::begin(unsigned char *_p, int len, bool mysql_header) {
 	QueryParserArgs.digest_text=NULL;
 	QueryParserArgs.first_comment=NULL;
 	start_time=sess->thread->curtime;
-	init(_p, len, mysql_header);
+	init(_p, len, header);
 	if (pgsql_thread___commands_stats || pgsql_thread___query_digests) {
 		query_parser_init();
 		if (pgsql_thread___commands_stats)
@@ -390,9 +390,9 @@ void PgSQL_Query_Info::end() {
 	}
 }
 
-void PgSQL_Query_Info::init(unsigned char *_p, int len, bool mysql_header) {
-	QueryLength=(mysql_header ? len-5 : len);
-	QueryPointer=(mysql_header ? _p+5 : _p);
+void PgSQL_Query_Info::init(unsigned char *_p, int len, bool header) {
+	QueryLength=(header ? len-5 : len);
+	QueryPointer=(header ? _p+5 : _p);
 	PgQueryCmd = PGSQL_QUERY__UNINITIALIZED;
 	bool_is_select_NOT_for_update=false;
 	bool_is_select_NOT_for_update_computed=false;

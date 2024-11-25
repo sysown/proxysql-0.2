@@ -89,12 +89,12 @@ public:
 
 	PgSQL_Query_Info();
 	~PgSQL_Query_Info();
-	void init(unsigned char* _p, int len, bool mysql_header = false);
+	void init(unsigned char* _p, int len, bool header = false);
 	void query_parser_init();
 	enum PGSQL_QUERY_command query_parser_command_type();
 	void query_parser_free();
 	unsigned long long query_parser_update_counters();
-	void begin(unsigned char* _p, int len, bool mysql_header = false);
+	void begin(unsigned char* _p, int len, bool header = false);
 	void end();
 	char* get_digest_text();
 	bool is_select_NOT_for_update();
