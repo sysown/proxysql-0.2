@@ -1158,7 +1158,11 @@ int PgSQL_Threads_Handler::listener_del(const char* iface) {
 		}
 		for (i = 0; i < num_threads; i++) {
 			PgSQL_Thread* thr = (PgSQL_Thread*)pgsql_threads[i].worker;
-			while (__sync_fetch_and_add(&thr->mypolls.pending_listener_del, 0));
+			while (__sync_fetch_and_add(&thr->mypolls.pending_listener_del, 0)) {
+				// Since 'listeners_stop' is performed in 'maintenance_loops' by the
+				// workers this active-wait is likely to take some time.
+				usleep(std::min(std::max(pgsql_thread___poll_timeout/20, 10000), 40000));
+			}
 		}
 		MLM->del(idx);
 #ifdef SO_REUSEPORT
@@ -2998,26 +3002,19 @@ void PgSQL_Thread::run() {
 #endif // IDLE_THREADS
 
 		pthread_mutex_unlock(&thread_mutex);
-		if (unlikely(mypolls.bootstrapping_listeners == true)) {
-			while ( // spin here if ...
-				(n = __sync_add_and_fetch(&mypolls.pending_listener_add, 0)) // there is a new listener to add
-				||
-				(GloPTH->bootstrapping_listeners == true) // PgSQL_Thread_Handlers has more listeners to configure
-				) {
-				if (n) {
-					poll_listener_add(n);
-					assert(__sync_bool_compare_and_swap(&mypolls.pending_listener_add, n, 0));
-				}
-				else {
-					if (GloPTH->bootstrapping_listeners == false) {
-						// we stop looping
-						mypolls.bootstrapping_listeners = false;
-					}
-				}
-#ifdef DEBUG
-				usleep(5 + rand() % 10);
-#endif
+		while ( // spin here if ...
+			(n = __sync_add_and_fetch(&mypolls.pending_listener_add, 0)) // there is a new listener to add
+			||
+			(GloPTH->bootstrapping_listeners == true) // PgSQL_Thread_Handlers has more listeners to configure
+		) {
+			if (n) {
+				poll_listener_add(n);
+				assert(__sync_bool_compare_and_swap(&mypolls.pending_listener_add, n, 0));
 			}
+			// The delay for the active-wait is a fraction of 'poll_timeout'. Since other
+			// threads may be waiting on poll for further operations, checks are meaningless
+			// until that timeout expires (other workers make progress).
+			usleep(std::min(std::max(pgsql_thread___poll_timeout/20, 10000), 40000) + (rand() % 2000));
 		}
 
 		proxy_debug(PROXY_DEBUG_NET, 7, "poll_timeout=%u\n", mypolls.poll_timeout);
