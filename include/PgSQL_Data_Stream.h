@@ -225,8 +225,8 @@ public:
 			// - without ssl: we use the file descriptor from pgsql connection
 			// - with ssl: we use the SSL structure from pgsql connection
 			if (myconn->is_connected() && myconn->get_pg_ssl_in_use()) {
-				encrypted = true;
 				if (ssl == NULL) {
+					encrypted = true;
 					SSL* ssl_obj = myconn->get_pg_ssl_object();
 					if (ssl_obj == NULL) assert(0); // Should not be null
 					ssl = ssl_obj;
