@@ -382,6 +382,7 @@ public:
 //	StmtLongDataHandler* SLDH;
 
 	Session_Regex** match_regexes;
+	CopyCmdMatcher* copy_cmd_matcher;
 
 	ProxySQL_Node_Address* proxysql_node_address; // this is used ONLY for Admin, and only if the other party is another proxysql instance part of a cluster
 	bool use_ldap_auth;

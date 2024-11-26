@@ -2770,6 +2770,12 @@ PgSQL_Thread::~PgSQL_Thread() {
 		free(match_regexes);
 		match_regexes = NULL;
 	}
+
+	if (copy_cmd_matcher) {
+		delete copy_cmd_matcher;
+		copy_cmd_matcher = NULL;
+	}
+
 	if (thr_SetParser != NULL) {
 		delete thr_SetParser;
 		thr_SetParser = NULL;
@@ -2823,6 +2829,8 @@ bool PgSQL_Thread::init() {
 
 	match_regexes[2] = new Session_Regex((char*)"^SET(?: +)(|SESSION +)TRANSACTION(?: +)(?:(?:(ISOLATION(?: +)LEVEL)(?: +)(REPEATABLE(?: +)READ|READ(?: +)COMMITTED|READ(?: +)UNCOMMITTED|SERIALIZABLE))|(?:(READ)(?: +)(WRITE|ONLY)))");
 	match_regexes[3] = new Session_Regex((char*)"^(set)(?: +)((charset)|(character +set))(?: )");
+
+	copy_cmd_matcher = new CopyCmdMatcher();
 
 	return true;
 }
@@ -4015,6 +4023,7 @@ PgSQL_Thread::PgSQL_Thread() {
 		status_variables.stvar[i] = 0;
 	}
 	match_regexes = NULL;
+	copy_cmd_matcher = NULL;
 
 	variables.min_num_servers_lantency_awareness = 1000;
 	variables.aurora_max_lag_ms_only_read_from_replicas = 2;

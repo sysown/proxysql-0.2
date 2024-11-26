@@ -591,7 +591,7 @@ PgSQL_Session::PgSQL_Session() {
 	change_user_auth_switch = false;
 
 	match_regexes = NULL;
-
+	copy_cmd_matcher = NULL;
 	init(); // we moved this out to allow CHANGE_USER
 
 	last_insert_id = 0; // #1093
@@ -685,6 +685,7 @@ PgSQL_Session::~PgSQL_Session() {
 	assert(qpo);
 	delete qpo;
 	match_regexes = NULL;
+	copy_cmd_matcher = NULL;
 	if (mirror) {
 		__sync_sub_and_fetch(&GloPTH->status_variables.mirror_sessions_current, 1);
 		//GloPTH->status_variables.p_gauge_array[p_th_gauge::mirror_concurrency]->Decrement();
@@ -3019,6 +3020,14 @@ __get_pkts_from_client:
 										}
 									}
 								}
+
+								// Swtich to fast forward mode if the query matches copy ... stdin command
+								re2::StringPiece matched;
+								const char* query_to_match = (CurrentQuery.get_digest_text() ? CurrentQuery.get_digest_text() : (char*)CurrentQuery.QueryPointer);
+								if (copy_cmd_matcher->match(query_to_match, &matched)) {
+									switch_normal_to_fast_forward_mode(pkt, std::string(matched.data(), matched.size()), SESSION_FORWARD_TYPE_COPY_STDIN);
+									break;
+								}
 								mybe = find_or_create_backend(current_hostgroup);
 								status = PROCESSING_QUERY;
 								// set query retries
@@ -3793,12 +3802,35 @@ handler_again:
 		handler___status_WAITING_CLIENT_DATA();
 		break;
 	case FAST_FORWARD:
+	{
 		if (mybe->server_myds->mypolls == NULL) {
 			// register the PgSQL_Data_Stream
 			thread->mypolls.add(POLLIN | POLLOUT, mybe->server_myds->fd, mybe->server_myds, thread->curtime);
 		}
 		client_myds->PSarrayOUT->copy_add(mybe->server_myds->PSarrayIN, 0, mybe->server_myds->PSarrayIN->len);
-		while (mybe->server_myds->PSarrayIN->len) mybe->server_myds->PSarrayIN->remove_index(mybe->server_myds->PSarrayIN->len - 1, NULL);
+
+		constexpr unsigned char ready_packet[] = { 0x5A, 0x00, 0x00, 0x00, 0x05 };
+		bool is_copy_ready_packet = false;
+		while (mybe->server_myds->PSarrayIN->len) {
+
+			// if session_fast_forward type is COPY STDIN, we need to check if it is ready packet
+			if (session_fast_forward == SESSION_FORWARD_TYPE_COPY_STDIN) {
+				const PtrSize_t& data = mybe->server_myds->PSarrayIN->pdata[mybe->server_myds->PSarrayIN->len - 1];
+				if (is_copy_ready_packet == false && data.size == 6) {
+					//const unsigned char* ptr = (static_cast<unsigned char*>(data.ptr) /*+ (data.size - 6)*/);
+					if (memcmp(data.ptr, ready_packet, sizeof(ready_packet)) == 0) {
+						is_copy_ready_packet = true;
+					}
+				}
+			}
+			mybe->server_myds->PSarrayIN->remove_index(mybe->server_myds->PSarrayIN->len - 1, NULL);
+		}
+
+		// if ready packet is found, we need to switch back to normal mode
+		if (is_copy_ready_packet) {
+			switch_fast_forward_to_normal_mode();
+		}
+	}
 		break;
 	case CONNECTING_CLIENT:
 		//fprintf(stderr,"CONNECTING_CLIENT\n");
