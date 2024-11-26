@@ -1775,10 +1775,8 @@ handler_again:
 	{
 		if (myds->sess && myds->sess->client_myds && myds->sess->mirror == false /* &&
 			myds->sess->status != SHOW_WARNINGS*/) { // see issue#4072
-			unsigned int buffered_data = 0;
-			buffered_data = myds->sess->client_myds->PSarrayOUT->len * PGSQL_RESULTSET_BUFLEN;
-			buffered_data += myds->sess->client_myds->resultset->len * PGSQL_RESULTSET_BUFLEN;
-			if (buffered_data > (unsigned int)pgsql_thread___threshold_resultset_size * 8) {
+			const unsigned int buffered_data = myds->sess->client_myds->PSarrayOUT->len * PGSQL_RESULTSET_BUFLEN;
+			if (buffered_data > overflow_safe_multiply<8,unsigned int>(pgsql_thread___threshold_resultset_size)) {
 				next_event(ASYNC_USE_RESULT_CONT); // we temporarily pause . See #1232
 				break;
 			}
@@ -1889,8 +1887,15 @@ handler_again:
 					const unsigned int bytes_recv = query_result->add_row(result.get());
 					update_bytes_recv(bytes_recv);
 					processed_bytes += bytes_recv;	// issue #527 : this variable will store the amount of bytes processed during this event
+					
+					bool suspend_resultset_fetch = (processed_bytes > overflow_safe_multiply<8,unsigned int>(pgsql_thread___threshold_resultset_size));
+					 
+					if (suspend_resultset_fetch == true && myds->sess && myds->sess->qpo && myds->sess->qpo->cache_ttl > 0) {
+						suspend_resultset_fetch = (processed_bytes > ((uint64_t)pgsql_thread___query_cache_size_MB) * 1024ULL * 1024ULL);
+					}
+					
 					if (
-						(processed_bytes > (unsigned int)pgsql_thread___threshold_resultset_size * 8)
+						suspend_resultset_fetch
 						||
 						(pgsql_thread___throttle_ratio_server_to_client && pgsql_thread___throttle_max_bytes_per_second_to_client && (processed_bytes > (unsigned long long)pgsql_thread___throttle_max_bytes_per_second_to_client / 10 * (unsigned long long)pgsql_thread___throttle_ratio_server_to_client))
 						) {
@@ -1911,8 +1916,14 @@ handler_again:
 				update_bytes_recv(bytes_recv);
 				processed_bytes += bytes_recv;	// issue #527 : this variable will store the amount of bytes processed during this event
 
+				bool suspend_resultset_fetch = (processed_bytes > overflow_safe_multiply<8,unsigned int>(pgsql_thread___threshold_resultset_size));
+
+				if (suspend_resultset_fetch == true && myds->sess && myds->sess->qpo && myds->sess->qpo->cache_ttl > 0) {
+					suspend_resultset_fetch = (processed_bytes > ((uint64_t)pgsql_thread___query_cache_size_MB) * 1024ULL * 1024ULL);
+				}
+
 				if (
-					(processed_bytes > (unsigned int)pgsql_thread___threshold_resultset_size * 8)
+					suspend_resultset_fetch
 					||
 					(pgsql_thread___throttle_ratio_server_to_client && pgsql_thread___throttle_max_bytes_per_second_to_client && (processed_bytes > (unsigned long long)pgsql_thread___throttle_max_bytes_per_second_to_client / 10 * (unsigned long long)pgsql_thread___throttle_ratio_server_to_client))
 					) {

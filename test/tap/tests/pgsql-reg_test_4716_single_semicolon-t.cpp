@@ -23,7 +23,7 @@ enum ConnType {
 PGconn* createNewConnection(ConnType conn_type, bool with_ssl) {
     std::stringstream ss;
     const char* host = (conn_type == BACKEND) ? cl.pgsql_host : cl.admin_host;
-    int port = (conn_type == BACKEND) ? cl.pgsql_port : cl.admin_port;
+    int port = (conn_type == BACKEND) ? cl.pgsql_port : cl.pgsql_admin_port;
     const char* username = (conn_type == BACKEND) ? cl.pgsql_username : cl.admin_username;
     const char* password = (conn_type == BACKEND) ? cl.pgsql_password : cl.admin_password;
     

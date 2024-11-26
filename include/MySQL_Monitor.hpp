@@ -436,7 +436,8 @@ struct DNS_Resolve_Data {
 	std::shared_ptr<DNS_Cache> dns_cache;
 	std::string hostname;
 	std::set<std::string> cached_ips;
-	unsigned int ttl;
+	unsigned int ttl = 0;
+	unsigned int refresh_intv = 0;
 };
 
 

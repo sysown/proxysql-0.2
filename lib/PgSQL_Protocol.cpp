@@ -668,7 +668,7 @@ bool PgSQL_Protocol::process_startup_packet(unsigned char* pkt, unsigned int len
 		(*myds)->sess->writeout();
 		(*myds)->encrypted = have_ssl;
 		ssl_request = true;
-		proxy_debug(PROXY_DEBUG_MYSQL_CONNECTION, 8, "Session=%p , DS=%p. SSL_REQUEST:'%c'\n", (*myds)->sess, (*myds), *ssl_supported);
+		proxy_debug(PROXY_DEBUG_MYSQL_CONNECTION, 8, "Session=%p , DS=%p. SSL_REQUEST:'%c'\n", (*myds)->sess, (*myds), have_ssl ? 'S' : 'N');
 		return true;
 	}
 
@@ -785,14 +785,14 @@ EXECUTION_STATE PgSQL_Protocol::process_handshake_response_packet(unsigned char*
 			||
 			((*myds)->sess->session_type == PROXYSQL_SESSION_SQLITE)
 			) {
-			if (strcmp((const char*)user, mysql_thread___monitor_username) == 0) {
+			if (strcmp((const char*)user, pgsql_thread___monitor_username) == 0) {
 				(*myds)->sess->default_hostgroup = STATS_HOSTGROUP;
 				(*myds)->sess->default_schema = strdup((char*)"main"); // just the pointer is passed
 				(*myds)->sess->schema_locked = false;
 				(*myds)->sess->transaction_persistent = false;
 				(*myds)->sess->session_fast_forward = SESSION_FORWARD_TYPE_NONE;
 				(*myds)->sess->user_max_connections = 0;
-				password = l_strdup(mysql_thread___monitor_password);
+				password = l_strdup(pgsql_thread___monitor_password);
 			}
 		}
 
@@ -1292,13 +1292,13 @@ bool PgSQL_Protocol::generate_ok_packet(bool send, bool ready, const char* msg, 
 		strcmp(tag, "MOVE") == 0 ||
 		strcmp(tag, "FETCH") == 0 ||
 		strcmp(tag, "COPY") == 0 ||
-		strcmp(tag, "SELECT") == 0 ||
-		strcmp(tag, "COPY") == 0 ) {
+		strcmp(tag, "SELECT") == 0) {
 		sprintf(tmpbuf, "%s %d", tag, rows);
 		pgpkt.write_CommandComplete(tmpbuf);
 	} else {
 		pgpkt.write_CommandComplete(tag);
 	}
+	free(tag);
 	
 	if (ready == true) {
 		pgpkt.write_ReadyForQuery(trx_state);
@@ -1312,7 +1312,6 @@ bool PgSQL_Protocol::generate_ok_packet(bool send, bool ready, const char* msg, 
 		_ptr->ptr = buff.first;
 		_ptr->size = buff.second;
 	}
-	free(tag);
 	return true;
 }
 
@@ -1966,10 +1965,12 @@ void PgSQL_Query_Result::buffer_init() {
 
 void PgSQL_Query_Result::init(PgSQL_Protocol* _proto, PgSQL_Data_Stream* _myds, PgSQL_Connection* _conn) {
 	PROXY_TRACE2();
-	transfer_started = false;
 	proto = _proto;
 	conn = _conn;
 	myds = _myds;
+
+	if (conn->processing_multi_statement == false)
+		transfer_started = false;
 	buffer_init();
 	reset();
 

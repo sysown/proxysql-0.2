@@ -311,15 +311,18 @@ static char* pgsql_thread_variables_names[] = {
 	(char*)"monitor_enabled",
 	(char*)"monitor_history",
 	(char*)"monitor_connect_interval",
+	(char*)"monitor_connect_interval_window",
 	(char*)"monitor_connect_timeout",
 	(char*)"monitor_ping_interval",
+	(char*)"monitor_ping_interval_window",
 	(char*)"monitor_ping_max_failures",
 	(char*)"monitor_ping_timeout",
-/*
-	(char*)"monitor_aws_rds_topology_discovery_interval",
 	(char*)"monitor_read_only_interval",
+	(char*)"monitor_read_only_interval_window",
 	(char*)"monitor_read_only_timeout",
 	(char*)"monitor_read_only_max_timeout_count",
+/*
+	(char*)"monitor_aws_rds_topology_discovery_interval",
 	(char*)"monitor_replication_lag_group_by_host",
 	(char*)"monitor_replication_lag_interval",
 	(char*)"monitor_replication_lag_timeout",
@@ -335,6 +338,7 @@ static char* pgsql_thread_variables_names[] = {
 */
 	(char*)"monitor_username",
 	(char*)"monitor_password",
+	(char*)"monitor_dbname",
 /*
 	(char*)"monitor_replication_lag_use_percona_heartbeat",
 	(char*)"monitor_query_interval",
@@ -350,8 +354,8 @@ static char* pgsql_thread_variables_names[] = {
 	(char*)"monitor_local_dns_cache_refresh_interval",
 	(char*)"monitor_local_dns_resolver_queue_maxsize",
 	(char*)"monitor_wait_timeout",
-	(char*)"monitor_writer_is_also_reader",
 */
+	(char*)"monitor_writer_is_also_reader",
 	(char*)"max_allowed_packet",
 	(char*)"tcp_keepalive_time",
 	(char*)"use_tcp_keepalive",
@@ -932,12 +936,15 @@ PgSQL_Threads_Handler::PgSQL_Threads_Handler() {
 	variables.monitor_enabled = true;
 	variables.monitor_history = 7200000; // changed in 2.6.0 : was 600000
 	variables.monitor_connect_interval = 120000;
+	variables.monitor_connect_interval_window = 50;
 	variables.monitor_connect_timeout = 600;
 	variables.monitor_ping_interval = 8000;
+	variables.monitor_ping_interval_window = 10;
 	variables.monitor_ping_max_failures = 3;
 	variables.monitor_ping_timeout = 1000;
     variables.monitor_aws_rds_topology_discovery_interval=1000;
 	variables.monitor_read_only_interval = 1000;
+	variables.monitor_read_only_interval_window = 10;
 	variables.monitor_read_only_timeout = 800;
 	variables.monitor_read_only_max_timeout_count = 3;
 	variables.monitor_replication_lag_group_by_host = false;
@@ -966,6 +973,7 @@ PgSQL_Threads_Handler::PgSQL_Threads_Handler() {
 	variables.monitor_local_dns_resolver_queue_maxsize = 128;
 	variables.monitor_username = strdup((char*)"monitor");
 	variables.monitor_password = strdup((char*)"monitor");
+	variables.monitor_dbname = strdup((char*)"postgres");
 /* TODO: Remove
 	variables.monitor_replication_lag_use_percona_heartbeat = strdup((char*)"");
 */
@@ -1181,6 +1189,7 @@ char* PgSQL_Threads_Handler::get_variable_string(char* name) {
 	if (!strncmp(name, "monitor_", 8)) {
 		if (!strcmp(name, "monitor_username")) return strdup(variables.monitor_username);
 		if (!strcmp(name, "monitor_password")) return strdup(variables.monitor_password);
+		if (!strcmp(name, "monitor_dbname")) return strdup(variables.monitor_dbname);
 /*
 		if (!strcmp(name, "monitor_replication_lag_use_percona_heartbeat")) return strdup(variables.monitor_replication_lag_use_percona_heartbeat);
 */
@@ -1504,6 +1513,7 @@ char* PgSQL_Threads_Handler::get_variable(char* name) {	// this is the public fu
 	if (!strncasecmp(name, "monitor_", 8)) {
 		if (!strcasecmp(name, "monitor_username")) return strdup(variables.monitor_username);
 		if (!strcasecmp(name, "monitor_password")) return strdup(variables.monitor_password);
+		if (!strcasecmp(name, "monitor_dbname")) return strdup(variables.monitor_dbname);
 /*
 		if (!strcasecmp(name, "monitor_replication_lag_use_percona_heartbeat")) return strdup(variables.monitor_replication_lag_use_percona_heartbeat);
 */
@@ -1613,6 +1623,11 @@ bool PgSQL_Threads_Handler::set_variable(char* name, const char* value) {	// thi
 		if (!strcasecmp(name, "monitor_password")) {
 			free(variables.monitor_password);
 			variables.monitor_password = strdup(value);
+			return true;
+		}
+		if (!strcasecmp(name, "monitor_dbname")) {
+			free(variables.monitor_dbname);
+			variables.monitor_dbname = strdup(value);
 			return true;
 		}
 		if (!strcasecmp(name, "monitor_replication_lag_use_percona_heartbeat")) {
@@ -2079,9 +2094,11 @@ char** PgSQL_Threads_Handler::get_variables_list() {
 		VariablesPointers_int["monitor_history"] = make_tuple(&variables.monitor_history, 1000, 7 * 24 * 3600 * 1000, false);
 
 		VariablesPointers_int["monitor_connect_interval"] = make_tuple(&variables.monitor_connect_interval, 100, 7 * 24 * 3600 * 1000, false);
+		VariablesPointers_int["monitor_connect_interval_window"] = make_tuple(&variables.monitor_connect_interval_window, 0, 100, false);
 		VariablesPointers_int["monitor_connect_timeout"] = make_tuple(&variables.monitor_connect_timeout, 100, 600 * 1000, false);
 
 		VariablesPointers_int["monitor_ping_interval"] = make_tuple(&variables.monitor_ping_interval, 100, 7 * 24 * 3600 * 1000, false);
+		VariablesPointers_int["monitor_ping_interval_window"] = make_tuple(&variables.monitor_ping_interval_window, 0, 100, false);
 		VariablesPointers_int["monitor_ping_timeout"] = make_tuple(&variables.monitor_ping_timeout, 100, 600 * 1000, false);
 		VariablesPointers_int["monitor_ping_max_failures"] = make_tuple(&variables.monitor_ping_max_failures, 1, 1000 * 1000, false);
 
@@ -2089,6 +2106,7 @@ char** PgSQL_Threads_Handler::get_variables_list() {
         VariablesPointers_int["monitor_aws_rds_topology_discovery_interval"] = make_tuple(&variables.monitor_aws_rds_topology_discovery_interval, 1, 100000, false);
 */
 		VariablesPointers_int["monitor_read_only_interval"] = make_tuple(&variables.monitor_read_only_interval, 100, 7 * 24 * 3600 * 1000, false);
+		VariablesPointers_int["monitor_read_only_interval_window"] = make_tuple(&variables.monitor_read_only_interval_window, 0, 100, false);
 		VariablesPointers_int["monitor_read_only_timeout"] = make_tuple(&variables.monitor_read_only_timeout, 100, 600 * 1000, false);
 		VariablesPointers_int["monitor_read_only_max_timeout_count"] = make_tuple(&variables.monitor_read_only_max_timeout_count, 1, 1000 * 1000, false);
 /*
@@ -2590,6 +2608,7 @@ void PgSQL_Threads_Handler::flush_client_host_cache() {
 PgSQL_Threads_Handler::~PgSQL_Threads_Handler() {
 	if (variables.monitor_username) { free(variables.monitor_username); variables.monitor_username = NULL; }
 	if (variables.monitor_password) { free(variables.monitor_password); variables.monitor_password = NULL; }
+	if (variables.monitor_dbname) { free(variables.monitor_dbname); variables.monitor_dbname = NULL; }
 	if (variables.monitor_replication_lag_use_percona_heartbeat) {
 		free(variables.monitor_replication_lag_use_percona_heartbeat);
 		variables.monitor_replication_lag_use_percona_heartbeat = NULL;
@@ -2722,13 +2741,16 @@ PgSQL_Thread::~PgSQL_Thread() {
 
 	if (pgsql_thread___monitor_username) { free(pgsql_thread___monitor_username); pgsql_thread___monitor_username = NULL; }
 	if (pgsql_thread___monitor_password) { free(pgsql_thread___monitor_password); pgsql_thread___monitor_password = NULL; }
+	if (pgsql_thread___monitor_dbname) { free(pgsql_thread___monitor_dbname); pgsql_thread___monitor_dbname = NULL; }
 
+	/*
 	if (mysql_thread___monitor_username) { free(mysql_thread___monitor_username); mysql_thread___monitor_username = NULL; }
 	if (mysql_thread___monitor_password) { free(mysql_thread___monitor_password); mysql_thread___monitor_password = NULL; }
 	if (mysql_thread___monitor_replication_lag_use_percona_heartbeat) {
 		free(mysql_thread___monitor_replication_lag_use_percona_heartbeat);
 		mysql_thread___monitor_replication_lag_use_percona_heartbeat = NULL;
 	}
+	*/
 	//if (pgsql_thread___default_schema) { free(pgsql_thread___default_schema); pgsql_thread___default_schema = NULL; }
 	if (pgsql_thread___keep_multiplexing_variables) { free(pgsql_thread___keep_multiplexing_variables); pgsql_thread___keep_multiplexing_variables = NULL; }
 	if (pgsql_thread___firewall_whitelist_errormsg) { free(pgsql_thread___firewall_whitelist_errormsg); pgsql_thread___firewall_whitelist_errormsg = NULL; }
@@ -3800,43 +3822,46 @@ void PgSQL_Thread::refresh_variables() {
 	pgsql_thread___query_processor_iterations = GloPTH->get_variable_int((char*)"query_processor_iterations");
 	pgsql_thread___query_processor_regex = GloPTH->get_variable_int((char*)"query_processor_regex");
 
-	mysql_thread___query_cache_size_MB = GloPTH->get_variable_int((char*)"query_cache_size_MB");
-	mysql_thread___query_cache_soft_ttl_pct = GloPTH->get_variable_int((char*)"query_cache_soft_ttl_pct");
-	mysql_thread___query_cache_handle_warnings = GloPTH->get_variable_int((char*)"query_cache_handle_warnings");
+	pgsql_thread___query_cache_size_MB = GloPTH->get_variable_int((char*)"query_cache_size_MB");
+	pgsql_thread___query_cache_soft_ttl_pct = GloPTH->get_variable_int((char*)"query_cache_soft_ttl_pct");
+	pgsql_thread___query_cache_handle_warnings = GloPTH->get_variable_int((char*)"query_cache_handle_warnings");
 	/*
 	mysql_thread___max_stmts_per_connection = GloPTH->get_variable_int((char*)"max_stmts_per_connection");
 	mysql_thread___max_stmts_cache = GloPTH->get_variable_int((char*)"max_stmts_cache");
 
-	*/
 	if (mysql_thread___monitor_username) free(mysql_thread___monitor_username);
 	mysql_thread___monitor_username = GloPTH->get_variable_string((char*)"monitor_username");
 	if (mysql_thread___monitor_password) free(mysql_thread___monitor_password);
 	mysql_thread___monitor_password = GloPTH->get_variable_string((char*)"monitor_password");
-	/*if (mysql_thread___monitor_replication_lag_use_percona_heartbeat) free(mysql_thread___monitor_replication_lag_use_percona_heartbeat);
+	if (mysql_thread___monitor_replication_lag_use_percona_heartbeat) free(mysql_thread___monitor_replication_lag_use_percona_heartbeat);
 	mysql_thread___monitor_replication_lag_use_percona_heartbeat = GloPTH->get_variable_string((char*)"monitor_replication_lag_use_percona_heartbeat");
 
 	mysql_thread___monitor_wait_timeout = (bool)GloPTH->get_variable_int((char*)"monitor_wait_timeout");
-	mysql_thread___monitor_writer_is_also_reader = (bool)GloPTH->get_variable_int((char*)"monitor_writer_is_also_reader");
 	*/
-
+	pgsql_thread___monitor_writer_is_also_reader = (bool)GloPTH->get_variable_int((char*)"monitor_writer_is_also_reader");
 	pgsql_thread___monitor_enabled = (bool)GloPTH->get_variable_int((char*)"monitor_enabled");
 	pgsql_thread___monitor_history = GloPTH->get_variable_int((char*)"monitor_history");
 	pgsql_thread___monitor_connect_interval = GloPTH->get_variable_int((char*)"monitor_connect_interval");
+	pgsql_thread___monitor_connect_interval_window = GloPTH->get_variable_int((char*)"monitor_connect_interval_window");
 	pgsql_thread___monitor_connect_timeout = GloPTH->get_variable_int((char*)"monitor_connect_timeout");
 	pgsql_thread___monitor_ping_interval = GloPTH->get_variable_int((char*)"monitor_ping_interval");
+	pgsql_thread___monitor_ping_interval_window = GloPTH->get_variable_int((char*)"monitor_ping_interval_window");
 	pgsql_thread___monitor_ping_max_failures = GloPTH->get_variable_int((char*)"monitor_ping_max_failures");
 	pgsql_thread___monitor_ping_timeout = GloPTH->get_variable_int((char*)"monitor_ping_timeout");
 	pgsql_thread___monitor_read_only_interval = GloPTH->get_variable_int((char*)"monitor_read_only_interval");
+	pgsql_thread___monitor_read_only_interval_window = GloPTH->get_variable_int((char*)"monitor_read_only_interval_window");
 	pgsql_thread___monitor_read_only_timeout = GloPTH->get_variable_int((char*)"monitor_read_only_timeout");
+	pgsql_thread___monitor_read_only_max_timeout_count = GloPTH->get_variable_int((char*)"monitor_read_only_max_timeout_count");
 	pgsql_thread___monitor_threads = GloPTH->get_variable_int((char*)"monitor_threads");
 	if (pgsql_thread___monitor_username) free(pgsql_thread___monitor_username);
 	pgsql_thread___monitor_username = GloPTH->get_variable_string((char*)"monitor_username");
 	if (pgsql_thread___monitor_password) free(pgsql_thread___monitor_password);
 	pgsql_thread___monitor_password = GloPTH->get_variable_string((char*)"monitor_password");
+	if (pgsql_thread___monitor_dbname) free(pgsql_thread___monitor_dbname);
+	pgsql_thread___monitor_dbname = GloPTH->get_variable_string((char*)"monitor_dbname");
 
 	/*
     mysql_thread___monitor_aws_rds_topology_discovery_interval = GloPTH->get_variable_int((char *)"monitor_aws_rds_topology_discovery_interval");
-	mysql_thread___monitor_read_only_max_timeout_count = GloPTH->get_variable_int((char*)"monitor_read_only_max_timeout_count");
 	mysql_thread___monitor_replication_lag_group_by_host = (bool)GloPTH->get_variable_int((char*)"monitor_replication_lag_group_by_host");
 	mysql_thread___monitor_replication_lag_interval = GloPTH->get_variable_int((char*)"monitor_replication_lag_interval");
 	mysql_thread___monitor_replication_lag_timeout = GloPTH->get_variable_int((char*)"monitor_replication_lag_timeout");
@@ -3943,13 +3968,14 @@ void PgSQL_Thread::refresh_variables() {
 	pgsql_thread___query_digests_grouping_limit = (int)GloPTH->get_variable_int((char*)"query_digests_grouping_limit");
 	pgsql_thread___query_digests_groups_grouping_limit = (int)GloPTH->get_variable_int((char*)"query_digests_groups_grouping_limit");
 	pgsql_thread___query_digests_keep_comment = (bool)GloPTH->get_variable_int((char*)"query_digests_keep_comment");
+
+	variables.query_cache_stores_empty_result = (bool)GloPTH->get_variable_int((char*)"query_cache_stores_empty_result");
 	/*
 	variables.min_num_servers_lantency_awareness = GloPTH->get_variable_int((char*)"min_num_servers_lantency_awareness");
 	variables.aurora_max_lag_ms_only_read_from_replicas = GloPTH->get_variable_int((char*)"aurora_max_lag_ms_only_read_from_replicas");
 	variables.stats_time_backend_query = (bool)GloPTH->get_variable_int((char*)"stats_time_backend_query");
 	variables.stats_time_query_processor = (bool)GloPTH->get_variable_int((char*)"stats_time_query_processor");
-	variables.query_cache_stores_empty_result = (bool)GloPTH->get_variable_int((char*)"query_cache_stores_empty_result");
-	
+
 	mysql_thread___client_session_track_gtid = (bool)GloPTH->get_variable_int((char*)"client_session_track_gtid");
 
 #ifdef IDLE_THREADS
@@ -4446,19 +4472,19 @@ SQLite3_result* PgSQL_Threads_Handler::SQL3_GlobalStatus(bool _memory) {
 			pta[1] = buf;
 			result->add_row(pta);
 		}
+		{
+			pta[0] = (char*)"PgSQL_Monitor_read_only_check_OK";
+			sprintf(buf, "%lu", GloPgMon->readonly_check_OK);
+			pta[1] = buf;
+			result->add_row(pta);
+		}
+		{
+			pta[0] = (char*)"PgSQL_Monitor_read_only_check_ERR";
+			sprintf(buf, "%lu", GloPgMon->readonly_check_ERR);
+			pta[1] = buf;
+			result->add_row(pta);
+		}
 		/*
-		{
-			pta[0] = (char*)"MySQL_Monitor_read_only_check_OK";
-			sprintf(buf, "%llu", GloMyMon->read_only_check_OK);
-			pta[1] = buf;
-			result->add_row(pta);
-		}
-		{
-			pta[0] = (char*)"MySQL_Monitor_read_only_check_ERR";
-			sprintf(buf, "%llu", GloMyMon->read_only_check_ERR);
-			pta[1] = buf;
-			result->add_row(pta);
-		}
 		{
 			pta[0] = (char*)"MySQL_Monitor_replication_lag_check_OK";
 			sprintf(buf, "%llu", GloMyMon->replication_lag_check_OK);
