@@ -9,7 +9,7 @@ on:
 
 env:
   SHA: ${{ inputs.trigger && fromJson(inputs.trigger).event.workflow_run.head_sha || github.sha }}
-  BRANCH: ${{ github.ref_name }}
+  BRANCH: ${{ inputs.trigger && fromJson(inputs.trigger).event.workflow_run.head_branch || github.ref_name }}
   BIN_PKG:
 
 jobs:
