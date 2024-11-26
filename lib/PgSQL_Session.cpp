@@ -6934,3 +6934,105 @@ void PgSQL_Session::set_previous_status_mode3(bool allow_execute) {
 		// LCOV_EXCL_STOP
 	}
 }
+
+void PgSQL_Session::switch_normal_to_fast_forward_mode(PtrSize_t& pkt, std::string_view command, SESSION_FORWARD_TYPE session_type) {
+
+	if (session_fast_forward || session_type == SESSION_FORWARD_TYPE_PERMANENT) return;
+
+	// we use a switch to write the command in the info message
+	std::string client_info;
+	// we add the client details in the info message
+	if (client_myds && client_myds->addr.addr) {
+		client_info += " from client " + std::string(client_myds->addr.addr) + ":" + std::to_string(client_myds->addr.port);
+	}
+	proxy_info("Received command '%s'%s. Switching to Fast Forward mode (Session Type:0x%02X)\n",
+		command.data(), client_info.c_str(), session_type);
+	session_fast_forward = session_type;
+
+	if (client_myds->PSarrayIN->len) {
+		proxy_error("UNEXPECTED PACKET FROM CLIENT -- PLEASE REPORT A BUG\n");
+		assert(0);
+	}
+	client_myds->PSarrayIN->add(pkt.ptr, pkt.size);
+
+	// current_hostgroup should already be set to the correct hostgroup 
+	mybe = find_or_create_backend(current_hostgroup); // set a backend
+	mybe->server_myds->reinit_queues(); // reinitialize the queues in the myds . By default, they are not active
+	// We reinitialize the 'wait_until' since this session shouldn't wait for processing as
+	// we are now transitioning to 'FAST_FORWARD'.
+	mybe->server_myds->wait_until = 0;
+	if (mybe->server_myds->DSS == STATE_NOT_INITIALIZED) {
+		// NOTE: This section is entirely borrowed from 'STATE_SLEEP' for 'session_fast_forward'.
+		// Check comments there for extra information.
+		// =============================================================================
+		if (mybe->server_myds->max_connect_time == 0) {
+			uint64_t connect_timeout =
+				pgsql_thread___connect_timeout_server < pgsql_thread___connect_timeout_server_max ?
+				pgsql_thread___connect_timeout_server_max : pgsql_thread___connect_timeout_server;
+			mybe->server_myds->max_connect_time = thread->curtime + connect_timeout * 1000;
+		}
+		mybe->server_myds->connect_retries_on_failure = pgsql_thread___connect_retries_on_failure;
+		CurrentQuery.start_time = thread->curtime;
+		// =============================================================================
+
+		// we don't have a connection
+		previous_status.push(FAST_FORWARD); // next status will be FAST_FORWARD
+		set_status(CONNECTING_SERVER); // now we need a connection
+	} else {
+		// In case of having a connection, we need to make user to reset the state machine
+		// for current server 'PgSQL_Data_Stream'
+		mybe->server_myds->DSS = STATE_READY;
+		// myds needs to have encrypted value set correctly
+		
+		PgSQL_Data_Stream* myds = mybe->server_myds;
+		PgSQL_Connection* myconn = myds->myconn;
+		assert(myconn != NULL);
+
+		// if backend connection uses SSL we will set
+		// encrypted = true and we will start using the SSL structure
+		// directly from PGconn SSL structure.
+		if (myconn->is_connected() && myconn->get_pg_ssl_in_use()) {
+			SSL* ssl_obj = myconn->get_pg_ssl_object();
+			if (ssl_obj != NULL) {
+				myds->encrypted = true;
+				myds->ssl = ssl_obj;
+				myds->rbio_ssl = BIO_new(BIO_s_mem());
+				myds->wbio_ssl = BIO_new(BIO_s_mem());
+				SSL_set_bio(myds->ssl, myds->rbio_ssl, myds->wbio_ssl);
+			} else {
+				// it means that ProxySQL tried to use SSL to connect to the backend
+				// but the backend didn't support SSL		
+			}
+		}
+		set_status(FAST_FORWARD); // we can set status to FAST_FORWARD
+	}
+}
+
+void PgSQL_Session::switch_fast_forward_to_normal_mode() {
+	if (session_fast_forward == SESSION_FORWARD_TYPE_NONE) return;
+
+	// only handle temporary session ff
+	if (session_fast_forward & SESSION_FORWARD_TYPE_TEMPORARY) {
+		// we use a switch to write the command in the info message
+		std::string client_info;
+		// we add the client details in the info message
+		if (client_myds && client_myds->addr.addr) {
+			client_info += " for client " + std::string(client_myds->addr.addr) + ":" + std::to_string(client_myds->addr.port);
+		}
+
+		proxy_info("Switching back to Normal mode (Session Type:0x%02X)%s\n", 
+			session_fast_forward, client_info.c_str());
+		session_fast_forward = SESSION_FORWARD_TYPE_NONE;
+		PgSQL_Data_Stream* myds = mybe->server_myds;
+		PgSQL_Connection* myconn = myds->myconn;
+		if (myds->encrypted == true) {
+			myds->encrypted = false;
+			myds->ssl = NULL;
+		}
+		RequestEnd(myds);
+		finishQuery(myds, myconn, false);
+	} else {
+		// cannot switch Permanent Fast Forward to Normal
+		assert(0);
+	}
+}

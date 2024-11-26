@@ -256,6 +256,29 @@ private:
 	void handler_WCD_SS_MCQ_qpo_error_msg(PtrSize_t* pkt);
 	void handler_WCD_SS_MCQ_qpo_LargePacket(PtrSize_t* pkt);
 
+	/**
+	 * @brief Switches session from normal mode to fast forward mode.
+	 *
+	 * This method transitions the session to fast forward mode based on session type.
+	 * (Currently only supports SESSION_FORWARD_TYPE_TEMPORARY and extended types)
+	 *
+	 * @param pkt Used solely to push the packet back to client_myds PSarrayIN,
+	 *			allowing it to be forwarded to the backend via the fast forward session
+	 * @param command Command that causes the session to switch to fast forward mode.
+	 * @param session_type SESSION_FORWARD_TYPE indicating the type of session.
+	 *
+	 * @return void.
+	 */
+	void switch_normal_to_fast_forward_mode(PtrSize_t& pkt, std::string_view command, SESSION_FORWARD_TYPE session_type);
+
+	/**
+	 * @brief Switches session from fast forward mode to normal mode.
+	 *
+	 * This method is used to revert session from fast forward mode back to normal mode.
+	 * 
+	 */
+	void switch_fast_forward_to_normal_mode();
+
 public:
 	bool handler_again___status_SETTING_GENERIC_VARIABLE(int* _rc, const char* var_name, const char* var_value, bool no_quote = false, bool set_transaction = false);
 #if 0
