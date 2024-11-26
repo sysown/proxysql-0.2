@@ -20,7 +20,7 @@ mariadb-connector-c/mariadb-connector-c/libmariadb/libmariadbclient.a:
 	cd mariadb-connector-c && tar -zxf mariadb-connector-c-*.tar.gz
 	cd mariadb-connector-c/mariadb-connector-c && patch -p0 < ../CMakeLists.txt.patch
 	cd mariadb-connector-c/mariadb-connector-c && patch -p0 < ../ConnectorName.cmake.patch
-	cd mariadb-connector-c/mariadb-connector-c && cmake . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOPENSSL_ROOT_DIR=$(DEPS_PATH)/libssl/openssl/
+	cd mariadb-connector-c/mariadb-connector-c && cmake . -DCMAKE_BUILD_TYPE=RelWithDebInfo
 	cd mariadb-connector-c/mariadb-connector-c && CC=${CC} CXX=${CXX} ${MAKE} mariadbclient
 
 mariadb_client: mariadb-connector-c/mariadb-connector-c/libmariadb/libmariadbclient.a
@@ -32,7 +32,7 @@ mysql-connector-c/mysql-connector-c/libmysql/libmysqlclient.a: mysql-connector-c
 	cd mysql-connector-c && rm -rf mysql-*/ || true
 	cd mysql-connector-c && tar -zxf mysql-boost-5.7.*.tar.gz
 	cd mysql-connector-c && ln -fsT $$(ls -1d mysql-5.7.*/) mysql-connector-c
-	cd mysql-connector-c/mysql-connector-c && cmake . -DWITH_BOOST=./boost -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O0 -ggdb -DNDEBUG -fPIC" -DOPENSSL_ROOT_DIR=$(DEPS_PATH)/libssl/openssl
+	cd mysql-connector-c/mysql-connector-c && cmake . -DWITH_BOOST=./boost -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O0 -ggdb -DNDEBUG -fPIC"
 	cd mysql-connector-c/mysql-connector-c && CC=${CC} CXX=${CXX} ${MAKE} mysqlclient mysql
 	cd mysql-connector-c/mysql-connector-c && cp archive_output_directory/libmysqlclient.a libmysql/
 
@@ -47,7 +47,7 @@ mysql-connector-c-8.4.0/mysql-connector-c/libmysql/libmysqlclient.a: mysql-conne
 	cd mysql-connector-c-8.4.0 && ln -fsT $$(ls -1d mysql-8.4.*/) mysql-connector-c
 	cd mysql-connector-c-8.4.0/mysql-connector-c && cmake . -DFORCE_INSOURCE_BUILD=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo \
 		-DWITHOUT_SERVER=ON -DDOWNLOAD_BOOST=1 -DWITH_BOOST=./mysql-server/downloads/ -DWITH_UNIT_TESTS=OFF \
-		-DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O0 -ggdb -DNDEBUG -fPIC" -DOPENSSL_ROOT_DIR=$(DEPS_PATH)/libssl/openssl
+		-DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O0 -ggdb -DNDEBUG -fPIC"
 	cd mysql-connector-c-8.4.0/mysql-connector-c && CC=${CC} CXX=${CXX} ${MAKE}
 	cd mysql-connector-c-8.4.0/mysql-connector-c && cp archive_output_directory/libmysqlclient.a libmysql/
 

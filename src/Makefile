@@ -81,9 +81,28 @@ CURL_PATH := $(DEPS_PATH)/curl/curl
 CURL_IDIR := $(CURL_PATH)/include
 CURL_LDIR := $(CURL_PATH)/lib/.libs
 
-SSL_PATH := $(DEPS_PATH)/libssl/openssl/
-SSL_IDIR := $(SSL_PATH)/include
-SSL_LDIR := $(SSL_PATH)
+DISTRO := $(shell lsb_release -si 2>/dev/null || grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
+
+ifeq ($(DISTRO), almalinux)
+	ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl3/*" 2>/dev/null | head -n 1)
+	LIB_SSL_PATH := $(shell find /usr /usr/local /opt -name "libssl.so.3" 2>/dev/null | head -n 1)
+	LIB_CRYPTO_PATH := $(shell find /usr /usr/local /opt -name "libcrypto.so.3" 2>/dev/null | head -n 1)
+    SSL_LDIR := $(dir $(LIB_SSL_PATH))
+else
+	ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl/*" 2>/dev/null | head -n 1)
+	LIB_SSL_PATH := $(shell find /usr /usr/local /opt -name "libssl.so" 2>/dev/null | head -n 1)
+	LIB_CRYPTO_PATH := $(shell find /usr /usr/local /opt -name "libcrypto.so" 2>/dev/null | head -n 1)
+    SSL_LDIR := $(dir $(LIB_SSL_PATH))
+endif
+
+ifneq ($(ssl_header_path),)
+	SSL_IDIR := $(shell dirname $(shell dirname $(ssl_header_path)))
+    $(info Found OpenSSL headers at $(SSL_IDIR))
+    $(info OpenSSL lib full path is $(LIB_SSL_PATH))
+    $(info OpenSSL libs directory is $(SSL_LDIR))	
+else
+	$(error Warning: OpenSSL headers not found. exiting, please install openssl.)
+endif
 
 EV_PATH := $(DEPS_PATH)/libev/libev/
 EV_IDIR := $(EV_PATH)
@@ -174,7 +193,7 @@ endif
 MYCXXFLAGS += $(IDIRS) $(OPTZ) $(DEBUG) $(PSQLCH) -DGITVERSION=\"$(GIT_VERSION)\" $(NOJEM) $(WGCOV) $(WASAN)
 
 
-STATICMYLIBS := -Wl,-Bstatic -lconfig -lproxysql -ldaemon -lconfig++ -lre2 -lpcrecpp -lpcre -lmariadbclient -lhttpserver -lmicrohttpd -linjection -lcurl -lssl -lcrypto -lev -lscram -lusual -lpq -lpgcommon -lpgport
+STATICMYLIBS := -Wl,-Bstatic -lconfig -lproxysql -ldaemon -lconfig++ -lre2 -lpcrecpp -lpcre -lmariadbclient -lhttpserver -lmicrohttpd -linjection -lcurl -lev -lscram -lusual -lpq -lpgcommon -lpgport
 ifneq ($(NOJEMALLOC),1)
 	STATICMYLIBS += -ljemalloc
 endif
@@ -182,7 +201,12 @@ ifeq ($(UNAME_S),Linux)
 	STATICMYLIBS += -lcoredumper
 endif
 
-MYLIBS := -Wl,--export-dynamic $(STATICMYLIBS) -Wl,-Bdynamic -lgnutls -lpthread -lm -lz -lrt -lprometheus-cpp-pull -lprometheus-cpp-core -luuid $(EXTRALINK)
+ifeq ($(DISTRO), almalinux)
+	MYLIBS := -Wl,--export-dynamic $(STATICMYLIBS) -Wl,-Bdynamic -lgnutls -lpthread $(LIB_SSL_PATH) $(LIB_CRYPTO_PATH) -lm -lz -lrt -lprometheus-cpp-pull -lprometheus-cpp-core -luuid $(EXTRALINK)
+else
+	MYLIBS := -Wl,--export-dynamic $(STATICMYLIBS) -Wl,-Bdynamic -lgnutls -lpthread -lssl -lcrypto -lm -lz -lrt -lprometheus-cpp-pull -lprometheus-cpp-core -luuid $(EXTRALINK)
+endif
+
 ifeq ($(UNAME_S),Darwin)
 	MYLIBS :=-lre2 -lmariadbclient -lpq -lpthread -lm -lz -liconv -lgnutls -lprometheus-cpp-pull -lprometheus-cpp-core -luuid
 else
@@ -215,8 +239,6 @@ ifeq ($(UNAME_S),Darwin)
 	LIBPROXYSQLAR += $(LIBINJECTION_LDIR)/libinjection.a
 	LIBPROXYSQLAR += $(EV_LDIR)/libev.a
 endif
-LIBPROXYSQLAR += $(SSL_LDIR)/libssl.a
-LIBPROXYSQLAR += $(SSL_LDIR)/libcrypto.a
 LIBPROXYSQLAR += $(CITYHASH_LDIR)/libcityhash.a
 
 ODIR := obj

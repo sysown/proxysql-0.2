@@ -11,61 +11,6 @@
 
 #include "openssl/x509v3.h"
 
-/*
-
-in libssl 1.1.0
-struct bio_st {
-	const BIO_METHOD *method;
-	long (*callback) (struct bio_st *, int, const char *, int, long, long);
-	char *cb_arg;
-	int init;
-	int shutdown;
-	int flags;
-	int retry_reason;
-	int num;
-	void *ptr;
-	struct bio_st *next_bio;
-	struct bio_st *prev_bio;
-	int references;
-	uint64_t num_read;
-	uint64_t num_write;
-	CRYPTO_EX_DATA ex_data;
-	CRYPTO_RWLOCK *lock;
-};
-*/
-
-typedef int CRYPTO_REF_COUNT;
-
-/**
- * @brief This is the 'bio_st' struct definition from libssl 3.0.0. NOTE: This is an internal struct from
- *   OpenSSL library, currently it's used for performing checks on the reads/writes performed on the BIO objects.
- *   It's extremely important to keep this struct up to date with each OpenSSL dependency update.
- */
-struct bio_st {
-	OSSL_LIB_CTX* libctx;
-	const BIO_METHOD* method;
-	/* bio, mode, argp, argi, argl, ret */
-#ifndef OPENSSL_NO_DEPRECATED_3_0
-	BIO_callback_fn callback;
-#endif
-	BIO_callback_fn_ex callback_ex;
-	char* cb_arg;               /* first argument for the callback */
-	int init;
-	int shutdown;
-	int flags;                  /* extra storage */
-	int retry_reason;
-	int num;
-	void* ptr;
-	struct bio_st* next_bio;    /* used by filter BIOs */
-	struct bio_st* prev_bio;    /* used by filter BIOs */
-	CRYPTO_REF_COUNT references;
-	uint64_t num_read;
-	uint64_t num_write;
-	CRYPTO_EX_DATA ex_data;
-	CRYPTO_RWLOCK* lock;
-};
-
-
 #define RESULTSET_BUFLEN_DS_16K 16000
 #define RESULTSET_BUFLEN_DS_1M 1000*1024
 
@@ -602,8 +547,8 @@ int PgSQL_Data_Stream::read_from_net() {
 		//ssize_t n = read(fd, buf, sizeof(buf));
 		int n = recv(fd, buf, sizeof(buf), 0);
 		//proxy_info("SSL recv of %d bytes\n", n);
-		proxy_debug(PROXY_DEBUG_NET, 7, "Session=%p: recv() read %d bytes. num_write: %lu ,  num_read: %lu\n", sess, n, rbio_ssl->num_write, rbio_ssl->num_read);
-		if (n > 0 || rbio_ssl->num_write > rbio_ssl->num_read) {
+		proxy_debug(PROXY_DEBUG_NET, 7, "Session=%p: recv() read %d bytes. num_write: %lu ,  num_read: %lu\n", sess, n, BIO_number_written(rbio_ssl), BIO_number_read(rbio_ssl));
+		if (n > 0 || BIO_number_written(rbio_ssl) > BIO_number_read(rbio_ssl)) {
 			//on_read_cb(buf, (size_t)n);
 
 			char buf2[MY_SSL_BUFFER];
@@ -728,7 +673,7 @@ int PgSQL_Data_Stream::write_to_net() {
 		if (encrypted == false) {
 			return 0;
 		}
-		if (ssl_write_len == 0 && wbio_ssl->num_write == wbio_ssl->num_read) {
+		if (ssl_write_len == 0 && BIO_number_written(wbio_ssl) == BIO_number_read(wbio_ssl)) {
 			return 0;
 		}
 	}
@@ -738,7 +683,7 @@ int PgSQL_Data_Stream::write_to_net() {
 		bytes_io = SSL_write(ssl, queue_r_ptr(queueOUT), s);
 		//proxy_info("Used SSL_write to write %d bytes\n", bytes_io);
 		proxy_debug(PROXY_DEBUG_NET, 7, "Session=%p, Datastream=%p: SSL_write() wrote %d bytes . queueOUT before: %u\n", sess, this, bytes_io, queue_data(queueOUT));
-		if (ssl_write_len || wbio_ssl->num_write > wbio_ssl->num_read) {
+		if (ssl_write_len || BIO_number_written(wbio_ssl) > BIO_number_read(wbio_ssl)) {
 			//proxy_info("ssl_write_len = %d , num_write = %d , num_read = %d\n", ssl_write_len , wbio_ssl->num_write , wbio_ssl->num_read);
 			char buf[MY_SSL_BUFFER];
 			do {
@@ -861,7 +806,7 @@ void PgSQL_Data_Stream::set_pollout() {
 			_pollfd->events |= POLLOUT;
 		}
 		if (encrypted) {
-			if (ssl_write_len || wbio_ssl->num_write > wbio_ssl->num_read) {
+			if (ssl_write_len || BIO_number_written(wbio_ssl) > BIO_number_read(wbio_ssl)) {
 				_pollfd->events |= POLLOUT;
 			}
 			else {
@@ -966,7 +911,7 @@ int PgSQL_Data_Stream::write_to_net_poll() {
 	}
 	if (call_write_to_net == false) {
 		if (encrypted) {
-			if (ssl_write_len || wbio_ssl->num_write > wbio_ssl->num_read) {
+			if (ssl_write_len || BIO_number_written(wbio_ssl) > BIO_number_read(wbio_ssl)) {
 				call_write_to_net = true;
 			}
 		}
@@ -1362,7 +1307,7 @@ void PgSQL_Data_Stream::destroy_MySQL_Connection_From_Pool(bool sq) {
 }
 
 bool PgSQL_Data_Stream::data_in_rbio() {
-	if (rbio_ssl->num_write > rbio_ssl->num_read) {
+	if (BIO_number_written(rbio_ssl) > BIO_number_read(rbio_ssl)) {
 		return true;
 	}
 	return false;
