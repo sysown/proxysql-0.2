@@ -291,6 +291,7 @@ class PgSQL_Protocol;
 #define PGSQL_QUERY_RESULT_ERROR	0x08
 #define PGSQL_QUERY_RESULT_EMPTY	0x10
 #define PGSQL_QUERY_RESULT_COPY_OUT	0x20
+#define PGSQL_QUERY_RESULT_COPY_IN	0x30
 
 class PgSQL_Query_Result {
 public:
