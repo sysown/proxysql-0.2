@@ -1830,9 +1830,17 @@ handler_again:
 					break;
 				case PGRES_COPY_IN:
 				case PGRES_COPY_BOTH:
-					// NOT IMPLEMENTED
-					proxy_error("COPY not supported\n");
-					assert(0);
+					// disconnect client session (and backend connection) if COPY (STDIN) command bypasses the initial checks.
+					// This scenario should be handled in fast-forward mode and should never occur at this point.
+					if (myds && myds->sess) {
+						proxy_warning("Unable to process the '%s' command from client %s:%d. Please report a bug for future enhancements.\n", 
+							myds->sess->CurrentQuery.QueryParserArgs.digest_text ? myds->sess->CurrentQuery.QueryParserArgs.digest_text : "COPY",
+							myds->sess->client_myds->addr.addr, myds->sess->client_myds->addr.port);
+					} else {
+						proxy_warning("Unable to process the 'COPY' command. Please report a bug for future enhancements.\n");
+					}
+					set_error(PGSQL_ERROR_CODES::ERRCODE_RAISE_EXCEPTION, "Unable to process 'COPY' command", true);
+					NEXT_IMMEDIATE(ASYNC_QUERY_END);
 					break;
 				case PGRES_BAD_RESPONSE:
 				case PGRES_NONFATAL_ERROR:
