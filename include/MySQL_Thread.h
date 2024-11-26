@@ -574,6 +574,7 @@ class MySQL_Threads_Handler
 	} status_variables;
 
 	std::atomic<bool> bootstrapping_listeners;
+	std::unordered_map<std::string, std::string> server_version_map;
 
 	/**
 	 * @brief Update the client host cache with the supplied 'client_sockaddr',
@@ -663,6 +664,8 @@ class MySQL_Threads_Handler
 	bool set_variable(char *name, const char *value);
 	char **get_variables_list();
 	bool has_variable(const char * name);
+	bool parse_server_version_json(const char * json_str);
+	char *get_server_version(char *port);
 
 	MySQL_Threads_Handler();
 	~MySQL_Threads_Handler();
