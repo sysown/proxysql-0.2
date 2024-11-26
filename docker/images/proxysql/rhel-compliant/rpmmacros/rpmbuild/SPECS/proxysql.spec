@@ -2,14 +2,14 @@
 %define          debug_package %{nil}
 %define        __os_install_post %{_dbpath}/brp-compress
 
-Summary: A high-performance MySQL proxy
+Summary: A high-performance MySQL and PostgreSQL proxy
 Name: proxysql
 Version: %{version}
 Release: 1
 License: GPL-3.0-only
 Source: %{name}-%{version}.tar.gz
 URL: https://proxysql.com/
-Requires: gnutls
+Requires: gnutls, (openssl >= 3.0.0 or openssl3 >= 3.0.0)
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 
 %description
