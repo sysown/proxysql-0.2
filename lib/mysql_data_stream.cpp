@@ -1321,7 +1321,7 @@ void MySQL_Data_Stream::generate_compressed_packet() {
 			total_size+=p2.size;
 			l_free(p2.size,p2.ptr);
 		}
-		int rc=compress2(dest, &destLen, source, sourceLen, GloMTH->variables.compression_level);
+		int rc=compress2(dest, &destLen, source, sourceLen, GloMTH->variables.protocol_compression_level);
 		assert(rc==Z_OK);
 		l_free(total_size, source);
 		queueOUT.pkt.size=destLen+7;
@@ -1353,9 +1353,9 @@ void MySQL_Data_Stream::generate_compressed_packet() {
 		dest1=(Bytef *)malloc(destLen1+7);
 		destLen2=len2*120/100+12;
 		dest2=(Bytef *)malloc(destLen2+7);
-		rc=compress2(dest1+7, &destLen1, (const unsigned char *)p2.ptr, len1, GloMTH->variables.compression_level);
+		rc=compress2(dest1+7, &destLen1, (const unsigned char *)p2.ptr, len1, GloMTH->variables.protocol_compression_level);
 		assert(rc==Z_OK);
-		rc=compress2(dest2+7, &destLen2, (const unsigned char *)p2.ptr+len1, len2, GloMTH->variables.compression_level);
+		rc=compress2(dest2+7, &destLen2, (const unsigned char *)p2.ptr+len1, len2, GloMTH->variables.protocol_compression_level);
 		assert(rc==Z_OK);
 
 		hdr.pkt_length=destLen1;
