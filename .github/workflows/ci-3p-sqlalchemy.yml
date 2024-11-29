@@ -66,6 +66,7 @@ jobs:
 #          proxysql
 
     - name: Wait for cache
+      if: ${{ $BRANCH != 'none' }}
       env:
         GH_TOKEN: ${{ secrets.gh_token }}
       run: |
@@ -80,6 +81,7 @@ jobs:
         echo "Cache available '${BLDCACHE}'"
 
     - name: Cache restore bin
+      if: ${{ $BRANCH != 'none' }}
       uses: actions/cache/restore@v4
       with:
         key: ${{ env.BLDCACHE }}
