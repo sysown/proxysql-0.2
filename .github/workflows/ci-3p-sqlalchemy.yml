@@ -97,7 +97,7 @@ jobs:
         ./setup.sh test_sqlalchemy/sqlalchemy
 
         # use cached build
-        rm -rf ./proxysql && mv ../proxysql .
+        rm -rf ./proxysql && mv ../proxysql . || true
                 
     - name: Run tests
       run: |
