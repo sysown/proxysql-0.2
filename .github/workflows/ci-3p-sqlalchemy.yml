@@ -15,7 +15,8 @@ env:
   TESTNAME: sqlalchemy
   TESTDIST: debian12
   SHA: ${{ inputs.trigger && fromJson(inputs.trigger).event.workflow_run.head_sha || github.sha }}
-  SUMMARY:
+  BRANCH: ${{ inputs.trigger && fromJson(inputs.trigger).event.workflow_run.head_branch || github.ref_name }}
+  SUMMARY: ''
 
 jobs:
   test:
