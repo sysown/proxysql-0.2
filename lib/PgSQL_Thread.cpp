@@ -3698,8 +3698,8 @@ void PgSQL_Thread::process_all_sessions() {
 					}
 					else {
 						proxy_warning(
-							"Closing 'fast_forward' client connection %s:%d\n", sess->client_myds->addr.addr,
-							sess->client_myds->addr.port
+							"Closing 'fast_forward' client connection %s:%d (Session Type:0x%02X)\n", sess->client_myds->addr.addr,
+							sess->client_myds->addr.port, sess->session_fast_forward
 						);
 					}
 				}
