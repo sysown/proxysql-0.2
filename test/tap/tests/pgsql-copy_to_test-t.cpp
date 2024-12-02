@@ -1,6 +1,6 @@
 /**
- * @file pgsql-copy_out_test-t.cpp
- * @brief Tests COPY OUT functionality in ProxySQL
+ * @file pgsql-copy_to_test-t.cpp
+ * @brief Tests COPY TO functionality in ProxySQL
  */
 
 #include <unistd.h>
