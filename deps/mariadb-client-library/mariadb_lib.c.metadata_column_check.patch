@@ -1,0 +1,31 @@
+diff --git libmariadb/mariadb_lib.c libmariadb/mariadb_lib.c
+index 027167f1..58b8283a 100644
+--- libmariadb/mariadb_lib.c
++++ libmariadb/mariadb_lib.c
+@@ -3021,6 +3021,12 @@ MYSQL_FIELD *ma_duplicate_resultset_metadata(MYSQL_FIELD *fields, size_t count,
+   return result;
+ }
+ 
++static uint8_t mysql_encode_length(uint64_t len) {
++    if (len < 251) { return 1; }
++    if (len < 65536) { return 3; }
++    if (len < 16777216) { return 4; }
++    return 9;
++}
+ 
+ int mthd_my_read_query_result(MYSQL *mysql)
+ {
+@@ -3070,6 +3076,13 @@ get_info:
+ 
+   if (has_metadata)
+   {
++    // integrity-check: the length encoding of the field count from 'column-count' packet
++    // must match the packet length from header, otherwise packet is malformed.
++    ulong enc_len = mysql_encode_length(field_count);
++    if (enc_len != length) {
++      my_set_error(mysql, CR_MALFORMED_PACKET, SQLSTATE_UNKNOWN, 0);
++      return -1;
++    }
+     // read packet metadata
+     mysql->fields =
+         mthd_my_read_metadata(mysql, field_count, 7 + ma_extended_type_info_rows(mysql));

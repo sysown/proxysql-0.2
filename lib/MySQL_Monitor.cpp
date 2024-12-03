@@ -13,6 +13,7 @@
 #include <thread>
 #include <future>
 #include <sstream>
+#include <random>
 #include "prometheus/counter.h"
 #include "MySQL_Protocol.h"
 #include "MySQL_HostGroups_Manager.h"
@@ -4668,6 +4669,13 @@ void* monitor_dns_resolver_thread(void* args) {
 		if (!ips.empty()) {
 
 			bool to_update_cache = false;
+			int cache_ttl = dns_resolve_data->ttl;
+			if (dns_resolve_data->ttl > dns_resolve_data->refresh_intv) {
+				thread_local std::mt19937 gen(std::random_device{}());
+				const int jitter = static_cast<int>(dns_resolve_data->ttl * 0.025);
+				std::uniform_int_distribution<int> dis(-jitter, jitter);
+				cache_ttl += dis(gen);
+			} 
 
 			if (!dns_resolve_data->cached_ips.empty()) {
 
@@ -4686,14 +4694,14 @@ void* monitor_dns_resolver_thread(void* args) {
 				// only update dns_records_bookkeeping
 				if (!to_update_cache) {
 					proxy_debug(PROXY_DEBUG_MYSQL_CONNECTION, 5, "DNS cache record already up-to-date. (Hostname:[%s] IP:[%s])\n", dns_resolve_data->hostname.c_str(), debug_iplisttostring(ips).c_str());
-					dns_resolve_data->result.set_value(std::make_tuple<>(true, DNS_Cache_Record(dns_resolve_data->hostname, std::move(dns_resolve_data->cached_ips), monotonic_time() + (1000 * dns_resolve_data->ttl))));
+					dns_resolve_data->result.set_value(std::make_tuple<>(true, DNS_Cache_Record(dns_resolve_data->hostname, std::move(dns_resolve_data->cached_ips), monotonic_time() + (1000 * cache_ttl))));
 				}
 			}
 			else
 				to_update_cache = true;
 
 			if (to_update_cache) {
-				dns_resolve_data->result.set_value(std::make_tuple<>(true, DNS_Cache_Record(dns_resolve_data->hostname, ips, monotonic_time() + (1000 * dns_resolve_data->ttl))));
+				dns_resolve_data->result.set_value(std::make_tuple<>(true, DNS_Cache_Record(dns_resolve_data->hostname, ips, monotonic_time() + (1000 * cache_ttl))));
 				dns_resolve_data->dns_cache->add(dns_resolve_data->hostname, std::move(ips));
 			}
 
@@ -4841,7 +4849,18 @@ void* MySQL_Monitor::monitor_dns_cache() {
 
 			std::list<std::future<std::tuple<bool, DNS_Cache_Record>>> dns_resolve_result;
 
+			int delay_us = 100;
+			if (hostnames.empty() == false) {
+				delay_us = mysql_thread___monitor_local_dns_cache_refresh_interval / 2 / hostnames.size();
+				delay_us *= 40;
+				if (delay_us > 1000000 || delay_us <= 0) {
+					delay_us = 10000;
+				}
+				delay_us = delay_us + rand() % delay_us;
+			}
+
 			if (dns_records_bookkeeping.empty() == false) {
+
 				unsigned long long current_time = monotonic_time();
 
 				for (auto itr = dns_records_bookkeeping.begin();
@@ -4861,12 +4880,14 @@ void* MySQL_Monitor::monitor_dns_cache() {
 							dns_resolve_data->hostname = std::move(itr->hostname_);
 							dns_resolve_data->cached_ips = std::move(itr->ips_);
 							dns_resolve_data->ttl = mysql_thread___monitor_local_dns_cache_ttl;
+							dns_resolve_data->refresh_intv = mysql_thread___monitor_local_dns_cache_refresh_interval;
 							dns_resolve_data->dns_cache = dns_cache;
 							dns_resolve_result.emplace_back(dns_resolve_data->result.get_future());
 
 							proxy_debug(PROXY_DEBUG_MYSQL_CONNECTION, 5, "Removing expired DNS record from bookkeeper. (Hostname:[%s] IP:[%s])\n", itr->hostname_.c_str(), debug_iplisttostring(dns_resolve_data->cached_ips).c_str());
 							dns_resolver_queue.add(new WorkItem<DNS_Resolve_Data>(dns_resolve_data.release(), monitor_dns_resolver_thread));
 							itr = dns_records_bookkeeping.erase(itr);
+							usleep(delay_us);
 							continue;
 						}
 
@@ -4881,7 +4902,6 @@ void* MySQL_Monitor::monitor_dns_cache() {
 
 				if (qsize > (static_cast<unsigned int>(mysql_thread___monitor_local_dns_resolver_queue_maxsize) / 8)) {
 					proxy_warning("DNS resolver queue too big: %d. Please refer to https://proxysql.com/documentation/dns-cache/ for further information.\n", qsize);
-
 					unsigned int threads_max = num_dns_resolver_max_threads;
 
 					if (threads_max > num_threads) {
@@ -4906,14 +4926,15 @@ void* MySQL_Monitor::monitor_dns_cache() {
 			}
 
 			if (hostnames.empty() == false) {
-
 				for (const std::string& hostname : hostnames) {
 					std::unique_ptr<DNS_Resolve_Data> dns_resolve_data(new DNS_Resolve_Data());
 					dns_resolve_data->hostname = hostname;
 					dns_resolve_data->ttl = mysql_thread___monitor_local_dns_cache_ttl;
+					dns_resolve_data->refresh_intv = mysql_thread___monitor_local_dns_cache_refresh_interval;
 					dns_resolve_data->dns_cache = dns_cache;
 					dns_resolve_result.emplace_back(dns_resolve_data->result.get_future());
 					dns_resolver_queue.add(new WorkItem<DNS_Resolve_Data>(dns_resolve_data.release(), monitor_dns_resolver_thread));
+					usleep(delay_us);
 				}
 			}
 

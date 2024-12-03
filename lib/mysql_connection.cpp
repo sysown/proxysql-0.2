@@ -1509,7 +1509,7 @@ handler_again:
 					unsigned int buffered_data=0;
 					buffered_data = myds->sess->client_myds->PSarrayOUT->len * RESULTSET_BUFLEN;
 					buffered_data += myds->sess->client_myds->resultset->len * RESULTSET_BUFLEN;
-					if (buffered_data > (unsigned int)mysql_thread___threshold_resultset_size*8) {
+					if (buffered_data > overflow_safe_multiply<8,unsigned int>(mysql_thread___threshold_resultset_size)) {
 						next_event(ASYNC_STMT_EXECUTE_STORE_RESULT_CONT); // we temporarily pause . See #1232
 						break;
 					}
@@ -1535,7 +1535,7 @@ handler_again:
 					if (rows_read_inner > 1) {
 						process_rows_in_ASYNC_STMT_EXECUTE_STORE_RESULT_CONT(processed_bytes);
 						if (
-							(processed_bytes > (unsigned int)mysql_thread___threshold_resultset_size*8)
+							(processed_bytes > overflow_safe_multiply<8,unsigned int>(mysql_thread___threshold_resultset_size))
 								||
 							( mysql_thread___throttle_ratio_server_to_client && mysql_thread___throttle_max_bytes_per_second_to_client && (processed_bytes > (unsigned long long)mysql_thread___throttle_max_bytes_per_second_to_client/10*(unsigned long long)mysql_thread___throttle_ratio_server_to_client) )
 						) {
@@ -1688,7 +1688,7 @@ handler_again:
 					unsigned int buffered_data=0;
 					buffered_data = myds->sess->client_myds->PSarrayOUT->len * RESULTSET_BUFLEN;
 					buffered_data += myds->sess->client_myds->resultset->len * RESULTSET_BUFLEN;
-					if (buffered_data > (unsigned int)mysql_thread___threshold_resultset_size*8) {
+					if (buffered_data > overflow_safe_multiply<8,unsigned int>(mysql_thread___threshold_resultset_size)) {
 						next_event(ASYNC_USE_RESULT_CONT); // we temporarily pause . See #1232
 						break;
 					}
@@ -1742,7 +1742,7 @@ handler_again:
 					bytes_info.bytes_recv += br;
 					processed_bytes+=br;	// issue #527 : this variable will store the amount of bytes processed during this event
 					if (
-						(processed_bytes > (unsigned int)mysql_thread___threshold_resultset_size*8)
+						(processed_bytes > overflow_safe_multiply<8,unsigned int>(mysql_thread___threshold_resultset_size))
 							||
 						( mysql_thread___throttle_ratio_server_to_client && mysql_thread___throttle_max_bytes_per_second_to_client && (processed_bytes > (unsigned long long)mysql_thread___throttle_max_bytes_per_second_to_client/10*(unsigned long long)mysql_thread___throttle_ratio_server_to_client) )
 					) {
