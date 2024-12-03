@@ -35,7 +35,6 @@ class ProxySQL_Poll {
 	T **myds;
 	unsigned long long *last_recv;
 	unsigned long long *last_sent;
-	std::atomic<bool> bootstrapping_listeners;
 	volatile int pending_listener_add;
 	volatile int pending_listener_del;
 	unsigned int poll_timeout;

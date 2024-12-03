@@ -1204,7 +1204,11 @@ int MySQL_Threads_Handler::listener_del(const char *iface) {
 		}
 		for (i=0;i<num_threads;i++) {
 			MySQL_Thread *thr=(MySQL_Thread *)mysql_threads[i].worker;
-			while(__sync_fetch_and_add(&thr->mypolls.pending_listener_del,0));
+			while(__sync_fetch_and_add(&thr->mypolls.pending_listener_del,0)) {
+				// Since 'listeners_stop' is performed in 'maintenance_loops' by the
+				// workers this active-wait is likely to take some time.
+				usleep(std::min(std::max(mysql_thread___poll_timeout/20, 10000), 40000));
+			}
 		}
 		MLM->del(idx);
 #ifdef SO_REUSEPORT
@@ -3127,15 +3131,11 @@ void MySQL_Thread::run_BootstrapListener() {
 		if (n) {
 			poll_listener_add(n);
 			assert(__sync_bool_compare_and_swap(&mypolls.pending_listener_add,n,0));
-		} else {
-			if (GloMTH->bootstrapping_listeners == false) {
-				// we stop looping
-				mypolls.bootstrapping_listeners = false;
-			}
 		}
-#ifdef DEBUG
-		usleep(5+rand()%10);
-#endif
+		// The delay for the active-wait is a fraction of 'poll_timeout'. Since other
+		// threads may be waiting on poll for further operations, checks are meaningless
+		// until that timeout expires (other workers make progress).
+		usleep(std::min(std::max(mysql_thread___poll_timeout/20, 10000), 40000) + (rand() % 2000));
 	}
 }
 
@@ -3238,9 +3238,7 @@ __run_skip_1:
 #endif // IDLE_THREADS
 
 		pthread_mutex_unlock(&thread_mutex);
-		if (unlikely(mypolls.bootstrapping_listeners == true)) {
-			run_BootstrapListener();
-		}
+		run_BootstrapListener();
 
 		// flush mysql log file
 		GloMyLogger->flush();

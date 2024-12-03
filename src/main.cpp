@@ -338,6 +338,17 @@ static void init_locks(void) {
 }
 
 
+static bool check_openssl_version() {
+	unsigned long version = OpenSSL_version_num();
+	const unsigned long OPENSSL_3_0_0 = 0x30000000L;
+
+	proxy_info("Using OpenSSL version: %s\n", OpenSSL_version(OPENSSL_VERSION));
+	if (version < OPENSSL_3_0_0) {
+		proxy_error("%s\n", "ProxySQL server required openssl version 3.0.0 or above");
+		return false;
+	}
+	return true;
+}
 
 
 void ProxySQL_Main_init_SSL_module() {
@@ -346,7 +357,6 @@ void ProxySQL_Main_init_SSL_module() {
 		proxy_error("%s\n", SSL_alert_desc_string_long(rc));
 	}
 	init_locks();
-	proxy_info("Using OpenSSL version: %s\n", OpenSSL_version(OPENSSL_VERSION));
 	SSL_METHOD *ssl_method;
 	OpenSSL_add_all_algorithms();
 	SSL_load_error_strings();
@@ -2289,6 +2299,9 @@ int main(int argc, const char * argv[]) {
 		if (rc) { exit(EXIT_FAILURE); }
 	}
 
+	if (check_openssl_version() == false) {
+		exit(EXIT_FAILURE);
+	}
 
 #ifdef DEBUG
 	{

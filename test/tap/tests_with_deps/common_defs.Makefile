@@ -44,9 +44,23 @@ LIBINJECTION_DIR=$(DEPS_PATH)/libinjection/libinjection
 LIBINJECTION_IDIR=$(LIBINJECTION_DIR)/src
 LIBINJECTION_LDIR=$(LIBINJECTION_DIR)/src
 
-SSL_DIR=$(DEPS_PATH)/libssl/openssl/
-SSL_IDIR=$(SSL_DIR)/include
-SSL_LDIR=$(SSL_DIR)
+libssl_path := $(shell find /usr /usr/local /opt -name "libssl.so" 2>/dev/null | head -n 1)
+
+ifneq ($(libssl_path),)
+    SSL_LDIR := $(dir $(libssl_path))
+    $(info Found OpenSSL libs at $(SSL_LDIR))
+else
+    $(error Warning: OpenSSL library not found. exiting, please install openssl.)
+endif
+
+ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl/*" 2>/dev/null | head -n 1)
+
+ifneq ($(ssl_header_path),)
+    SSL_IDIR := $(shell dirname $(ssl_header_path))
+    $(info Found OpenSSL headers at $(SSL_IDIR))
+else
+    $(error Warning: OpenSSL headers not found. exiting, please install openssl.)
+endif
 
 EV_DIR=$(DEPS_PATH)/libev/libev/
 EV_IDIR=$(EV_DIR)
