@@ -186,6 +186,7 @@ jobs:
         key: ${{ env.BLDCACHE }}_bin
         enableCrossOsArchive: true
         path: |
+          proxysql/.git
           proxysql/binaries/
 
     - name: Cache save src
