@@ -282,7 +282,7 @@ jobs:
         sed -i "s/\${INFRA}-\${CONTAINER}-1/\${INFRA}_\${CONTAINER}_1/" docker-compose-init.bash
         ./docker-compose-init.bash
         
-        cd ${{ github.workspace }}/jenkins-build-scripts/infra-pgsql16-single
+        cd ${{ github.workspace }}/jenkins-build-scripts/docker-pgsql16-single
         sed -i "s/\${INFRA}-\${CONTAINER}-1/\${INFRA}_\${CONTAINER}_1/" docker-compose-init.bash
         ./docker-compose-init.bash
         
@@ -322,7 +322,7 @@ jobs:
         sed -i "s/\${INFRA}-\${CONTAINER}-1/\${INFRA}_\${CONTAINER}_1/" docker-compose-init.bash
         ./docker-compose-destroy.bash
         
-        cd ${{ github.workspace }}/jenkins-build-scripts/infra-pgsql16
+        cd ${{ github.workspace }}/jenkins-build-scripts/docker-pgsql16-single
         sed -i "s/\${INFRA}-\${CONTAINER}-1/\${INFRA}_\${CONTAINER}_1/" docker-compose-init.bash
         ./docker-compose-destroy.bash
         
