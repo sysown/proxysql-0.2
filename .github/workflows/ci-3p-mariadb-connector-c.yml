@@ -81,6 +81,7 @@ jobs:
         key: ${{ env.BLDCACHE }}
         fail-on-cache-miss: true
         path: |
+          proxysql/.git/
           proxysql/binaries/
         
     - name: Prepare
