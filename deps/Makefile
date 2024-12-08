@@ -1,15 +1,22 @@
 #!/bin/make -f
 
 
-SYS_KERN := $(shell uname -s)
-SYS_ARCH := $(shell uname -m)
+GIT_VERSION ?= $(shell git describe --long --abbrev=7)
+ifndef GIT_VERSION
+    $(error GIT_VERSION is not set)
+endif
+
+UNAME_S := $(shell uname -s)
+UNAME_M := $(shell uname -m)
+
+DISTRO := $(shell grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
 
 CENTOSVER := Unknown
 ifneq (,$(wildcard /etc/system-release))
 	CENTOSVER := $(shell rpm --eval %rhel)
 endif
 
-IS_ARM := $(if $(findstring aarch64, $(SYS_ARCH)),true,false)
+IS_ARM := $(if $(findstring aarch64, $(UNAME_M)),true,false)
 IS_CENTOS := $(if $(findstring Unknown, $(CENTOSVER)),false,true)
 
 # to compile libmariadb_client with support for valgrind enabled, run:
@@ -39,7 +46,7 @@ STDCPP := -std=c++$(shell echo $(CPLUSPLUS) | cut -c3-4) -DCXX$(shell echo $(CPL
 
 
 targets := check_openssl_version libconfig libdaemon jemalloc mariadb_client re2 sqlite3 pcre lz4 cityhash microhttpd curl ev libhttpserver libinjection prometheus-cpp postgresql libusual libscram
-ifeq ($(SYS_KERN),Linux)
+ifeq ($(UNAME_S),Linux)
 	targets += coredumper
 endif
 ifeq ($(PROXYSQLCLICKHOUSE),1)
@@ -60,7 +67,7 @@ ifneq ($(CENTOSVER),6)
 	cd libinjection/libinjection && patch -p1 < ../update-build-py3.diff
 	cd libinjection/libinjection && patch -p1 < ../libinjection_sqli.c.patch
 endif
-ifeq ($(SYS_KERN),Darwin)
+ifeq ($(UNAME_S),Darwin)
 	sed -i '' 's/CC=/CC?=/' libinjection/libinjection/src/Makefile
 else
 	sed -i -e 's/CC=/CC?=/' libinjection/libinjection/src/Makefile
@@ -69,18 +76,16 @@ endif
 
 libinjection: libinjection/libinjection/src/libinjection.a
 
-DISTRO := $(shell lsb_release -si 2>/dev/null || grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
-OPENSSL_VERSION_3 := 3.0.0
-
 ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl/*" 2>/dev/null | head -n 1)
 LIB_SSL_PATH := $(shell find /usr /usr/local /opt -name "libssl.so" 2>/dev/null | head -n 1)
 LIB_CRYPTO_PATH := $(shell find /usr /usr/local /opt -name "libcrypto.so" 2>/dev/null | head -n 1)
-ifeq ($(DISTRO), almalinux)
-ifeq ($(CENTOSVER), 8)
+ifeq ($(DISTRO),almalinux)
+ifeq ($(CENTOSVER),8)
 	ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl3/*" 2>/dev/null | head -n 1)
 	LIB_SSL_PATH := $(shell find /usr /usr/local /opt -name "libssl.so.3" 2>/dev/null | head -n 1)
 	LIB_CRYPTO_PATH := $(shell find /usr /usr/local /opt -name "libcrypto.so.3" 2>/dev/null | head -n 1)
 endif
+else
 endif
 SSL_LDIR := $(dir $(LIB_SSL_PATH))
 
@@ -93,8 +98,9 @@ else
     $(error Warning: OpenSSL headers not found. exiting, please install openssl version 3.)
 endif
 
+OPENSSL_VERSION_3 := 3.0.0
 check_openssl_version:
-	@if [ "$(DISTRO)" = "almalinux" && "$(CENTOSVER)" = "8" ]; then \
+	@if [[ "$(DISTRO)" = "almalinux" && "$(CENTOSVER)" = "8" ]]; then \
 		@current_version=$$(openssl3 version | awk '{print $$2}'); \
 	else \
 		@current_version=$$(openssl version | awk '{print $$2}'); \
@@ -148,7 +154,7 @@ curl/curl/lib/.libs/libcurl.a:
 	cd curl && tar -zxf curl-*.tar.gz
 #	cd curl/curl && ./configure --disable-debug --disable-ftp --disable-ldap --disable-ldaps --disable-rtsp --disable-proxy --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smb --disable-smtp --disable-gopher --disable-manual --disable-ipv6 --disable-sspi --disable-crypto-auth --disable-ntlm-wb --disable-tls-srp --without-nghttp2 --without-libidn2 --without-libssh2 --without-brotli --with-ssl=$(shell pwd)/../../libssl/openssl/ && CC=${CC} CXX=${CXX} ${MAKE}
 	cd curl/curl && autoreconf -fi
-ifeq ($(SYS_KERN),Darwin)
+ifeq ($(UNAME_S),Darwin)
 	cd curl/curl && patch configure < ../configure.patch
 endif
 	cd curl/curl && CPPFLAGS="-I$(SSL_IDIR)" LDFLAGS="$(LIB_SSL_PATH) $(LIB_CRYPTO_PATH)" ./configure --disable-debug --disable-ftp --disable-ldap --disable-ldaps --disable-rtsp --disable-proxy --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smb --disable-smtp --disable-gopher --disable-manual --disable-ipv6 --disable-sspi --disable-ntlm-wb --disable-tls-srp --without-nghttp2 --without-libidn2 --without-libssh2 --without-brotli --without-librtmp --without-libpsl --without-zstd --with-ssl --enable-shared=yes
@@ -307,7 +313,7 @@ re2/re2/obj/libre2.a:
 #	cd re2/re2 && sed -i -e 's/-O3 -g /-O3 -fPIC /' Makefile
 #	cd re2/re2 && patch util/mutex.h < ../mutex.h.patch
 	cd re2/re2 && patch re2/onepass.cc < ../onepass.cc-multiplication-overflow.patch
-ifeq ($(SYS_KERN),Darwin)
+ifeq ($(UNAME_S),Darwin)
 	cd re2/re2 && sed -i '' -e 's/-O3 -g/-O3 -g -${STDCPP} -fPIC -DMEMORY_SANITIZER -DRE2_ON_VALGRIND /' Makefile
 #	cd re2/re2 && sed -i '' -e 's/RE2_CXXFLAGS?=-std=c++11 /RE2_CXXFLAGS?=-std=c++11 -fPIC /' Makefile
 else
