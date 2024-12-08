@@ -83,25 +83,25 @@ CURL_LDIR := $(CURL_PATH)/lib/.libs
 
 DISTRO := $(shell lsb_release -si 2>/dev/null || grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
 
+ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl/*" 2>/dev/null | head -n 1)
+LIB_SSL_PATH := $(shell find /usr /usr/local /opt -name "libssl.so" 2>/dev/null | head -n 1)
+LIB_CRYPTO_PATH := $(shell find /usr /usr/local /opt -name "libcrypto.so" 2>/dev/null | head -n 1)
 ifeq ($(DISTRO), almalinux)
+ifeq ($(CENTOSVER), 8)
 	ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl3/*" 2>/dev/null | head -n 1)
 	LIB_SSL_PATH := $(shell find /usr /usr/local /opt -name "libssl.so.3" 2>/dev/null | head -n 1)
 	LIB_CRYPTO_PATH := $(shell find /usr /usr/local /opt -name "libcrypto.so.3" 2>/dev/null | head -n 1)
-    SSL_LDIR := $(dir $(LIB_SSL_PATH))
-else
-	ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl/*" 2>/dev/null | head -n 1)
-	LIB_SSL_PATH := $(shell find /usr /usr/local /opt -name "libssl.so" 2>/dev/null | head -n 1)
-	LIB_CRYPTO_PATH := $(shell find /usr /usr/local /opt -name "libcrypto.so" 2>/dev/null | head -n 1)
-    SSL_LDIR := $(dir $(LIB_SSL_PATH))
 endif
+endif
+SSL_LDIR := $(dir $(LIB_SSL_PATH))
 
 ifneq ($(ssl_header_path),)
 	SSL_IDIR := $(shell dirname $(shell dirname $(ssl_header_path)))
     $(info Found OpenSSL headers at $(SSL_IDIR))
     $(info OpenSSL lib full path is $(LIB_SSL_PATH))
-    $(info OpenSSL libs directory is $(SSL_LDIR))	
+    $(info OpenSSL libs directory is $(SSL_LDIR))
 else
-	$(error Warning: OpenSSL headers not found. exiting, please install openssl.)
+	$(error Warning: OpenSSL headers not found. exiting, please install openssl version 3.)
 endif
 
 EV_PATH := $(DEPS_PATH)/libev/libev/
@@ -201,10 +201,11 @@ ifeq ($(UNAME_S),Linux)
 	STATICMYLIBS += -lcoredumper
 endif
 
+MYLIBS := -Wl,--export-dynamic $(STATICMYLIBS) -Wl,-Bdynamic -lgnutls -lpthread -lssl -lcrypto -lm -lz -lrt -lprometheus-cpp-pull -lprometheus-cpp-core -luuid $(EXTRALINK)
 ifeq ($(DISTRO), almalinux)
+ifeq ($(CENTOSVER), 8)
 	MYLIBS := -Wl,--export-dynamic $(STATICMYLIBS) -Wl,-Bdynamic -lgnutls -lpthread $(LIB_SSL_PATH) $(LIB_CRYPTO_PATH) -lm -lz -lrt -lprometheus-cpp-pull -lprometheus-cpp-core -luuid $(EXTRALINK)
-else
-	MYLIBS := -Wl,--export-dynamic $(STATICMYLIBS) -Wl,-Bdynamic -lgnutls -lpthread -lssl -lcrypto -lm -lz -lrt -lprometheus-cpp-pull -lprometheus-cpp-core -luuid $(EXTRALINK)
+endif
 endif
 
 ifeq ($(UNAME_S),Darwin)
