@@ -6260,7 +6260,8 @@ void PgSQL_Session::PgSQL_Result_to_PgSQL_wire(PgSQL_Connection* _conn, PgSQL_Da
 	if (query_result && query_result->get_result_packet_type() != PGSQL_QUERY_RESULT_NO_DATA) {
 		bool transfer_started = query_result->is_transfer_started();
 		// if there is an error, it will be false so results are not cached
-		bool is_tuple = query_result->get_result_packet_type() == (PGSQL_QUERY_RESULT_TUPLE | PGSQL_QUERY_RESULT_COMMAND | PGSQL_QUERY_RESULT_READY); 
+		bool is_tuple = query_result->get_result_packet_type() == ((PGSQL_QUERY_RESULT_TUPLE | PGSQL_QUERY_RESULT_COMMAND | PGSQL_QUERY_RESULT_READY) ||
+			(PGSQL_QUERY_RESULT_NOTICE | PGSQL_QUERY_RESULT_TUPLE | PGSQL_QUERY_RESULT_COMMAND | PGSQL_QUERY_RESULT_READY));
 		const uint64_t num_rows  = query_result->get_num_rows();
 		const uint64_t resultset_size = query_result->get_resultset_size();
 		const auto _affected_rows = query_result->get_affected_rows();

@@ -2877,7 +2877,7 @@ void PgSQL_Connection::unhandled_notice_cb(void* arg, const PGresult* result) {
 	assert(arg);
 	PgSQL_Connection* conn = (PgSQL_Connection*)arg;
 	proxy_error("Unhandled notice: '%s' received from backend [PID: %d] (Host: %s, Port: %d, User: %s, FD: %d, State: %d). Please report this issue for further investigation and enhancements.\n",
-		PQresultErrorMessage(result), conn->get_pg_backend_pid(), conn->get_pg_host(), conn->get_pg_port(), conn->get_pg_user(), conn->get_pg_socket_fd(), conn->async_state_machine);
+		PQresultErrorMessage(result), conn->get_pg_backend_pid(), conn->get_pg_host(), atoi(conn->get_pg_port()), conn->get_pg_user(), conn->get_pg_socket_fd(), (int)conn->async_state_machine);
 #ifdef DEBUG
 	assert(0);
 #endif
