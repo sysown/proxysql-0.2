@@ -17,12 +17,6 @@ It uses 2 valid init_connect, and 2 invalid ones that trigger PMC-10003.
 It also sets a value that causes a syntax error
 */
 
-inline unsigned long long monotonic_time() {
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return (((unsigned long long) ts.tv_sec) * 1000000) + (ts.tv_nsec / 1000);
-}
-
 int main(int argc, char** argv) {
 	CommandLine cl;
 

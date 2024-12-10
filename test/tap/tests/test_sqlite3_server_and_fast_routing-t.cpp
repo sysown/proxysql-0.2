@@ -24,12 +24,6 @@ const int ST = 5;
 
 #include "modules_server_test.h"
 
-inline unsigned long long monotonic_time() {
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return (((unsigned long long) ts.tv_sec) * 1000000) + (ts.tv_nsec / 1000);
-}
-
 int benchmark_query_rules_fast_routing(CommandLine& cl, MYSQL* proxysql_admin, MYSQL* proxysql_mysql) {
 	std::string s;
 	std::pair<std::string, int> host_port {};

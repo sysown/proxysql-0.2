@@ -19,12 +19,6 @@ This TAP test:
 - creates new connections
 */
 
-inline unsigned long long monotonic_time() {
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return (((unsigned long long) ts.tv_sec) * 1000000) + (ts.tv_nsec / 1000);
-}
-
 int main(int argc, char** argv) {
 	CommandLine cl;
 

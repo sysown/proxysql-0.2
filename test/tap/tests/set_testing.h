@@ -109,13 +109,6 @@ int readTestCasesJSON(const std::string& fileName) {
 	return 1;
 }
 
-unsigned long long monotonic_time() {
-	struct timespec ts;
-	//clock_gettime(CLOCK_MONOTONIC_COARSE, &ts); // this is faster, but not precise
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	return (((unsigned long long) ts.tv_sec) * 1000000) + (ts.tv_nsec / 1000);
-}
-
 struct cpu_timer
 {
 	cpu_timer() {

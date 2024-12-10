@@ -35,12 +35,6 @@ inline int fastrand() {
 	return (g_seed>>16)&0x7FFF;
 }
 
-inline unsigned long long monotonic_time() {
-	struct timespec ts;
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	return (((unsigned long long) ts.tv_sec) * 1000000) + (ts.tv_nsec / 1000);
-}
-
 void gen_random_str(char *s, const int len) {
 	g_seed = monotonic_time() ^ getpid() ^ pthread_self();
 	static const char alphanum[] =
