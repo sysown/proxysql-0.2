@@ -5812,10 +5812,12 @@ MySQL_Connection * MySQL_Thread::get_MyConn_local(unsigned int _hid, MySQL_Sessi
 	if (sess->client_myds->myconn->userinfo == NULL) return NULL;
 	unsigned int i;
 	std::vector<MySrvC *> parents; // this is a vector of srvers that needs to be excluded in case gtid_uuid is used
+	std::string client_iface = std::string(sess->client_myds->proxy_addr.addr) + (sess->client_myds->proxy_addr.port? (std::to_string(sess->client_myds->proxy_addr.port)) : "");
+	char * target_server_version = get_server_version((char*) client_iface.c_str());
 	MySQL_Connection *c=NULL;
 	for (i=0; i<cached_connections->len; i++) {
 		c=(MySQL_Connection *)cached_connections->index(i);
-		if (c->parent->myhgc->hid==_hid && sess->client_myds->myconn->match_tracked_options(c)) { // options are all identical
+		if (c->parent->myhgc->hid==_hid && strcmp(target_server_version, c->parent->server_version) == 0 && sess->client_myds->myconn->match_tracked_options(c)) { // options are all identical
 			if (
 				(gtid_uuid == NULL) || // gtid_uuid is not used
 				(gtid_uuid && find(parents.begin(), parents.end(), c->parent) == parents.end()) // the server is currently not excluded

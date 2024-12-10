@@ -8,7 +8,7 @@ class MyHGC;
 MySrvC::MySrvC(
 	char* add, uint16_t p, uint16_t gp, int64_t _weight, enum MySerStatus _status, unsigned int _compression,
 	int64_t _max_connections, unsigned int _max_replication_lag, int32_t _use_ssl, unsigned int _max_latency_ms,
-	char* _comment
+	char* _comment, char* _server_version
 ) {
 	address=strdup(add);
 	port=p;
@@ -38,6 +38,7 @@ MySrvC::MySrvC(
 	//charset=_charset;
 	myhgc=NULL;
 	comment=strdup(_comment);
+	server_version=strdup(_server_version);
 	ConnectionsUsed=new MySrvConnList(this);
 	ConnectionsFree=new MySrvConnList(this);
 }
@@ -139,6 +140,7 @@ void MySrvC::shun_and_killall() {
 MySrvC::~MySrvC() {
 	if (address) free(address);
 	if (comment) free(comment);
+	if (server_version) free(server_version);
 	delete ConnectionsUsed;
 	delete ConnectionsFree;
 }
