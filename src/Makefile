@@ -6,10 +6,18 @@ ifndef GIT_VERSION
     $(error GIT_VERSION is not set)
 endif
 
+UNAME_S := $(shell uname -s)
+UNAME_M := $(shell uname -m)
+
+DISTRO := $(shell grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
+
 CENTOSVER := Unknown
 ifneq (,$(wildcard /etc/system-release))
 	CENTOSVER := $(shell rpm --eval %rhel)
 endif
+
+IS_ARM := $(if $(findstring aarch64, $(UNAME_M)),true,false)
+IS_CENTOS := $(if $(findstring Unknown, $(CENTOSVER)),false,true)
 
 
 PROXYSQL_PATH := ..
@@ -81,27 +89,25 @@ CURL_PATH := $(DEPS_PATH)/curl/curl
 CURL_IDIR := $(CURL_PATH)/include
 CURL_LDIR := $(CURL_PATH)/lib/.libs
 
-DISTRO := $(shell lsb_release -si 2>/dev/null || grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
-
-ifeq ($(DISTRO), almalinux)
+ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl/*" 2>/dev/null | head -n 1)
+LIB_SSL_PATH := $(shell find /usr /usr/local /opt -name "libssl.so" 2>/dev/null | head -n 1)
+LIB_CRYPTO_PATH := $(shell find /usr /usr/local /opt -name "libcrypto.so" 2>/dev/null | head -n 1)
+ifeq ($(DISTRO),almalinux)
+ifeq ($(CENTOSVER),8)
 	ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl3/*" 2>/dev/null | head -n 1)
 	LIB_SSL_PATH := $(shell find /usr /usr/local /opt -name "libssl.so.3" 2>/dev/null | head -n 1)
 	LIB_CRYPTO_PATH := $(shell find /usr /usr/local /opt -name "libcrypto.so.3" 2>/dev/null | head -n 1)
-    SSL_LDIR := $(dir $(LIB_SSL_PATH))
-else
-	ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl/*" 2>/dev/null | head -n 1)
-	LIB_SSL_PATH := $(shell find /usr /usr/local /opt -name "libssl.so" 2>/dev/null | head -n 1)
-	LIB_CRYPTO_PATH := $(shell find /usr /usr/local /opt -name "libcrypto.so" 2>/dev/null | head -n 1)
-    SSL_LDIR := $(dir $(LIB_SSL_PATH))
 endif
+endif
+SSL_LDIR := $(dir $(LIB_SSL_PATH))
 
 ifneq ($(ssl_header_path),)
 	SSL_IDIR := $(shell dirname $(shell dirname $(ssl_header_path)))
     $(info Found OpenSSL headers at $(SSL_IDIR))
     $(info OpenSSL lib full path is $(LIB_SSL_PATH))
-    $(info OpenSSL libs directory is $(SSL_LDIR))	
+    $(info OpenSSL libs directory is $(SSL_LDIR))
 else
-	$(error Warning: OpenSSL headers not found. exiting, please install openssl.)
+	$(error Warning: OpenSSL headers not found. exiting, please install openssl version 3.)
 endif
 
 EV_PATH := $(DEPS_PATH)/libev/libev/
@@ -124,7 +130,6 @@ IDIRS := -I$(PROXYSQL_IDIR) -I$(JEMALLOC_IDIR) -I$(MARIADB_IDIR) -I$(LIBCONFIG_I
 LDIRS := -L$(PROXYSQL_LDIR) -L$(JEMALLOC_LDIR) -L$(MARIADB_LDIR) -L$(LIBCONFIG_LDIR) -L$(LIBDAEMON_LDIR) -L$(RE2_LDIR) -L$(PCRE_LDIR) -L$(MICROHTTPD_LDIR) -L$(LIBHTTPSERVER_LDIR) -L$(LIBINJECTION_LDIR) -L$(CURL_LDIR) -L$(EV_LDIR) -L$(SSL_LDIR) -L$(PROMETHEUS_LDIR) -L$(POSTGRESQL_LDIR) -L$(LIBUSUAL_LDIR) -L$(LIBSCRAM_LDIR)
 
 
-UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
 	LDIRS += -L$(COREDUMPER_LDIR)
 endif
@@ -201,10 +206,11 @@ ifeq ($(UNAME_S),Linux)
 	STATICMYLIBS += -lcoredumper
 endif
 
-ifeq ($(DISTRO), almalinux)
+MYLIBS := -Wl,--export-dynamic $(STATICMYLIBS) -Wl,-Bdynamic -lgnutls -lpthread -lssl -lcrypto -lm -lz -lrt -lprometheus-cpp-pull -lprometheus-cpp-core -luuid $(EXTRALINK)
+ifeq ($(DISTRO),almalinux)
+ifeq ($(CENTOSVER),8)
 	MYLIBS := -Wl,--export-dynamic $(STATICMYLIBS) -Wl,-Bdynamic -lgnutls -lpthread $(LIB_SSL_PATH) $(LIB_CRYPTO_PATH) -lm -lz -lrt -lprometheus-cpp-pull -lprometheus-cpp-core -luuid $(EXTRALINK)
-else
-	MYLIBS := -Wl,--export-dynamic $(STATICMYLIBS) -Wl,-Bdynamic -lgnutls -lpthread -lssl -lcrypto -lm -lz -lrt -lprometheus-cpp-pull -lprometheus-cpp-core -luuid $(EXTRALINK)
+endif
 endif
 
 ifeq ($(UNAME_S),Darwin)
