@@ -1421,7 +1421,7 @@ unsigned int PgSQL_Protocol::copy_row_description_to_PgSQL_Query_Result(bool sen
 //	if (dump_pkt) { __dump_pkt(__func__, _ptr, size); }
 //#endif
 
-	pg_query_result->resultset_size = size;
+	pg_query_result->resultset_size += size;
 
 	if (alloced_new_buffer) {
 		// we created new buffer
@@ -1843,7 +1843,7 @@ unsigned int PgSQL_Protocol::copy_out_response_start_to_PgSQL_Query_Result(bool 
 	//	if (dump_pkt) { __dump_pkt(__func__, _ptr, size); }
 	//#endif
 
-	pg_query_result->resultset_size = size;
+	pg_query_result->resultset_size += size;
 
 	if (alloced_new_buffer) {
 		// we created new buffer
