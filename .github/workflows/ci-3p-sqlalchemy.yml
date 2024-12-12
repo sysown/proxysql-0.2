@@ -179,6 +179,7 @@ jobs:
   summarize:
     runs-on: ubuntu-22.04
     needs: [ test ]
+    continue-on-error: true
     if: ${{ !cancelled() }}
     steps:
       - name: Collect summary
