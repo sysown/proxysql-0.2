@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
 	if(cl.getEnv())
 		return exit_status();
 
-	plan(5);
+	plan(8);
 
 	// ProxySQL connection without compression
 	proxysql = initilize_mysql_connection(cl.host, cl.username, cl.password, cl.port, false);
@@ -144,12 +144,21 @@ int main(int argc, char** argv) {
 		goto cleanup;
 	}
 
-	diff = abs(time_mysql_compressed - time_proxy_compressed);
+	diff = time_proxy_compressed - time_mysql_compressed;
 	performance_diff = (diff * 100) / time_mysql_compressed;
 
 	ok((performance_diff < 20), "proxysql with compression performed well compared to mysql with compression. Performance difference: %d percentage", performance_diff);
 
 	ret = get_variable_value(proxysql_admin, "mysql-protocol_compression_level", compression_level, true);
+	if (ret == EXIT_SUCCESS) {
+		ok(compression_level == "3", "Run-time default compression level is correct: %s", compression_level.c_str());
+	}
+	else {
+		diag("Failed to get the default compression level.");
+		goto cleanup;
+	}
+
+	ret = get_variable_value(proxysql_admin, "mysql-protocol_compression_level", compression_level);
 	if (ret == EXIT_SUCCESS) {
 		ok(compression_level == "3", "Default compression level is correct: %s", compression_level.c_str());
 	}
@@ -164,6 +173,15 @@ int main(int argc, char** argv) {
 		goto cleanup;
 	}
 	ret = get_variable_value(proxysql_admin, "mysql-protocol_compression_level", compression_level, true);
+	if (ret == EXIT_SUCCESS) {
+		ok(compression_level == "8", "Run-time Compression level is set correctly: %s", compression_level.c_str());
+	}
+	else {
+		diag("Failed to set the Compression level is set correctly:");
+		goto cleanup;
+	}
+
+	ret = get_variable_value(proxysql_admin, "mysql-protocol_compression_level", compression_level);
 	if (ret == EXIT_SUCCESS) {
 		ok(compression_level == "8", "Compression level is set correctly: %s", compression_level.c_str());
 	}
@@ -184,6 +202,15 @@ int main(int argc, char** argv) {
 		goto cleanup;
 	}	
 	ret = get_variable_value(proxysql_admin, "mysql-protocol_compression_level", compression_level, true);
+	if (ret == EXIT_SUCCESS) {
+		ok(compression_level == "3", "Run-time Compression level set correctly: %s", compression_level.c_str());
+	}
+	else {
+		diag("Failed to set the Compression level set correctly:");
+		goto cleanup;
+	}
+
+	ret = get_variable_value(proxysql_admin, "mysql-protocol_compression_level", compression_level);
 	if (ret == EXIT_SUCCESS) {
 		ok(compression_level == "3", "Compression level set correctly: %s", compression_level.c_str());
 	}
