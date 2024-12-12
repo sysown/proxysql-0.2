@@ -3870,7 +3870,7 @@ void MySQL_Thread::ProcessAllSessions_Healthy0(MySQL_Session *sess, unsigned int
 	char _buf[1024];
 	if (sess->client_myds) {
 		if (mysql_thread___log_unhealthy_connections) {
-			if (sess->session_fast_forward == false) {
+			if (sess->session_fast_forward == SESSION_FORWARD_TYPE_NONE) {
 				proxy_warning(
 					"Closing unhealthy client connection %s:%d\n", sess->client_myds->addr.addr,
 					sess->client_myds->addr.port

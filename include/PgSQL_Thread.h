@@ -118,6 +118,25 @@ enum PgSQL_Thread_status_variable {
 	PG_st_var_END = 42 // to avoid ASAN complaining. TO FIX
 };
 
+
+struct CopyCmdMatcher {
+	re2::RE2::Options options;
+	re2::RE2 pattern;
+
+	CopyCmdMatcher() : 
+		options(RE2::Quiet), 
+		pattern(
+			R"(((?is)(?:--.*?$|/\*[\s\S]*?\*/|\s)*\bCOPY\b\s+[^;]*?\bFROM\b\s+STDIN\b(?:\s+WITH\s*\([^)]*\))?))",
+			options) {
+		//((?is)(?:--.*?$|/\*[\s\S]*?\*/|\s)*\bCOPY\b\s+[^;]*?\bFROM\b\s+STDIN\b(?:\s+WITH\s*\([^)]*\))?)
+	}
+
+	inline
+	bool match(const char* query, re2::StringPiece* matched = nullptr) const {
+		return re2::RE2::PartialMatch(query, pattern, matched);
+	}
+};
+
 class __attribute__((aligned(64))) PgSQL_Thread : public Base_Thread
 {
 private:
@@ -196,7 +215,7 @@ public:
 #ifdef IDLE_THREADS
 	PtrArray* idle_mysql_sessions;
 	PtrArray* resume_mysql_sessions;
-
+	CopyCmdMatcher *copy_cmd_matcher;
 	pgsql_conn_exchange_t myexchange;
 #endif // IDLE_THREADS
 

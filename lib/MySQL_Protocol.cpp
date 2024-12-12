@@ -249,7 +249,7 @@ bool MySQL_Protocol::generate_pkt_ERR(bool send, void **ptr, unsigned int *len, 
 			case STATE_OK:
 				break;
 			case STATE_SLEEP:
-				if ((*myds)->sess->session_fast_forward==true) { // see issue #733
+				if ((*myds)->sess->session_fast_forward) { // see issue #733
 					break;
 				}
 			default:
@@ -1831,9 +1831,9 @@ void MySQL_Protocol::PPHR_5passwordTrue(
 #endif
 	(*myds)->sess->schema_locked = attr1.schema_locked;
 	(*myds)->sess->transaction_persistent = attr1.transaction_persistent;
-	(*myds)->sess->session_fast_forward=false; // default
+	(*myds)->sess->session_fast_forward=SESSION_FORWARD_TYPE_NONE; // default
 	if ((*myds)->sess->session_type == PROXYSQL_SESSION_MYSQL) {
-		(*myds)->sess->session_fast_forward = attr1.fast_forward;
+		(*myds)->sess->session_fast_forward = attr1.fast_forward ? SESSION_FORWARD_TYPE_PERMANENT : SESSION_FORWARD_TYPE_NONE;
 	}
 	(*myds)->sess->user_max_connections = attr1.max_connections;
 }
@@ -1852,7 +1852,7 @@ void MySQL_Protocol::PPHR_5passwordFalse_0(
 			(*myds)->sess->default_schema=strdup((char *)"main"); // just the pointer is passed
 			(*myds)->sess->schema_locked=false;
 			(*myds)->sess->transaction_persistent=false;
-			(*myds)->sess->session_fast_forward=false;
+			(*myds)->sess->session_fast_forward=SESSION_FORWARD_TYPE_NONE;
 			(*myds)->sess->user_max_connections=0;
 			vars1.password=l_strdup(mysql_thread___monitor_password);
 			ret=true;
@@ -1903,7 +1903,7 @@ void MySQL_Protocol::PPHR_5passwordFalse_auth2(
 #endif
 			(*myds)->sess->schema_locked=attr1.schema_locked;
 			(*myds)->sess->transaction_persistent=attr1.transaction_persistent;
-			(*myds)->sess->session_fast_forward=attr1.fast_forward;
+			(*myds)->sess->session_fast_forward=attr1.fast_forward ? SESSION_FORWARD_TYPE_PERMANENT : SESSION_FORWARD_TYPE_NONE;
 			(*myds)->sess->user_max_connections=attr1.max_connections;
 			if (strcmp(vars1.password, (char *) vars1.pass) == 0) {
 				if (backend_username) {
@@ -1928,7 +1928,7 @@ void MySQL_Protocol::PPHR_5passwordFalse_auth2(
 #endif
 						(*myds)->sess->schema_locked=attr1.schema_locked;
 						(*myds)->sess->transaction_persistent=attr1.transaction_persistent;
-						(*myds)->sess->session_fast_forward=attr1.fast_forward;
+						(*myds)->sess->session_fast_forward=attr1.fast_forward ? SESSION_FORWARD_TYPE_PERMANENT : SESSION_FORWARD_TYPE_NONE;
 						(*myds)->sess->user_max_connections=attr1.max_connections;
 						char *tmp_user=strdup((const char *)acct.username);
 						userinfo->set(backend_username, NULL, NULL, NULL);

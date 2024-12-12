@@ -334,7 +334,7 @@ pcre/pcre/.libs/libpcre.a:
 
 pcre: pcre/pcre/.libs/libpcre.a
 
-postgresql/postgresql/src/interfaces/libpq/libpq.a :
+postgresql/postgresql/src/interfaces/libpq/libpq.a:
 	cd postgresql && rm -rf postgresql-*/ || true
 	cd postgresql && tar -zxf postgresql-*.tar.gz
 	cd postgresql/postgresql && patch -p0 < ../get_result_from_pgconn.patch

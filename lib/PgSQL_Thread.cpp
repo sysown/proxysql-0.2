@@ -2796,6 +2796,12 @@ PgSQL_Thread::~PgSQL_Thread() {
 		free(match_regexes);
 		match_regexes = NULL;
 	}
+
+	if (copy_cmd_matcher) {
+		delete copy_cmd_matcher;
+		copy_cmd_matcher = NULL;
+	}
+
 	if (thr_SetParser != NULL) {
 		delete thr_SetParser;
 		thr_SetParser = NULL;
@@ -2849,6 +2855,8 @@ bool PgSQL_Thread::init() {
 
 	match_regexes[2] = new Session_Regex((char*)"^SET(?: +)(|SESSION +)TRANSACTION(?: +)(?:(?:(ISOLATION(?: +)LEVEL)(?: +)(REPEATABLE(?: +)READ|READ(?: +)COMMITTED|READ(?: +)UNCOMMITTED|SERIALIZABLE))|(?:(READ)(?: +)(WRITE|ONLY)))");
 	match_regexes[3] = new Session_Regex((char*)"^(set)(?: +)((charset)|(character +set))(?: )");
+
+	copy_cmd_matcher = new CopyCmdMatcher();
 
 	return true;
 }
@@ -3679,7 +3687,7 @@ void PgSQL_Thread::process_all_sessions() {
 			char _buf[1024];
 			if (sess->client_myds) {
 				if (pgsql_thread___log_unhealthy_connections) {
-					if (sess->session_fast_forward == false) {
+					if (sess->session_fast_forward == SESSION_FORWARD_TYPE_NONE) {
 						proxy_warning(
 							"Closing unhealthy client connection %s:%d\n", sess->client_myds->addr.addr,
 							sess->client_myds->addr.port
@@ -3687,8 +3695,8 @@ void PgSQL_Thread::process_all_sessions() {
 					}
 					else {
 						proxy_warning(
-							"Closing 'fast_forward' client connection %s:%d\n", sess->client_myds->addr.addr,
-							sess->client_myds->addr.port
+							"Closing 'fast_forward' client connection %s:%d (Session Type:0x%02X)\n", sess->client_myds->addr.addr,
+							sess->client_myds->addr.port, sess->session_fast_forward
 						);
 					}
 				}
@@ -4038,6 +4046,7 @@ PgSQL_Thread::PgSQL_Thread() {
 		status_variables.stvar[i] = 0;
 	}
 	match_regexes = NULL;
+	copy_cmd_matcher = NULL;
 
 	variables.min_num_servers_lantency_awareness = 1000;
 	variables.aurora_max_lag_ms_only_read_from_replicas = 2;

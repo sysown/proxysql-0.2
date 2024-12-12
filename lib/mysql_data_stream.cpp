@@ -1555,7 +1555,7 @@ void MySQL_Data_Stream::reset_connection() {
 			return_MySQL_Connection_To_Pool();
 		}
 		else {
-			if (sess && sess->session_fast_forward == false) {
+			if (sess && sess->session_fast_forward == SESSION_FORWARD_TYPE_NONE) {
 				destroy_MySQL_Connection_From_Pool(true);
 			}
 			else {

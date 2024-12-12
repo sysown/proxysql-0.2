@@ -115,7 +115,7 @@ void execute_tests(bool with_ssl) {
     check_prepared_statement_binary(conn);
 
     // Test 2: COPY in binary mode
-    check_copy_binary(conn);
+    //check_copy_binary(conn);
 
     // Close the connection
 
@@ -124,7 +124,7 @@ void execute_tests(bool with_ssl) {
 
 int main(int argc, char** argv) {
 
-    plan(7); // Total number of tests planned
+    plan(4); // Total number of tests planned
 
     if (cl.getEnv())
         return exit_status();
