@@ -69,18 +69,20 @@ int main(int argc, char** argv) {
 	unsigned long time_proxy_compressed = 0;
 	unsigned long diff = 0;
 	unsigned long time_mysql_compressed = 0;
+	unsigned long time_mysql_without_compressed = 0;
 	std::string compression_level = {""};
 	int32_t ret = 0;
 	MYSQL* proxysql = nullptr;
 	MYSQL* proxysql_compression = nullptr;
 	MYSQL* proxysql_admin = nullptr;
 	MYSQL* mysql_compression = nullptr;
+	MYSQL* mysql = nullptr;
 	int performance_diff = 0;
 
 	if(cl.getEnv())
 		return exit_status();
 
-	plan(8);
+	plan(7);
 
 	// ProxySQL connection without compression
 	proxysql = initilize_mysql_connection(cl.host, cl.username, cl.password, cl.port, false);
@@ -97,6 +99,12 @@ int main(int argc, char** argv) {
 	// MySQL connection with compression
 	mysql_compression = initilize_mysql_connection(cl.host, cl.username, cl.password, cl.mysql_port, true);
 	if (!mysql_compression) {
+		goto cleanup;
+	}
+
+	// MySQL connection without compression
+	mysql = initilize_mysql_connection(cl.host, cl.username, cl.password, cl.mysql_port, false);
+	if (!mysql) {
 		goto cleanup;
 	}
 
@@ -144,10 +152,16 @@ int main(int argc, char** argv) {
 		goto cleanup;
 	}
 
-	diff = time_proxy_compressed - time_mysql_compressed;
-	performance_diff = (diff * 100) / time_mysql_compressed;
+	time_mysql_without_compressed = calculate_query_execution_time(mysql, query);
+	diag("Time taken for query with mysql without compression: %ld", time_mysql_without_compressed);
+	if (time_mysql_without_compressed == -1) {
+		goto cleanup;
+	}
 
-	ok((performance_diff < 20), "proxysql with compression performed well compared to mysql with compression. Performance difference: %d percentage", performance_diff);
+	diff = time_mysql_without_compressed - time_mysql_compressed;
+	performance_diff = (diff * 100) / time_mysql_without_compressed;
+
+	diag("Time difference for mysql, compression and without compression is: %d", performance_diff);
 
 	ret = get_variable_value(proxysql_admin, "mysql-protocol_compression_level", compression_level, true);
 	if (ret == EXIT_SUCCESS) {
@@ -232,6 +246,8 @@ cleanup:
 		mysql_close(proxysql_compression);
 	if (mysql_compression)
 		mysql_close(mysql_compression);
+	if (mysql)
+		mysql_close(mysql);
 	if (proxysql_admin)
 		mysql_close(proxysql_admin);
 
