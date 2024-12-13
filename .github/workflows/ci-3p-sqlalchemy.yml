@@ -122,8 +122,9 @@ jobs:
         
         GHUSER="$(id -u):$(id -g)"
         sudo chown -R ${GHUSER} ./logs
-        #FAILS=$(cat logs/*run-tests.log | grep -oP '^=+ \d+ failed, ' | awk '{ print $2 }')
-        FAILS=$(cat logs/*_summary.log | grep -oP '(?<=^FAIL: )\d+')
+        #FAILS=$(cat ./logs/*run-tests.log | grep -oP '^=+ \d+ failed, ' | awk '{ print $2 }')
+        cat ./logs/*_summary.log
+        FAILS=$(cat ./logs/*_summary.log | grep -oP '(?<=^FAIL: )\d+')
         STATUS='PASS'
         RC=0
         if [[ -z ${FAILS} ]]; then
