@@ -967,14 +967,14 @@ bool MySQL_Protocol::generate_pkt_auth_switch_request(bool send, void **ptr, uns
 
 bool MySQL_Protocol::generate_pkt_initial_handshake(bool send, void **ptr, unsigned int *len, uint32_t *_thread_id, bool deprecate_eof_active) {
 	int use_plugin_id = mysql_thread___default_authentication_plugin_int;
-	std::string iface = std::string((*myds)->proxy_addr.addr) + ((*myds)->proxy_addr.port ? (":" + std::to_string((*myds)->proxy_addr.port)) : "");
-	char* server_version = GloMTH->mth_get_server_version((char*)iface.c_str());
+	//std::string iface = std::string((*myds)->proxy_addr.addr) + ((*myds)->proxy_addr.port ? (":" + std::to_string((*myds)->proxy_addr.port)) : "");
+	//char* server_version = GloMTH->mth_get_server_version((char*)iface.c_str());
   proxy_debug(PROXY_DEBUG_MYSQL_CONNECTION, 7, "Generating handshake pkt\n");
 	assert(use_plugin_id == 0 || use_plugin_id == 2 ); // mysql_native_password or caching_sha2_password
   mysql_hdr myhdr;
   myhdr.pkt_id=0;
   myhdr.pkt_length=sizeof(protocol_version)
-    + (server_version ? strlen(server_version)+1 : strlen(mysql_thread___server_version)+1)
+    + strlen(mysql_thread___server_version)+1//+ (server_version ? strlen(server_version)+1 : strlen(mysql_thread___server_version)+1)
     + sizeof(uint32_t)  // thread_id
     + 8  // scramble1
     + 1  // 0x00
@@ -1012,11 +1012,11 @@ bool MySQL_Protocol::generate_pkt_initial_handshake(bool send, void **ptr, unsig
   rand_st.seed2=rand()%rand_st.max_value;
 
   memcpy(_ptr+l, &protocol_version, sizeof(protocol_version)); l+=sizeof(protocol_version);
-  if (server_version){
-	memcpy(_ptr+l, server_version, strlen(server_version)); l+=strlen(server_version)+1;
-  } else {
+  //if (server_version){
+	//memcpy(_ptr+l, server_version, strlen(server_version)); l+=strlen(server_version)+1;
+  //} else {
   	memcpy(_ptr+l, mysql_thread___server_version, strlen(mysql_thread___server_version)); l+=strlen(mysql_thread___server_version)+1;
-  }
+  //}
   memcpy(_ptr+l, &thread_id, sizeof(uint32_t)); l+=sizeof(uint32_t);
 //#ifdef MARIADB_BASE_VERSION
 //  proxy_create_random_string(myds->myconn->myconn.scramble_buff+0,8,(struct my_rnd_struct *)&rand_st);

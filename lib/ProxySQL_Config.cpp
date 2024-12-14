@@ -1023,7 +1023,7 @@ int ProxySQL_Config::Read_MySQL_Servers_from_configfile() {
 		const Setting &mysql_servers = root["mysql_servers"];
 		int count = mysql_servers.getLength();
 		//fprintf(stderr, "Found %d servers\n",count);
-		char *q=(char *)"INSERT OR REPLACE INTO mysql_servers (hostname, port, gtid_port, hostgroup_id, compression, weight, status, max_connections, max_replication_lag, use_ssl, max_latency_ms, comment) VALUES (\"%s\", %d, %d, %d, %d, %d, \"%s\", %d, %d, %d, %d, '%s')";
+		char *q=(char *)"INSERT OR REPLACE INTO mysql_servers (hostname, port, gtid_port, hostgroup_id, compression, weight, status, max_connections, max_replication_lag, use_ssl, max_latency_ms, comment, server_version) VALUES (\"%s\", %d, %d, %d, %d, %d, \"%s\", %d, %d, %d, %d, '%s', '%s')";
 		for (i=0; i< count; i++) {
 			const Setting &server = mysql_servers[i];
 			std::string address;
@@ -1038,6 +1038,7 @@ int ProxySQL_Config::Read_MySQL_Servers_from_configfile() {
 			int use_ssl=0;
 			int max_latency_ms=0;
 			std::string comment="";
+			std::string server_version="";
 			if (server.lookupValue("address", address)==false) {
 				if (server.lookupValue("hostname", address)==false) {
 					proxy_error("Admin: detected a mysql_servers in config file without a mandatory hostname\n");
@@ -1070,12 +1071,17 @@ int ProxySQL_Config::Read_MySQL_Servers_from_configfile() {
 			server.lookupValue("comment", comment);
 			char *o1=strdup(comment.c_str());
 			char *o=escape_string_single_quotes(o1, false);
-			char *query=(char *)malloc(strlen(q)+strlen(status.c_str())+strlen(address.c_str())+strlen(o)+128);
-			sprintf(query,q, address.c_str(), port, gtid_port, hostgroup, compression, weight, status.c_str(), max_connections, max_replication_lag, use_ssl, max_latency_ms, o);
+			server.lookupValue("server_version", server_version);
+			char *sv=strdup(server_version.c_str());
+			char *esc_sv=escape_string_single_quotes(sv, false);
+			char *query=(char *)malloc(strlen(q)+strlen(status.c_str())+strlen(address.c_str())+strlen(o)+strlen(esc_sv)+256);
+			sprintf(query,q, address.c_str(), port, gtid_port, hostgroup, compression, weight, status.c_str(), max_connections, max_replication_lag, use_ssl, max_latency_ms, o, esc_sv);
 			//fprintf(stderr, "%s\n", query);
 			admindb->execute(query);
 			if (o!=o1) free(o);
 			free(o1);
+			if (sv!=esc_sv) free(sv);
+			free(esc_sv);
 			free(query);
 			rows++;
 		}

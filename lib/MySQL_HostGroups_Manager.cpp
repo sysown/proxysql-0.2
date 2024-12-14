@@ -1313,7 +1313,7 @@ bool MySQL_HostGroups_Manager::commit(
 	mydb->execute("INSERT OR IGNORE INTO mysql_servers(hostgroup_id, hostname, port, gtid_port, weight, status, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, comment, server_version) SELECT hostgroup_id, hostname, port, gtid_port, weight, status, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, comment, server_version FROM mysql_servers_incoming");
 
 	// SELECT FROM mysql_servers whatever is not identical in mysql_servers_incoming, or where mem_pointer=0 (where there is no pointer yet)
-	query=(char *)"SELECT t1.*, t2.gtid_port, t2.weight, t2.status, t2.compression, t2.max_connections, t2.max_replication_lag, t2.use_ssl, t2.max_latency_ms, t2.comment FROM mysql_servers t1 JOIN mysql_servers_incoming t2 ON (t1.hostgroup_id=t2.hostgroup_id AND t1.hostname=t2.hostname AND t1.port=t2.port AND t1.server_version=t2.server_version) WHERE mem_pointer=0 OR t1.gtid_port<>t2.gtid_port OR t1.weight<>t2.weight OR t1.status<>t2.status OR t1.compression<>t2.compression OR t1.max_connections<>t2.max_connections OR t1.max_replication_lag<>t2.max_replication_lag OR t1.use_ssl<>t2.use_ssl OR t1.max_latency_ms<>t2.max_latency_ms or t1.comment<>t2.comment";
+	query=(char *)"SELECT t1.*, t2.gtid_port, t2.weight, t2.status, t2.compression, t2.max_connections, t2.max_replication_lag, t2.use_ssl, t2.max_latency_ms, t2.comment, t2.server_version FROM mysql_servers t1 JOIN mysql_servers_incoming t2 ON (t1.hostgroup_id=t2.hostgroup_id AND t1.hostname=t2.hostname AND t1.port=t2.port AND t1.server_version=t2.server_version) WHERE mem_pointer=0 OR t1.gtid_port<>t2.gtid_port OR t1.weight<>t2.weight OR t1.status<>t2.status OR t1.compression<>t2.compression OR t1.max_connections<>t2.max_connections OR t1.max_replication_lag<>t2.max_replication_lag OR t1.use_ssl<>t2.use_ssl OR t1.max_latency_ms<>t2.max_latency_ms or t1.comment<>t2.comment";
 	proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 4, "%s\n", query);
 	mydb->execute_statement(query, &error , &cols , &affected_rows , &resultset);
 	if (error) {
@@ -1333,14 +1333,14 @@ bool MySQL_HostGroups_Manager::commit(
 		//rc=(*proxy_sqlite3_prepare_v2)(mydb3, query1, -1, &statement1, 0);
 		rc = mydb->prepare_v2(query1, &statement1);
 		ASSERT_SQLITE_OK(rc, mydb);
-		char *query2=(char *)"UPDATE mysql_servers SET weight = ?1 , status = ?2 , compression = ?3 , max_connections = ?4 , max_replication_lag = ?5 , use_ssl = ?6 , max_latency_ms = ?7 , comment = ?8 , gtid_port = ?9 WHERE hostgroup_id = ?10 AND hostname = ?11 AND port = ?12 AND server_version = ?13";
+		char *query2=(char *)"UPDATE mysql_servers SET weight = ?1 , status = ?2 , compression = ?3 , max_connections = ?4 , max_replication_lag = ?5 , use_ssl = ?6 , max_latency_ms = ?7 , comment = ?8 , gtid_port = ?9, server_version = ?10 WHERE hostgroup_id = ?11 AND hostname = ?12 AND port = ?13";
 		//rc=(*proxy_sqlite3_prepare_v2)(mydb3, query2, -1, &statement2, 0);
 		rc = mydb->prepare_v2(query2, &statement2);
 		ASSERT_SQLITE_OK(rc, mydb);
 
 		for (std::vector<SQLite3_row *>::iterator it = resultset->rows.begin() ; it != resultset->rows.end(); ++it) {
 			SQLite3_row *r=*it;
-			long long ptr=atoll(r->fields[13]); // increase this index every time a new column is added
+			long long ptr=atoll(r->fields[12]); // increase this index every time a new column is added
 			proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 5, "Server %s:%d , weight=%d, status=%d, mem_pointer=%llu, hostgroup=%d, compression=%d\n", r->fields[1], atoi(r->fields[2]), atoi(r->fields[4]), atoi(r->fields[5]), ptr, atoi(r->fields[0]), atoi(r->fields[6]));
 			//fprintf(stderr,"%lld\n", ptr);
 			if (ptr==0) {
@@ -1367,24 +1367,25 @@ bool MySQL_HostGroups_Manager::commit(
 				bool run_update=false;
 				MySrvC *mysrvc=(MySrvC *)ptr;
 				// carefully increase the 2nd index by 1 for every new column added
-				if (atoi(r->fields[3])!=atoi(r->fields[13])) {
+				// we compare every filed of mysql_server with mysql_server incoming, starting with gtid_port(r->fields[3])
+				if (atoi(r->fields[3])!=atoi(r->fields[14])) {
 					if (GloMTH->variables.hostgroup_manager_verbose)
-						proxy_info("Changing gtid_port for server %u:%s:%d (%s:%d) from %d (%d) to %d\n" , mysrvc->myhgc->hid , mysrvc->address, mysrvc->port, r->fields[1], atoi(r->fields[2]), atoi(r->fields[3]) , mysrvc->gtid_port , atoi(r->fields[13]));
-					mysrvc->gtid_port=atoi(r->fields[13]);
+						proxy_info("Changing gtid_port for server %u:%s:%d (%s:%d) from %d (%d) to %d\n" , mysrvc->myhgc->hid , mysrvc->address, mysrvc->port, r->fields[1], atoi(r->fields[2]), atoi(r->fields[3]) , mysrvc->gtid_port , atoi(r->fields[14]));
+					mysrvc->gtid_port=atoi(r->fields[14]);
 				}
 
-				if (atoi(r->fields[4])!=atoi(r->fields[14])) {
+				if (atoi(r->fields[4])!=atoi(r->fields[15])) {
 					if (GloMTH->variables.hostgroup_manager_verbose)
-						proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 5, "Changing weight for server %d:%s:%d (%s:%d) from %d (%ld) to %d\n" , mysrvc->myhgc->hid , mysrvc->address, mysrvc->port, r->fields[1], atoi(r->fields[2]), atoi(r->fields[4]) , mysrvc->weight , atoi(r->fields[14]));
-					mysrvc->weight=atoi(r->fields[14]);
+						proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 5, "Changing weight for server %d:%s:%d (%s:%d) from %d (%ld) to %d\n" , mysrvc->myhgc->hid , mysrvc->address, mysrvc->port, r->fields[1], atoi(r->fields[2]), atoi(r->fields[4]) , mysrvc->weight , atoi(r->fields[15]));
+					mysrvc->weight=atoi(r->fields[15]);
 				}
-				if (atoi(r->fields[5])!=atoi(r->fields[15])) {
+				if (atoi(r->fields[5])!=atoi(r->fields[16])) {
 					bool change_server_status = true;
 					if (GloMTH->variables.evaluate_replication_lag_on_servers_load == 1) {
 						if (mysrvc->get_status() == MYSQL_SERVER_STATUS_SHUNNED_REPLICATION_LAG && // currently server is shunned due to replication lag
-							(MySerStatus)atoi(r->fields[15]) == MYSQL_SERVER_STATUS_ONLINE) { // new server status is online
+							(MySerStatus)atoi(r->fields[16]) == MYSQL_SERVER_STATUS_ONLINE) { // new server status is online
 							if (mysrvc->cur_replication_lag != -2) { // Master server? Seconds_Behind_Master column is not present
-								const unsigned int new_max_repl_lag = atoi(r->fields[18]);
+								const unsigned int new_max_repl_lag = atoi(r->fields[19]);
 								if (mysrvc->cur_replication_lag < 0 ||
 									(new_max_repl_lag > 0 &&
 									((unsigned int)mysrvc->cur_replication_lag > new_max_repl_lag))) { // we check if current replication lag is greater than new max_replication_lag
@@ -1395,27 +1396,27 @@ bool MySQL_HostGroups_Manager::commit(
 					}
 					if (change_server_status == true) {
 						if (GloMTH->variables.hostgroup_manager_verbose)
-							proxy_info("Changing status for server %d:%s:%d (%s:%d) from %d (%d) to %d\n", mysrvc->myhgc->hid, mysrvc->address, mysrvc->port, r->fields[1], atoi(r->fields[2]), atoi(r->fields[5]), (int)mysrvc->get_status(), atoi(r->fields[15]));
-						mysrvc->set_status((MySerStatus)atoi(r->fields[15]));
+							proxy_info("Changing status for server %d:%s:%d (%s:%d) from %d (%d) to %d\n", mysrvc->myhgc->hid, mysrvc->address, mysrvc->port, r->fields[1], atoi(r->fields[2]), atoi(r->fields[5]), (int)mysrvc->get_status(), atoi(r->fields[16]));
+						mysrvc->set_status((MySerStatus)atoi(r->fields[16]));
 					}
 					if (mysrvc->get_status() == MYSQL_SERVER_STATUS_SHUNNED) {
 						mysrvc->shunned_automatic=false;
 					}
 				}
-				if (atoi(r->fields[6])!=atoi(r->fields[16])) {
+				if (atoi(r->fields[6])!=atoi(r->fields[17])) {
 					if (GloMTH->variables.hostgroup_manager_verbose)
-						proxy_info("Changing compression for server %d:%s:%d (%s:%d) from %d (%d) to %d\n" , mysrvc->myhgc->hid , mysrvc->address, mysrvc->port, r->fields[1], atoi(r->fields[2]), atoi(r->fields[6]) , mysrvc->compression , atoi(r->fields[16]));
-					mysrvc->compression=atoi(r->fields[16]);
+						proxy_info("Changing compression for server %d:%s:%d (%s:%d) from %d (%d) to %d\n" , mysrvc->myhgc->hid , mysrvc->address, mysrvc->port, r->fields[1], atoi(r->fields[2]), atoi(r->fields[6]) , mysrvc->compression , atoi(r->fields[17]));
+					mysrvc->compression=atoi(r->fields[17]);
 				}
-				if (atoi(r->fields[7])!=atoi(r->fields[17])) {
+				if (atoi(r->fields[7])!=atoi(r->fields[18])) {
 					if (GloMTH->variables.hostgroup_manager_verbose)
-					proxy_info("Changing max_connections for server %d:%s:%d (%s:%d) from %d (%ld) to %d\n" , mysrvc->myhgc->hid , mysrvc->address, mysrvc->port, r->fields[1], atoi(r->fields[2]), atoi(r->fields[7]) , mysrvc->max_connections , atoi(r->fields[17]));
-					mysrvc->max_connections=atoi(r->fields[17]);
+					proxy_info("Changing max_connections for server %d:%s:%d (%s:%d) from %d (%ld) to %d\n" , mysrvc->myhgc->hid , mysrvc->address, mysrvc->port, r->fields[1], atoi(r->fields[2]), atoi(r->fields[7]) , mysrvc->max_connections , atoi(r->fields[18]));
+					mysrvc->max_connections=atoi(r->fields[18]);
 				}
-				if (atoi(r->fields[8])!=atoi(r->fields[18])) {
+				if (atoi(r->fields[8])!=atoi(r->fields[19])) {
 					if (GloMTH->variables.hostgroup_manager_verbose)
-						proxy_info("Changing max_replication_lag for server %u:%s:%d (%s:%d) from %d (%d) to %d\n" , mysrvc->myhgc->hid , mysrvc->address, mysrvc->port, r->fields[1], atoi(r->fields[2]), atoi(r->fields[8]) , mysrvc->max_replication_lag , atoi(r->fields[18]));
-					mysrvc->max_replication_lag=atoi(r->fields[18]);
+						proxy_info("Changing max_replication_lag for server %u:%s:%d (%s:%d) from %d (%d) to %d\n" , mysrvc->myhgc->hid , mysrvc->address, mysrvc->port, r->fields[1], atoi(r->fields[2]), atoi(r->fields[8]) , mysrvc->max_replication_lag , atoi(r->fields[19]));
+					mysrvc->max_replication_lag=atoi(r->fields[19]);
 					if (mysrvc->max_replication_lag == 0) { // we just changed it to 0
 						if (mysrvc->get_status() == MYSQL_SERVER_STATUS_SHUNNED_REPLICATION_LAG) {
 							// the server is currently shunned due to replication lag
@@ -1425,21 +1426,27 @@ bool MySQL_HostGroups_Manager::commit(
 						}
 					}
 				}
-				if (atoi(r->fields[9])!=atoi(r->fields[19])) {
+				if (atoi(r->fields[9])!=atoi(r->fields[20])) {
 					if (GloMTH->variables.hostgroup_manager_verbose)
-						proxy_info("Changing use_ssl for server %d:%s:%d (%s:%d) from %d (%d) to %d\n" , mysrvc->myhgc->hid , mysrvc->address, mysrvc->port, r->fields[1], atoi(r->fields[2]), atoi(r->fields[9]) , mysrvc->use_ssl , atoi(r->fields[19]));
-					mysrvc->use_ssl=atoi(r->fields[19]);
+						proxy_info("Changing use_ssl for server %d:%s:%d (%s:%d) from %d (%d) to %d\n" , mysrvc->myhgc->hid , mysrvc->address, mysrvc->port, r->fields[1], atoi(r->fields[2]), atoi(r->fields[9]) , mysrvc->use_ssl , atoi(r->fields[20]));
+					mysrvc->use_ssl=atoi(r->fields[20]);
 				}
-				if (atoi(r->fields[10])!=atoi(r->fields[20])) {
+				if (atoi(r->fields[10])!=atoi(r->fields[21])) {
 					if (GloMTH->variables.hostgroup_manager_verbose)
-						proxy_info("Changing max_latency_ms for server %d:%s:%d (%s:%d) from %d (%d) to %d\n" , mysrvc->myhgc->hid , mysrvc->address, mysrvc->port, r->fields[1], atoi(r->fields[2]), atoi(r->fields[10]) , mysrvc->max_latency_us/1000 , atoi(r->fields[20]));
-					mysrvc->max_latency_us=1000*atoi(r->fields[20]);
+						proxy_info("Changing max_latency_ms for server %d:%s:%d (%s:%d) from %d (%d) to %d\n" , mysrvc->myhgc->hid , mysrvc->address, mysrvc->port, r->fields[1], atoi(r->fields[2]), atoi(r->fields[10]) , mysrvc->max_latency_us/1000 , atoi(r->fields[21]));
+					mysrvc->max_latency_us=1000*atoi(r->fields[21]);
 				}
-				if (strcmp(r->fields[11],r->fields[21])) {
+				if (strcmp(r->fields[11],r->fields[22])) {
 					if (GloMTH->variables.hostgroup_manager_verbose)
-						proxy_info("Changing comment for server %d:%s:%d (%s:%d) from '%s' to '%s'\n" , mysrvc->myhgc->hid , mysrvc->address, mysrvc->port, r->fields[1], atoi(r->fields[2]), r->fields[11], r->fields[21]);
+						proxy_info("Changing comment for server %d:%s:%d (%s:%d) from '%s' to '%s'\n" , mysrvc->myhgc->hid , mysrvc->address, mysrvc->port, r->fields[1], atoi(r->fields[2]), r->fields[11], r->fields[22]);
 					free(mysrvc->comment);
-					mysrvc->comment=strdup(r->fields[21]);
+					mysrvc->comment=strdup(r->fields[22]);
+				}
+				if (strcmp(r->fields[12],r->fields[23])) {
+					if (GloMTH->variables.hostgroup_manager_verbose)
+						proxy_info("Changing comment for server %d:%s:%d (%s:%d) from '%s' to '%s'\n" , mysrvc->myhgc->hid , mysrvc->address, mysrvc->port, r->fields[1], atoi(r->fields[2]), r->fields[12], r->fields[23]);
+					free(mysrvc->server_version);
+					mysrvc->server_version=strdup(r->fields[23]);
 				}
 				if (run_update) {
 					rc=(*proxy_sqlite3_bind_int64)(statement2, 1, mysrvc->weight); ASSERT_SQLITE_OK(rc, mydb);
@@ -1450,11 +1457,12 @@ bool MySQL_HostGroups_Manager::commit(
 					rc=(*proxy_sqlite3_bind_int64)(statement2, 6, mysrvc->use_ssl); ASSERT_SQLITE_OK(rc, mydb);
 					rc=(*proxy_sqlite3_bind_int64)(statement2, 7, mysrvc->max_latency_us/1000); ASSERT_SQLITE_OK(rc, mydb);
 					rc=(*proxy_sqlite3_bind_text)(statement2, 8,  mysrvc->comment, -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, mydb);
-					rc=(*proxy_sqlite3_bind_int64)(statement2, 9, mysrvc->gtid_port); ASSERT_SQLITE_OK(rc, mydb);
-					rc=(*proxy_sqlite3_bind_int64)(statement2, 10, mysrvc->myhgc->hid); ASSERT_SQLITE_OK(rc, mydb);
-					rc=(*proxy_sqlite3_bind_text)(statement2, 11,  mysrvc->address, -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, mydb);
-					rc=(*proxy_sqlite3_bind_int64)(statement2, 12, mysrvc->port); ASSERT_SQLITE_OK(rc, mydb);
-					rc=(*proxy_sqlite3_bind_text)(statement2, 13,  mysrvc->server_version, -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, mydb);
+					rc=(*proxy_sqlite3_bind_text)(statement2, 9,  mysrvc->server_version, -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, mydb);
+					rc=(*proxy_sqlite3_bind_int64)(statement2, 10, mysrvc->gtid_port); ASSERT_SQLITE_OK(rc, mydb);
+					rc=(*proxy_sqlite3_bind_int64)(statement2, 11, mysrvc->myhgc->hid); ASSERT_SQLITE_OK(rc, mydb);
+					rc=(*proxy_sqlite3_bind_text)(statement2, 12,  mysrvc->address, -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, mydb);
+					rc=(*proxy_sqlite3_bind_int64)(statement2, 13, mysrvc->port); ASSERT_SQLITE_OK(rc, mydb);
+					
 					SAFE_SQLITE3_STEP2(statement2);
 					rc=(*proxy_sqlite3_clear_bindings)(statement2); ASSERT_SQLITE_OK(rc, mydb);
 					rc=(*proxy_sqlite3_reset)(statement2); ASSERT_SQLITE_OK(rc, mydb);
@@ -2514,6 +2522,7 @@ MySQL_Connection * MySQL_HostGroups_Manager::get_MyConn_from_pool(unsigned int _
 
 	// Look up the hostgroup by ID and retrieve a random MySQL server from it based on specified criteria
 	MyHGC *myhgc=MyHGC_lookup(_hid);
+	proxy_info("Hostgroup ID: %d, server_version: %s\n", _hid, target_server_version);
 	MySrvC *mysrvc = NULL;
 #ifdef TEST_AURORA
 	for (int i=0; i<10; i++)
@@ -4718,7 +4727,7 @@ void MySQL_HostGroups_Manager::update_group_replication_set_writer(char *_hostna
 			mydb->execute(query);
 			//free(query);
 			if (writer_is_also_reader && read_HG>=0) {
-				q=(char *)"INSERT OR IGNORE INTO mysql_servers_incoming (hostgroup_id,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment) SELECT %d,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment FROM mysql_servers_incoming WHERE hostgroup_id=%d AND hostname='%s' AND port=%d";
+				q=(char *)"INSERT OR IGNORE INTO mysql_servers_incoming (hostgroup_id,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment, server_version) SELECT %d,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment, server_version FROM mysql_servers_incoming WHERE hostgroup_id=%d AND hostname='%s' AND port=%d";
 				free(query);
 				query=(char *)malloc(strlen(q)+strlen(_hostname)+256);
 				sprintf(query,q,read_HG,_writer_hostgroup,_hostname,_port);
@@ -4893,7 +4902,7 @@ void MySQL_HostGroups_Manager::converge_group_replication_config(int _writer_hos
 						sprintf(query,q, info->reader_hostgroup);
 						mydb->execute(query);
 						free(query);
-						q=(char *)"INSERT OR IGNORE INTO mysql_servers_incoming (hostgroup_id,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment) SELECT %d,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment FROM mysql_servers_incoming WHERE hostgroup_id=%d";
+						q=(char *)"INSERT OR IGNORE INTO mysql_servers_incoming (hostgroup_id,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment, server_version) SELECT %d,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment, server_version FROM mysql_servers_incoming WHERE hostgroup_id=%d";
 						query=(char *)malloc(strlen(q) + 128);
 						sprintf(query,q, info->reader_hostgroup, info->backup_writer_hostgroup);
 						mydb->execute(query);
@@ -5193,7 +5202,7 @@ void MySQL_HostGroups_Manager::update_galera_set_offline(char *_hostname, int _p
 				mydb->execute(query);
 				//free(query);
 			} else {
-				q=(char *)"INSERT OR REPLACE INTO mysql_servers_incoming SELECT %d, hostname, port, gtid_port, weight, 0, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, comment FROM mysql_servers_incoming WHERE hostname='%s' AND port=%d AND hostgroup_id in (%d, %d, %d)";
+				q=(char *)"INSERT OR REPLACE INTO mysql_servers_incoming SELECT %d, hostname, port, gtid_port, weight, 0, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, comment, server_version FROM mysql_servers_incoming WHERE hostname='%s' AND port=%d AND hostgroup_id in (%d, %d, %d)";
 				sprintf(query,q,info->offline_hostgroup,_hostname,_port,_writer_hostgroup, info->backup_writer_hostgroup, info->reader_hostgroup);
 				mydb->execute(query);
 				// we just delete the servers from the 'backup_writer_hostgroup', to keep servers from reader hostgroup,
@@ -5218,8 +5227,8 @@ void MySQL_HostGroups_Manager::update_galera_set_offline(char *_hostname, int _p
 				char *q1 = NULL;
 				char *q2 = NULL;
 				char *error=NULL;
-				q1 = (char *)"SELECT DISTINCT hostgroup_id, hostname, port, gtid_port, weight, status, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, mysql_servers.comment FROM mysql_servers JOIN mysql_galera_hostgroups ON hostgroup_id=writer_hostgroup OR hostgroup_id=backup_writer_hostgroup OR hostgroup_id=reader_hostgroup WHERE writer_hostgroup=%d ORDER BY hostgroup_id, hostname, port";
-				q2 = (char *)"SELECT DISTINCT hostgroup_id, hostname, port, gtid_port, weight, status, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, mysql_servers_incoming.comment FROM mysql_servers_incoming JOIN mysql_galera_hostgroups ON hostgroup_id=writer_hostgroup OR hostgroup_id=backup_writer_hostgroup OR hostgroup_id=reader_hostgroup WHERE writer_hostgroup=%d ORDER BY hostgroup_id, hostname, port";
+				q1 = (char *)"SELECT DISTINCT hostgroup_id, hostname, port, gtid_port, weight, status, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, mysql_servers.comment, mysql_servers.server_version FROM mysql_servers JOIN mysql_galera_hostgroups ON hostgroup_id=writer_hostgroup OR hostgroup_id=backup_writer_hostgroup OR hostgroup_id=reader_hostgroup WHERE writer_hostgroup=%d ORDER BY hostgroup_id, hostname, port";
+				q2 = (char *)"SELECT DISTINCT hostgroup_id, hostname, port, gtid_port, weight, status, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, mysql_servers_incoming.comment, mysql_servers_incoming.server_version FROM mysql_servers_incoming JOIN mysql_galera_hostgroups ON hostgroup_id=writer_hostgroup OR hostgroup_id=backup_writer_hostgroup OR hostgroup_id=reader_hostgroup WHERE writer_hostgroup=%d ORDER BY hostgroup_id, hostname, port";
 				query_local = (char *)malloc(strlen(q2)+128);
 				sprintf(query_local,q1,_writer_hostgroup);
 				mydb->execute_statement(query_local, &error , &cols , &affected_rows , &resultset_servers);
@@ -5504,7 +5513,7 @@ void MySQL_HostGroups_Manager::update_galera_set_writer(char *_hostname, int _po
 			mydb->execute(query);
 			//free(query);
 			if (writer_is_also_reader && read_HG>=0) {
-				q=(char *)"INSERT OR IGNORE INTO mysql_servers_incoming (hostgroup_id,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment) SELECT %d,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment FROM mysql_servers_incoming WHERE hostgroup_id=%d AND hostname='%s' AND port=%d";
+				q=(char *)"INSERT OR IGNORE INTO mysql_servers_incoming (hostgroup_id,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment, server_version) SELECT %d,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment, server_version FROM mysql_servers_incoming WHERE hostgroup_id=%d AND hostname='%s' AND port=%d";
 				sprintf(query,q,read_HG,_writer_hostgroup,_hostname,_port);
 				mydb->execute(query);
 			}
@@ -5519,8 +5528,8 @@ void MySQL_HostGroups_Manager::update_galera_set_writer(char *_hostname, int _po
 				char *q1 = NULL;
 				char *q2 = NULL;
 				char *error=NULL;
-				q1 = (char *)"SELECT DISTINCT hostgroup_id, hostname, port, gtid_port, weight, status, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, mysql_servers.comment FROM mysql_servers JOIN mysql_galera_hostgroups ON hostgroup_id=writer_hostgroup OR hostgroup_id=backup_writer_hostgroup OR hostgroup_id=reader_hostgroup WHERE writer_hostgroup=%d ORDER BY hostgroup_id, hostname, port";
-				q2 = (char *)"SELECT DISTINCT hostgroup_id, hostname, port, gtid_port, weight, status, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, mysql_servers_incoming.comment FROM mysql_servers_incoming JOIN mysql_galera_hostgroups ON hostgroup_id=writer_hostgroup OR hostgroup_id=backup_writer_hostgroup OR hostgroup_id=reader_hostgroup WHERE writer_hostgroup=%d ORDER BY hostgroup_id, hostname, port";
+				q1 = (char *)"SELECT DISTINCT hostgroup_id, hostname, port, gtid_port, weight, status, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, mysql_servers.comment, mysql_servers.server_version FROM mysql_servers JOIN mysql_galera_hostgroups ON hostgroup_id=writer_hostgroup OR hostgroup_id=backup_writer_hostgroup OR hostgroup_id=reader_hostgroup WHERE writer_hostgroup=%d ORDER BY hostgroup_id, hostname, port";
+				q2 = (char *)"SELECT DISTINCT hostgroup_id, hostname, port, gtid_port, weight, status, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, mysql_servers_incoming.comment, mysql_servers_incoming.server_version FROM mysql_servers_incoming JOIN mysql_galera_hostgroups ON hostgroup_id=writer_hostgroup OR hostgroup_id=backup_writer_hostgroup OR hostgroup_id=reader_hostgroup WHERE writer_hostgroup=%d ORDER BY hostgroup_id, hostname, port";
 				query = (char *)malloc(strlen(q2)+128);
 				sprintf(query,q1,_writer_hostgroup);
 				mydb->execute_statement(query, &error , &cols , &affected_rows , &resultset_servers);
@@ -5661,7 +5670,7 @@ void MySQL_HostGroups_Manager::converge_galera_config(int _writer_hostgroup) {
 								free(query);
 								//q=(char *)"UPDATE OR REPLACE mysql_servers_incoming SET status=0, hostgroup_id=%d WHERE hostgroup_id=%d AND hostname='%s' AND port=%d";
 								// we copy the server from the writer hostgroup in the backup writer hostgroup #2656
-								q=(char *)"INSERT OR IGNORE INTO mysql_servers_incoming SELECT %d, hostname, port, gtid_port, weight, 0, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, comment FROM mysql_servers_incoming WHERE hostgroup_id=%d AND hostname='%s' AND port=%d";
+								q=(char *)"INSERT OR IGNORE INTO mysql_servers_incoming SELECT %d, hostname, port, gtid_port, weight, 0, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, comment, server_version FROM mysql_servers_incoming WHERE hostgroup_id=%d AND hostname='%s' AND port=%d";
 								query=(char *)malloc(strlen(q)+strlen(r->fields[1])+128);
 								sprintf(query,q,info->backup_writer_hostgroup,info->writer_hostgroup,r->fields[1],atoi(r->fields[2]));
 								mydb->execute(query);
@@ -5738,7 +5747,7 @@ void MySQL_HostGroups_Manager::converge_galera_config(int _writer_hostgroup) {
 														int writer_is_also_reader = info->writer_is_also_reader;
 														if (writer_is_also_reader) {
 															int read_HG = info->reader_hostgroup;
-															q=(char *)"INSERT OR IGNORE INTO mysql_servers_incoming (hostgroup_id,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment) SELECT %d,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment FROM mysql_servers_incoming WHERE hostgroup_id=%d AND hostname='%s' AND port=%d";
+															q=(char *)"INSERT OR IGNORE INTO mysql_servers_incoming (hostgroup_id,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment, server_version) SELECT %d,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment, server_version FROM mysql_servers_incoming WHERE hostgroup_id=%d AND hostname='%s' AND port=%d";
 															query=(char *)malloc(strlen(q) + s.length() + 128);
 															sprintf(query,q,read_HG, info->writer_hostgroup, host.c_str(), port_n);
 															mydb->execute(query);
@@ -5798,7 +5807,7 @@ void MySQL_HostGroups_Manager::converge_galera_config(int _writer_hostgroup) {
 					free(query);
 
 					if (num_backup_writers) { // there are backup writers, only these will be used as readers
-						q=(char *)"INSERT OR IGNORE INTO mysql_servers_incoming (hostgroup_id,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment) SELECT %d,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment FROM mysql_servers_incoming WHERE hostgroup_id=%d";
+						q=(char *)"INSERT OR IGNORE INTO mysql_servers_incoming (hostgroup_id,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment, server_version) SELECT %d,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment, server_version FROM mysql_servers_incoming WHERE hostgroup_id=%d";
 						query=(char *)malloc(strlen(q) + 128);
 						sprintf(query,q, info->reader_hostgroup, info->backup_writer_hostgroup);
 						mydb->execute(query);
@@ -6878,12 +6887,12 @@ void MySQL_HostGroups_Manager::update_aws_aurora_set_writer(int _whid, int _rhid
 			q=(char *)"DELETE FROM mysql_servers_incoming WHERE status=3 AND hostgroup_id=%d";
 			sprintf(query,q,_rhid);
 			mydb->execute(query);
-			q=(char *)"INSERT OR IGNORE INTO mysql_servers_incoming SELECT %d, hostname, port, gtid_port, %d, status, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, comment FROM mysql_servers WHERE hostgroup_id=%d AND status=0";
+			q=(char *)"INSERT OR IGNORE INTO mysql_servers_incoming SELECT %d, hostname, port, gtid_port, %d, status, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, comment, server_version FROM mysql_servers WHERE hostgroup_id=%d AND status=0";
 			sprintf(query,q,_rhid, new_reader_weight, _whid);
 			mydb->execute(query);
 
 			if (writer_is_also_reader && read_HG>=0) {
-				q=(char *)"INSERT OR IGNORE INTO mysql_servers_incoming (hostgroup_id,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment) SELECT %d,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment FROM mysql_servers_incoming WHERE hostgroup_id=%d AND hostname='%s%s' AND port=%d";
+				q=(char *)"INSERT OR IGNORE INTO mysql_servers_incoming (hostgroup_id,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment, server_version) SELECT %d,hostname,port,gtid_port,status,weight,compression,max_connections,max_replication_lag,use_ssl,max_latency_ms,comment, server_version FROM mysql_servers_incoming WHERE hostgroup_id=%d AND hostname='%s%s' AND port=%d";
 				sprintf(query, q, read_HG, _writer_hostgroup, _server_id, domain_name, aurora_port);
 				mydb->execute(query);
 				q = (char *)"UPDATE mysql_servers_incoming SET weight=%d WHERE hostgroup_id=%d AND hostname='%s%s' AND port=%d";
@@ -6900,8 +6909,8 @@ void MySQL_HostGroups_Manager::update_aws_aurora_set_writer(int _whid, int _rhid
 				char *q1 = NULL;
 				char *q2 = NULL;
 				char *error=NULL;
-				q1 = (char *)"SELECT DISTINCT hostgroup_id, hostname, port, gtid_port, weight, status, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, mysql_servers.comment FROM mysql_servers JOIN mysql_aws_aurora_hostgroups ON hostgroup_id=writer_hostgroup OR hostgroup_id=reader_hostgroup WHERE writer_hostgroup=%d ORDER BY hostgroup_id, hostname, port";
-				q2 = (char *)"SELECT DISTINCT hostgroup_id, hostname, port, gtid_port, weight, status, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, mysql_servers_incoming.comment FROM mysql_servers_incoming JOIN mysql_aws_aurora_hostgroups ON hostgroup_id=writer_hostgroup OR hostgroup_id=reader_hostgroup WHERE writer_hostgroup=%d ORDER BY hostgroup_id, hostname, port";
+				q1 = (char *)"SELECT DISTINCT hostgroup_id, hostname, port, gtid_port, weight, status, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, mysql_servers.comment, mysql_servers.server_version FROM mysql_servers JOIN mysql_aws_aurora_hostgroups ON hostgroup_id=writer_hostgroup OR hostgroup_id=reader_hostgroup WHERE writer_hostgroup=%d ORDER BY hostgroup_id, hostname, port";
+				q2 = (char *)"SELECT DISTINCT hostgroup_id, hostname, port, gtid_port, weight, status, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, mysql_servers_incoming.comment, mysql_servers_incoming.server_version FROM mysql_servers_incoming JOIN mysql_aws_aurora_hostgroups ON hostgroup_id=writer_hostgroup OR hostgroup_id=reader_hostgroup WHERE writer_hostgroup=%d ORDER BY hostgroup_id, hostname, port";
 				query = (char *)malloc(strlen(q2)+128);
 				sprintf(query,q1,_writer_hostgroup);
 				mydb->execute_statement(query, &error , &cols , &affected_rows , &resultset_servers);
