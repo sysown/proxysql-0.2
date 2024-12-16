@@ -113,6 +113,7 @@ jobs:
         exit $RC
         
     - name: Check baseline
+      if: ${{ !cancelled() }}
       id: check_baseline
       env:
         GH_TOKEN: ${{ secrets.gh_token }}
@@ -122,29 +123,17 @@ jobs:
         
         GHUSER="$(id -u):$(id -g)"
         sudo chown -R ${GHUSER} ./logs
-        #FAILS=$(cat ./logs/*run-tests.log | grep -oP '^=+ \d+ failed, ' | awk '{ print $2 }')
-        cat ./logs/*_summary.log
+        cat ./logs/*_summary.log || true
         FAILS=$(cat ./logs/*_summary.log | grep -oP '(?<=^FAIL: )\d+')
         STATUS='PASS'
         RC=0
         if [[ -z ${FAILS} ]]; then
           STATUS='ERROR'
           RC=1
-        fi
-        #if [[ ${FAILS} -gt ${BASELINE:-10000} ]]; then
-        if [[ ${FAILS} -ne 0 ]]; then
+        elif [[ ${FAILS} -ne 0 ]]; then
           STATUS='FAIL'
           RC=1
-        #else
-        #  #MAIN=$(git -C ./proxysql remote show origin | grep -Po '(?<=HEAD branch: ).*')
-        #  MAIN=$(curl -s https://api.github.com/repos/${{ github.repository }} | jq --raw-output .default_branch)
-        #  #MAIN=$(gh repo view ${{ github.repository }} --json defaultBranchRef --jq .defaultBranchRef.name)
-        #  if [[ ${MAIN} == ${{ github.ref_name }} ]]; then
-        #    echo "INFRADB: '${INFRADB}' CONNECTOR: '${CONNECTOR}' Setting new BASELINE: ${FAILS} for '${MAIN}'"
-        #    gh variable -R ${{ github.repository }} set BASELINE_3P_SQLALCHEMY_${INFRADB//./}_${CONNECTOR//./} -b "${FAILS}"
-        #  fi
         fi
-        #SUM="{'STATUS':'${STATUS}','INFRADB':'${INFRADB}','CONNECTOR':'${CONNECTOR}','BASELINE':${BASELINE:-10000},'FAILS':${FAILS:-1}}"
         SUM="{'STATUS':'${STATUS}','INFRADB':'${INFRADB}','CONNECTOR':'${CONNECTOR}','FAILS':${FAILS:-x}}"
         echo "SUMMARY=${SUM}"
         echo "SUMMARY="${SUM//\'/\"} >> $GITHUB_ENV
