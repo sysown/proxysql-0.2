@@ -78,7 +78,6 @@ MySrvC *MyHGC::get_random_MySrvC(char * gtid_uuid, uint64_t gtid_trxid, int max_
 		//int j=0;
 		for (j=0; j<l; j++) {
 			mysrvc=mysrvs->idx(j);
-			proxy_info("Server version: %s, Targetted Server version: %s\n", mysrvc->server_version, target_server_version);
 			if (mysrvc->get_status() == MYSQL_SERVER_STATUS_ONLINE && strcmp(mysrvc->server_version, target_server_version) == 0) { // consider this server only if ONLINE
 				if (mysrvc->myhgc->num_online_servers.load(std::memory_order_relaxed) <= mysrvc->myhgc->attributes.max_num_online_servers) { // number of online servers in HG is within configured range
 					if (mysrvc->ConnectionsUsed->conns_length() < mysrvc->max_connections) { // consider this server only if didn't reach max_connections

@@ -1347,7 +1347,7 @@ bool MySQL_HostGroups_Manager::commit(
 				if (GloMTH->variables.hostgroup_manager_verbose) {
 					proxy_info("Creating new server in HG %d : %s:%d , server_version=%s, gtid_port=%d, weight=%d, status=%d\n", atoi(r->fields[0]), r->fields[1], atoi(r->fields[2]), r->fields[13], atoi(r->fields[3]), atoi(r->fields[4]), atoi(r->fields[5]));
 				}
-				MySrvC *mysrvc=new MySrvC(r->fields[1], atoi(r->fields[2]), atoi(r->fields[3]), atoi(r->fields[4]), (MySerStatus)atoi(r->fields[5]), atoi(r->fields[6]), atoi(r->fields[7]), atoi(r->fields[8]), atoi(r->fields[9]), atoi(r->fields[10]), r->fields[11], r->fields[12]); // add new fields here if adding more columns in mysql_servers
+				MySrvC *mysrvc=new MySrvC(r->fields[1], atoi(r->fields[2]), atoi(r->fields[3]), atoi(r->fields[4]), (MySerStatus)atoi(r->fields[5]), atoi(r->fields[6]), atoi(r->fields[7]), atoi(r->fields[8]), atoi(r->fields[9]), atoi(r->fields[10]), r->fields[11], r->fields[13]); // add new fields here if adding more columns in mysql_servers
 				proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 5, "Adding new server %s:%d , server_version=%s, weight=%d, status=%d, mem_ptr=%p into hostgroup=%d\n", r->fields[1], atoi(r->fields[2]), r->fields[13], atoi(r->fields[4]), atoi(r->fields[5]), mysrvc, atoi(r->fields[0]));
 				add(mysrvc,atoi(r->fields[0]));
 				ptr=(uintptr_t)mysrvc;
@@ -1442,7 +1442,7 @@ bool MySQL_HostGroups_Manager::commit(
 					free(mysrvc->comment);
 					mysrvc->comment=strdup(r->fields[22]);
 				}
-				if (strcmp(r->fields[12],r->fields[23])) {
+				if (strcmp(r->fields[13],r->fields[23])) {
 					if (GloMTH->variables.hostgroup_manager_verbose)
 						proxy_info("Changing comment for server %d:%s:%d (%s:%d) from '%s' to '%s'\n" , mysrvc->myhgc->hid , mysrvc->address, mysrvc->port, r->fields[1], atoi(r->fields[2]), r->fields[12], r->fields[23]);
 					free(mysrvc->server_version);
@@ -2522,7 +2522,6 @@ MySQL_Connection * MySQL_HostGroups_Manager::get_MyConn_from_pool(unsigned int _
 
 	// Look up the hostgroup by ID and retrieve a random MySQL server from it based on specified criteria
 	MyHGC *myhgc=MyHGC_lookup(_hid);
-	proxy_info("Hostgroup ID: %d, server_version: %s\n", _hid, target_server_version);
 	MySrvC *mysrvc = NULL;
 #ifdef TEST_AURORA
 	for (int i=0; i<10; i++)
