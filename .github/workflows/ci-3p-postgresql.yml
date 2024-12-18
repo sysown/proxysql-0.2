@@ -53,6 +53,7 @@ jobs:
         path: 'proxysql_3p_testing'
         token: ${{ secrets.gh_token }}
         sparse-checkout: |
+          common
           libs
           infra-docker-hoster
           test_postgresql
