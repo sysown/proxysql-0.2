@@ -3,6 +3,11 @@ run-name: '${{ github.event.workflow_run && github.event.workflow_run.head_branc
 
 on:
   workflow_dispatch:
+    inputs:
+      testtree:
+        description: 'proxysql_3p_testing treeish/branch/tag/hash'
+        default: main
+        type: string
   workflow_run:
     workflows: [ CI-trigger ]
     types: [ completed ]
