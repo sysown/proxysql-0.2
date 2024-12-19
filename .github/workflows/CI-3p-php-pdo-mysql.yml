@@ -3,6 +3,11 @@ run-name: '${{ github.event.workflow_run && github.event.workflow_run.head_branc
 
 on:
   workflow_dispatch:
+    inputs:
+      testtree:
+        description: 'proxysql_3p_testing treeish/branch/tag/hash'
+        default: main
+        type: string
   workflow_run:
     workflows: [ CI-trigger ]
     types: [ completed ]
@@ -12,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  run:
+  run-mysql:
     if: ${{ github.event.workflow_run && github.event.workflow_run.conclusion == 'success' || ! github.event.workflow_run }}
     uses: sysown/proxysql/.github/workflows/ci-3p-php-pdo-mysql.yml@GH-Actions
     secrets: inherit
@@ -20,3 +25,12 @@ jobs:
       trigger: ${{ toJson(github) }}
       infradb: ${{ vars.MATRIX_3P_PHP_PDO_MYSQL_infradb_mysql }}
       connector: ${{ vars.MATRIX_3P_PHP_PDO_MYSQL_connector_mysql }}
+
+  run-mariadb:
+    if: ${{ github.event.workflow_run && github.event.workflow_run.conclusion == 'success' || ! github.event.workflow_run }}
+    uses: sysown/proxysql/.github/workflows/ci-3p-php-pdo-mysql.yml@GH-Actions
+    secrets: inherit
+    with:
+      trigger: ${{ toJson(github) }}
+      infradb: ${{ vars.MATRIX_3P_PHP_PDO_MYSQL_infradb_mariadb }}
+      connector: ${{ vars.MATRIX_3P_PHP_PDO_MYSQL_connector_mariadb }}
