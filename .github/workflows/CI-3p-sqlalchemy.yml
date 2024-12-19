@@ -36,7 +36,9 @@ jobs:
       connector: ${{ vars.MATRIX_3P_SQLALCHEMY_connector_mariadb }}
 
   run-pgsql:
-    if: ${{ github.event.workflow_run && github.event.workflow_run.conclusion == 'success' || ! github.event.workflow_run }}
+    if: |
+      (github.event.workflow_run && github.event.workflow_run.conclusion == 'success' || ! github.event.workflow_run) &&
+      startsWith((github.event.workflow_run && github.event.workflow_run.head_branch || github.ref_name), 'v3.')
     uses: sysown/proxysql/.github/workflows/ci-3p-sqlalchemy.yml@GH-Actions
     secrets: inherit
     with:

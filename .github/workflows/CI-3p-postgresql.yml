@@ -3,6 +3,11 @@ run-name: '${{ github.event.workflow_run && github.event.workflow_run.head_branc
 
 on:
   workflow_dispatch:
+    inputs:
+      testtree:
+        description: 'proxysql_3p_testing treeish/branch/tag/hash'
+        default: main
+        type: string
   workflow_run:
     workflows: [ CI-trigger ]
     types: [ completed ]
@@ -12,10 +17,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  run:
+  run-pgsql:
     if: |
-      ${{ (github.event.workflow_run && github.event.workflow_run.conclusion == 'success' || ! github.event.workflow_run) &&
-          startsWith(github.event.workflow_run && github.event.workflow_run.head_branch || github.ref_name, 'v3.') }}
+      (github.event.workflow_run && github.event.workflow_run.conclusion == 'success' || ! github.event.workflow_run) &&
+      startsWith((github.event.workflow_run && github.event.workflow_run.head_branch || github.ref_name), 'v3.')
     uses: sysown/proxysql/.github/workflows/ci-3p-postgresql.yml@GH-Actions
     secrets: inherit
     with:
