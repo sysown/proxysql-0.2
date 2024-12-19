@@ -82,7 +82,7 @@ int main(int argc, char** argv) {
 	if(cl.getEnv())
 		return exit_status();
 
-	plan(7);
+	plan(8);
 
 	// ProxySQL connection without compression
 	proxysql = initilize_mysql_connection(cl.host, cl.username, cl.password, cl.port, false);
@@ -158,10 +158,10 @@ int main(int argc, char** argv) {
 		goto cleanup;
 	}
 
-	diff = time_mysql_without_compressed - time_mysql_compressed;
+	diff = abs(time_mysql_without_compressed - time_mysql_compressed);
 	performance_diff = (diff * 100) / time_mysql_without_compressed;
 
-	diag("Time difference for mysql, compression and without compression is: %d", performance_diff);
+	ok((performance_diff < 10), "MySQL with compression performed well compared to without compression. Performance difference: %d percentage", performance_diff);
 
 	ret = get_variable_value(proxysql_admin, "mysql-protocol_compression_level", compression_level, true);
 	if (ret == EXIT_SUCCESS) {
