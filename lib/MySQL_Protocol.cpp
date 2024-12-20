@@ -1595,6 +1595,10 @@ int MySQL_Protocol::PPHR_1(unsigned char *pkt, unsigned int len, bool& ret, MyPr
 
 // this function was inline in process_pkt_handshake_response() , split for readibility
 bool MySQL_Protocol::PPHR_2(unsigned char *pkt, unsigned int len, bool& ret, MyProt_tmp_auth_vars& vars1) { // process_pkt_handshake_response inner 2
+
+	// if packet length is less than 4, it's a malformed packet.
+	if ((len - sizeof(mysql_hdr)) < 4) return false;
+
 	vars1.capabilities = CPY4(pkt);
 	// see bug #2916. If CLIENT_MULTI_STATEMENTS is set by the client
 	// we enforce setting CLIENT_MULTI_RESULTS, this is the proper and expected

@@ -1421,7 +1421,7 @@ unsigned int PgSQL_Protocol::copy_row_description_to_PgSQL_Query_Result(bool sen
 //	if (dump_pkt) { __dump_pkt(__func__, _ptr, size); }
 //#endif
 
-	pg_query_result->resultset_size = size;
+	pg_query_result->resultset_size += size;
 
 	if (alloced_new_buffer) {
 		// we created new buffer
@@ -1544,7 +1544,7 @@ unsigned int PgSQL_Protocol::copy_command_completion_to_PgSQL_Query_Result(bool 
 	return size;
 }
 
-unsigned int PgSQL_Protocol::copy_error_to_PgSQL_Query_Result(bool send, PgSQL_Query_Result* pg_query_result, const PGresult* result) {
+unsigned int PgSQL_Protocol::copy_error_notice_to_PgSQL_Query_Result(bool send, PgSQL_Query_Result* pg_query_result, const PGresult* result, bool is_error) {
 	assert(pg_query_result);
 	assert(result);
 
@@ -1599,7 +1599,7 @@ unsigned int PgSQL_Protocol::copy_error_to_PgSQL_Query_Result(bool send, PgSQL_Q
 
 	PG_pkt pgpkt(_ptr, size);
 
-	pgpkt.put_char('E');
+	pgpkt.put_char(is_error ? 'E' : 'N');
 	pgpkt.put_uint32(size - 1); 
 	if (severity) {
 		pgpkt.put_char('S');
@@ -1843,7 +1843,7 @@ unsigned int PgSQL_Protocol::copy_out_response_start_to_PgSQL_Query_Result(bool 
 	//	if (dump_pkt) { __dump_pkt(__func__, _ptr, size); }
 	//#endif
 
-	pg_query_result->resultset_size = size;
+	pg_query_result->resultset_size += size;
 
 	if (alloced_new_buffer) {
 		// we created new buffer
@@ -2016,12 +2016,17 @@ unsigned int PgSQL_Query_Result::add_copy_out_response_end() {
 	return res;
 }
 
+unsigned int PgSQL_Query_Result::add_notice(const PGresult* result) {
+	const unsigned int res = proto->copy_error_notice_to_PgSQL_Query_Result(false, this, result, false);
+	result_packet_type |= PGSQL_QUERY_RESULT_NOTICE;
+	return res;
+}
 
 unsigned int PgSQL_Query_Result::add_error(const PGresult* result) {
 	unsigned int size = 0;
 
 	if (result) {
-		size = proto->copy_error_to_PgSQL_Query_Result(false, this, result);
+		size = proto->copy_error_notice_to_PgSQL_Query_Result(false, this, result, true);
 		PgHGM->p_update_pgsql_error_counter(p_pgsql_error_type::proxysql, conn->parent->myhgc->hid, conn->parent->address, conn->parent->port, 1907);
 	}
 	else {

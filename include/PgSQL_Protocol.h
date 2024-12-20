@@ -291,7 +291,7 @@ class PgSQL_Protocol;
 #define PGSQL_QUERY_RESULT_ERROR	0x08
 #define PGSQL_QUERY_RESULT_EMPTY	0x10
 #define PGSQL_QUERY_RESULT_COPY_OUT	0x20
-#define PGSQL_QUERY_RESULT_COPY_IN	0x30
+#define PGSQL_QUERY_RESULT_NOTICE	0x40
 
 class PgSQL_Query_Result {
 public:
@@ -470,6 +470,8 @@ public:
      * @return The number of bytes added to the packet.
      */
     unsigned int add_copy_out_response_end();
+
+	unsigned int add_notice(const PGresult* result);
 
 	/**
 	 * @brief Retrieves the query result set and copies it to a PtrSizeArray.
@@ -829,11 +831,11 @@ public:
 	unsigned int copy_command_completion_to_PgSQL_Query_Result(bool send, PgSQL_Query_Result* pg_query_result, const PGresult* result, bool extract_affected_rows);
 
 	/**
-	 * @brief Copies an error message from a PGresult to a PgSQL_Query_Result.
+	 * @brief Copies an error/notice message from a PGresult to a PgSQL_Query_Result.
 	 *
-	 * This function copies an error message from a `PGresult` object (typically
-	 * obtained from libpq) to a `PgSQL_Query_Result` object. The error message
-	 * contains information about an error that occurred during query execution.
+	 * This function copies an error/notice message from a `PGresult` object (typically
+	 * obtained from libpq) to a `PgSQL_Query_Result` object. The message
+	 * contains information about an error/notice that occurred during query execution.
 	 *
 	 * @param send A boolean flag indicating whether to send the generated packet
 	 *            immediately or just generate it. (Currently not supported).
@@ -841,14 +843,15 @@ public:
 	 *                       error message will be copied.
 	 * @param result A pointer to the `PGresult` object containing the error
 	 *              message to be copied.
-	 *
+	 * @param is_error A boolean flag indicating whether the message is an error or a notice.
+	 * 
 	 * @return The number of bytes copied to the `PgSQL_Query_Result` object.
 	 *
 	 * @note This function extracts the various error fields (severity, code,
 	 *       message, detail, etc.) from the `PGresult` object and copies them
 	 *       to the `PgSQL_Query_Result` object.
 	 */
-	unsigned int copy_error_to_PgSQL_Query_Result(bool send, PgSQL_Query_Result* pg_query_result, const PGresult* result);
+	unsigned int copy_error_notice_to_PgSQL_Query_Result(bool send, PgSQL_Query_Result* pg_query_result, const PGresult* result, bool is_error);
 
 	/**
 	 * @brief Copies an empty query response from a PGresult to a

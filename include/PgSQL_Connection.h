@@ -465,7 +465,6 @@ class PgSQL_Connection_Placeholder {
 	bool AutocommitFalse_AndSavepoint();
 	bool MultiplexDisabled(bool check_delay_token = true);
 	bool IsKeepMultiplexEnabledVariables(char *query_digest_text);
-	void ProcessQueryAndSetStatusFlags(char *query_digest_text);
 	void optimize();
 	void close_mysql();
 
@@ -491,6 +490,7 @@ class PgSQL_Connection_Placeholder {
 	bool IsKnownActiveTransaction() { assert(0); return false; }
 	bool IsActiveTransaction() { assert(0); return false; }
 	PG_ASYNC_ST handler(short event) { assert(0); return ASYNC_IDLE; }
+	void ProcessQueryAndSetStatusFlags(char* query_digest_text);
 	/********* End of remove ******************/
 };
 
@@ -617,6 +617,7 @@ public:
 	void optimize() {}
 	void update_bytes_recv(uint64_t bytes_recv);
 	void update_bytes_sent(uint64_t bytes_sent);
+	void ProcessQueryAndSetStatusFlags(char* query_digest_text);
 
 	inline const PGconn* get_pg_connection() const { return pgsql_conn; }
 	inline int get_pg_server_version() { return PQserverVersion(pgsql_conn); }
@@ -665,6 +666,8 @@ private:
 	// Handles the COPY OUT response from the server.
 	// Returns true if it consumes all buffer data, or false if the threshold for result size is reached
 	bool handle_copy_out(const PGresult* result, uint64_t* processed_bytes);
+	static void notice_handler_cb(void* arg, const PGresult* result);
+	static void unhandled_notice_cb(void* arg, const PGresult* result);
 };
 
 #endif /* __CLASS_PGSQL_CONNECTION_H */
