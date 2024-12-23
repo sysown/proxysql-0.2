@@ -62,25 +62,39 @@ COREDUMPER_IDIR := $(COREDUMPER_DIR)/include
 CURL_DIR := $(DEPS_PATH)/curl/curl
 CURL_IDIR := $(CURL_DIR)/include
 
-ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl/*" 2>/dev/null | head -n 1)
-LIB_SSL_PATH := $(shell find /usr /usr/local /opt -name "libssl.so" 2>/dev/null | head -n 1)
-LIB_CRYPTO_PATH := $(shell find /usr /usr/local /opt -name "libcrypto.so" 2>/dev/null | head -n 1)
+CUSTOM_OPENSSL_PATH ?=
+
+OPENSSL_PACKAGE := openssl
+
 ifeq ($(DISTRO),almalinux)
 ifeq ($(CENTOSVER),8)
-	ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl3/*" 2>/dev/null | head -n 1)
-	LIB_SSL_PATH := $(shell find /usr /usr/local /opt -name "libssl.so.3" 2>/dev/null | head -n 1)
-	LIB_CRYPTO_PATH := $(shell find /usr /usr/local /opt -name "libcrypto.so.3" 2>/dev/null | head -n 1)endif
+    OPENSSL_PACKAGE := openssl3
 endif
 endif
-SSL_LDIR := $(dir $(LIB_SSL_PATH))
 
-ifneq ($(ssl_header_path),)
-	SSL_IDIR := $(shell dirname $(shell dirname $(ssl_header_path)))
-    $(info Found OpenSSL headers at $(SSL_IDIR))
-    $(info OpenSSL lib full path is $(LIB_SSL_PATH))
-    $(info OpenSSL libs directory is $(SSL_LDIR))
+$(info OPENSSL_PACKAGE: $(OPENSSL_PACKAGE))
+
+# Use pkg-config to get the compiler and linker flags for OpenSSL if CUSTOM_OPENSSL_PATH is not set
+ifeq ($(CUSTOM_OPENSSL_PATH),)
+    $(info No custom path specified.)
+    SSL_IDIR := $(shell pkg-config --cflags  --keep-system-cflags $(OPENSSL_PACKAGE) | grep -oP "(?<=-I)[^ ]+")
+    SSL_LDIR := $(shell pkg-config --variable=libdir  $(OPENSSL_PACKAGE) )
+    LIB_SSL_PATH := $(shell find $(SSL_LDIR) -name "libssl.so" 2>/dev/null | head -n 1)
+    LIB_CRYPTO_PATH := $(shell find $(SSL_LDIR) -name "libcrypto.so" 2>/dev/null | head -n 1)
 else
-    $(error Warning: OpenSSL headers not found. exiting, please install openssl version 3.)
+    SSL_IDIR := -I$(CUSTOM_OPENSSL_PATH)/include
+    SSL_LDIR := -L$(CUSTOM_OPENSSL_PATH)/lib -lssl -lcrypto
+    $(info Using custom OpenSSL path: $(CUSTOM_OPENSSL_PATH))
+endif
+
+# Check if required flags are set and provide feedback
+ifneq ($(SSL_IDIR),)
+    $(info SSL_IDIR: $(SSL_IDIR))
+    $(info SSL_LDIR: $(SSL_LDIR))
+    $(info LIB_SSL_PATH: $(LIB_SSL_PATH))
+    $(info LIB_CRYPTO_PATH: $(LIB_CRYPTO_PATH))	
+else
+    $(error Warning: OpenSSL headers not found. Exiting. Please install OpenSSL version 3.)
 endif
 
 EV_DIR := $(DEPS_PATH)/libev/libev/
