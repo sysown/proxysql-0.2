@@ -43,13 +43,32 @@ MICROHTTPD_IDIR := $(MICROHTTPD_PATH)/src/include
 CURL_PATH := $(DEPS_PATH)/curl/curl
 CURL_IDIR := -I$(CURL_PATH)/include
 
-ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl/*" 2>/dev/null | head -n 1)
+CUSTOM_OPENSSL_PATH ?=
 
-ifneq ($(ssl_header_path),)
-    SSL_IDIR := $(shell dirname $(ssl_header_path))
-    $(info Found OpenSSL headers at $(SSL_IDIR))
+OPENSSL_PACKAGE := openssl
+
+ifeq ($(DISTRO),almalinux)
+ifeq ($(CENTOSVER),8)
+    OPENSSL_PACKAGE := openssl3
+endif
+endif
+
+$(info OPENSSL_PACKAGE: $(OPENSSL_PACKAGE))
+
+# Use pkg-config to get the compiler and linker flags for OpenSSL if CUSTOM_OPENSSL_PATH is not set
+ifeq ($(CUSTOM_OPENSSL_PATH),)
+    $(info No custom path specified.)
+    SSL_IDIR := $(shell pkg-config --cflags  --keep-system-cflags $(OPENSSL_PACKAGE) | grep -oP "(?<=-I)[^ ]+")
 else
-    $(error Warning: OpenSSL headers not found. exiting, please install openssl.)
+    SSL_IDIR := -I$(CUSTOM_OPENSSL_PATH)/include
+    $(info Using custom OpenSSL path: $(CUSTOM_OPENSSL_PATH))
+endif
+
+# Check if required flags are set and provide feedback
+ifneq ($(SSL_IDIR),)
+    $(info SSL_IDIR: $(SSL_IDIR))
+else
+    $(error Warning: OpenSSL headers not found. Exiting. Please install OpenSSL version 3.)
 endif
 
 EV_PATH := $(DEPS_PATH)/libev/libev/
