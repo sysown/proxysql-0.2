@@ -64,11 +64,15 @@ $(info OPENSSL_PACKAGE: $(OPENSSL_PACKAGE))
 # Use pkg-config to get the compiler and linker flags for OpenSSL if CUSTOM_OPENSSL_PATH is not set
 ifeq ($(CUSTOM_OPENSSL_PATH),)
     $(info No custom path specified.)
-    SSL_IDIR := $(shell pkg-config --cflags  --keep-system-cflags $(OPENSSL_PACKAGE) | grep -oP "(?<=-I)[^ ]+")
+    SSL_IDIR := $(shell export PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1; export PKG_CONFIG_ALLOW_SYSTEM_LIBS=1; pkg-config --cflags $(OPENSSL_PACKAGE) | grep -oP "(?<=-I)[^ ]+")
     SSL_LDIR := $(shell pkg-config --variable=libdir  $(OPENSSL_PACKAGE) )
+    LIB_SSL_PATH := $(shell find $(SSL_LDIR) -name "libssl.so" 2>/dev/null | head -n 1)
+    LIB_CRYPTO_PATH := $(shell find $(SSL_LDIR) -name "libcrypto.so" 2>/dev/null | head -n 1)
 else
-    SSL_IDIR := -I$(CUSTOM_OPENSSL_PATH)/include
-    SSL_LDIR := -L$(CUSTOM_OPENSSL_PATH)/lib -lssl -lcrypto
+    SSL_IDIR := $(CUSTOM_OPENSSL_PATH)/include
+    SSL_LDIR := $(CUSTOM_OPENSSL_PATH)/lib64
+    LIB_SSL_PATH := $(shell find $(SSL_LDIR) -name "libssl.so" 2>/dev/null | head -n 1)
+    LIB_CRYPTO_PATH := $(shell find $(SSL_LDIR) -name "libcrypto.so" 2>/dev/null | head -n 1)	
     $(info Using custom OpenSSL path: $(CUSTOM_OPENSSL_PATH))
 endif
 
