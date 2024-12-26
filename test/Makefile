@@ -55,14 +55,7 @@ endif
 
 $(info OPENSSL_PACKAGE: $(OPENSSL_PACKAGE))
 
-# Use pkg-config to get the compiler and linker flags for OpenSSL if CUSTOM_OPENSSL_PATH is not set
-ifeq ($(CUSTOM_OPENSSL_PATH),)
-    $(info No custom path specified.)
-    SSL_IDIR := $(shell export PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1; export PKG_CONFIG_ALLOW_SYSTEM_LIBS=1; pkg-config --cflags $(OPENSSL_PACKAGE) | grep -oP "(?<=-I)[^ ]+")
-else
-    SSL_IDIR := -I$(CUSTOM_OPENSSL_PATH)/include
-    $(info Using custom OpenSSL path: $(CUSTOM_OPENSSL_PATH))
-endif
+include ../common_mk/openssl_flags.mk
 
 # Check if required flags are set and provide feedback
 ifneq ($(SSL_IDIR),)

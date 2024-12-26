@@ -76,85 +76,8 @@ endif
 
 libinjection: libinjection/libinjection/src/libinjection.a
 
-CUSTOM_OPENSSL_PATH ?=
-
-OPENSSL_PACKAGE := openssl
-
-ifeq ($(DISTRO),almalinux)
-ifeq ($(CENTOSVER),8)
-    OPENSSL_PACKAGE := openssl3
-endif
-endif
-
-$(info OPENSSL_PACKAGE: $(OPENSSL_PACKAGE))
-# Use pkg-config to get the compiler and linker flags for OpenSSL if CUSTOM_OPENSSL_PATH is not set
-ifeq ($(CUSTOM_OPENSSL_PATH),)
-    $(info No custom path specified.)
-    SSL_IDIR := $(shell export PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1; export PKG_CONFIG_ALLOW_SYSTEM_LIBS=1; pkg-config --cflags $(OPENSSL_PACKAGE) | grep -oP "(?<=-I)[^ ]+")
-    SSL_LDIR := $(shell pkg-config --variable=libdir  $(OPENSSL_PACKAGE) )
-    LIB_SSL_PATH := $(shell find $(SSL_LDIR) -name "libssl.so" 2>/dev/null | head -n 1)
-    LIB_CRYPTO_PATH := $(shell find $(SSL_LDIR) -name "libcrypto.so" 2>/dev/null | head -n 1)
-else
-    SSL_IDIR := $(CUSTOM_OPENSSL_PATH)/include
-    SSL_LDIR := $(CUSTOM_OPENSSL_PATH)/lib64
-    LIB_SSL_PATH := $(shell find $(SSL_LDIR) -name "libssl.so" 2>/dev/null | head -n 1)
-    LIB_CRYPTO_PATH := $(shell find $(SSL_LDIR) -name "libcrypto.so" 2>/dev/null | head -n 1)	
-    $(info Using custom OpenSSL path: $(CUSTOM_OPENSSL_PATH))
-endif
-
-# Check if required flags are set and provide feedback
-ifneq ($(SSL_IDIR),)
-    $(info SSL_IDIR: $(SSL_IDIR))
-    $(info SSL_LDIR: $(SSL_LDIR))
-    $(info LIB_SSL_PATH: $(LIB_SSL_PATH))
-    $(info LIB_CRYPTO_PATH: $(LIB_CRYPTO_PATH))	
-else
-    $(error Warning: OpenSSL headers not found. Exiting. Please install OpenSSL version 3.)
-endif
-
-REQUIRED_OPENSSL_VERSION := 3.0.0
-PKG_CONFIG := pkg-config
-
-check_openssl_version:
-	@echo "Checking OpenSSL version..."
-	@if [ -n "$(CUSTOM_OPENSSL_PATH)" ]; then \
-		echo "Using custom OpenSSL path: $(CUSTOM_OPENSSL_PATH)"; \
-		header_path="$(CUSTOM_OPENSSL_PATH)/include/openssl/opensslv.h"; \
-		if [ ! -f "$$header_path" ]; then \
-			echo "OpenSSL header file not found at $$header_path"; \
-			exit 1; \
-		fi; \
-		version_number=$$(grep -oP '# define OPENSSL_VERSION_STR "\K[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?' $$header_path | tr -d '[:space:]'); \
-		if [ -z "$$version_number" ]; then \
-			echo "Failed to extract OPENSSL_VERSION_STR from $$header_path"; \
-			exit 1; \
-		fi; \
-		major=$$(echo $$version_number | cut -d'.' -f1); \
-		minor=$$(echo $$version_number | cut -d'.' -f2); \
-		patch=$$(echo $$version_number | cut -d'.' -f3); \
-		echo "Detected OpenSSL version from header: $$major.$$minor.$$patch"; \
-		required_major=3; \
-		required_minor=0; \
-		required_patch=0; \
-		if [ $$major -gt $$required_major ] || { [ $$major -eq $$required_major ] && { [ $$minor -gt $$required_minor ] || { [ $$minor -eq $$required_minor ] && [ $$patch -ge $$required_patch ]; }; }; }; then \
-			echo "OpenSSL version is valid."; \
-		else \
-			echo "OpenSSL version must be >= $(REQUIRED_OPENSSL_VERSION). Detected: $$major.$$minor.$$patch"; \
-			exit 1; \
-		fi; \
-	else \
-		echo "Using pkg-config to detect OpenSSL"; \
-		openssl_version=$$(pkg-config --modversion openssl 2>/dev/null); \
-		if [ -z "$$openssl_version" ]; then \
-			echo "OpenSSL not found via pkg-config."; \
-			exit 1; \
-		fi; \
-		echo "Detected OpenSSL version from pkg-config: $$openssl_version"; \
-		if [ "$$(printf '%s\n' "$(REQUIRED_OPENSSL_VERSION)" "$$openssl_version" | sort -V | head -n1)" != "$(REQUIRED_OPENSSL_VERSION)" ]; then \
-			echo "OpenSSL version must be >= $(REQUIRED_OPENSSL_VERSION). Detected: $$openssl_version"; \
-			exit 1; \
-		fi; \
-	fi
+include ../common_mk/openssl_flags.mk
+include ../common_mk/openssl_version_check.mk
 
 libhttpserver/libhttpserver/build/src/.libs/libhttpserver.a: libmicrohttpd/libmicrohttpd/src/microhttpd/.libs/libmicrohttpd.a re2/re2/obj/libre2.a
 	cd libhttpserver && rm -rf libhttpserver-*/ || true
