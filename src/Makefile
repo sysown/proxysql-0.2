@@ -89,26 +89,7 @@ CURL_PATH := $(DEPS_PATH)/curl/curl
 CURL_IDIR := $(CURL_PATH)/include
 CURL_LDIR := $(CURL_PATH)/lib/.libs
 
-ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl/*" 2>/dev/null | head -n 1)
-LIB_SSL_PATH := $(shell find /usr /usr/local /opt -name "libssl.so" 2>/dev/null | head -n 1)
-LIB_CRYPTO_PATH := $(shell find /usr /usr/local /opt -name "libcrypto.so" 2>/dev/null | head -n 1)
-ifeq ($(DISTRO),almalinux)
-ifeq ($(CENTOSVER),8)
-	ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl3/*" 2>/dev/null | head -n 1)
-	LIB_SSL_PATH := $(shell find /usr /usr/local /opt -name "libssl.so.3" 2>/dev/null | head -n 1)
-	LIB_CRYPTO_PATH := $(shell find /usr /usr/local /opt -name "libcrypto.so.3" 2>/dev/null | head -n 1)
-endif
-endif
-SSL_LDIR := $(dir $(LIB_SSL_PATH))
-
-ifneq ($(ssl_header_path),)
-	SSL_IDIR := $(shell dirname $(shell dirname $(ssl_header_path)))
-    $(info Found OpenSSL headers at $(SSL_IDIR))
-    $(info OpenSSL lib full path is $(LIB_SSL_PATH))
-    $(info OpenSSL libs directory is $(SSL_LDIR))
-else
-	$(error Warning: OpenSSL headers not found. exiting, please install openssl version 3.)
-endif
+include ../common_mk/openssl_flags.mk
 
 EV_PATH := $(DEPS_PATH)/libev/libev/
 EV_IDIR := $(EV_PATH)

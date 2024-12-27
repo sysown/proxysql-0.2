@@ -76,41 +76,8 @@ endif
 
 libinjection: libinjection/libinjection/src/libinjection.a
 
-ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl/*" 2>/dev/null | head -n 1)
-LIB_SSL_PATH := $(shell find /usr /usr/local /opt -name "libssl.so" 2>/dev/null | head -n 1)
-LIB_CRYPTO_PATH := $(shell find /usr /usr/local /opt -name "libcrypto.so" 2>/dev/null | head -n 1)
-ifeq ($(DISTRO),almalinux)
-ifeq ($(CENTOSVER),8)
-	ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl3/*" 2>/dev/null | head -n 1)
-	LIB_SSL_PATH := $(shell find /usr /usr/local /opt -name "libssl.so.3" 2>/dev/null | head -n 1)
-	LIB_CRYPTO_PATH := $(shell find /usr /usr/local /opt -name "libcrypto.so.3" 2>/dev/null | head -n 1)
-endif
-else
-endif
-SSL_LDIR := $(dir $(LIB_SSL_PATH))
-
-ifneq ($(ssl_header_path),)
-	SSL_IDIR := $(shell dirname $(shell dirname $(ssl_header_path)))
-    $(info Found OpenSSL headers at $(SSL_IDIR))
-    $(info OpenSSL lib full path is $(LIB_SSL_PATH))
-    $(info OpenSSL libs directory is $(SSL_LDIR))
-else
-    $(error Warning: OpenSSL headers not found. exiting, please install openssl version 3.)
-endif
-
-OPENSSL_VERSION_3 := 3.0.0
-check_openssl_version:
-	@if [[ "$(DISTRO)" = "almalinux" && "$(CENTOSVER)" = "8" ]]; then \
-		@current_version=$$(openssl3 version | awk '{print $$2}'); \
-	else \
-		@current_version=$$(openssl version | awk '{print $$2}'); \
-	fi; \
-	echo "Installed OpenSSL version: $$current_version"; \
-	compare_result=`printf "%s\n%s" "$(OPENSSL_VERSION_3)" "$$current_version" | sort -V | head -n 1`; \
-	if [ "$$compare_result" != "$(OPENSSL_VERSION_3)" ]; then \
-		echo "Error: Installed OpenSSL version must be $(OPENSSL_VERSION_3) or higher, Please upgrade OpenSSL."; \
-		exit 1; \
-	fi
+include ../common_mk/openssl_flags.mk
+include ../common_mk/openssl_version_check.mk
 
 libhttpserver/libhttpserver/build/src/.libs/libhttpserver.a: libmicrohttpd/libmicrohttpd/src/microhttpd/.libs/libmicrohttpd.a re2/re2/obj/libre2.a
 	cd libhttpserver && rm -rf libhttpserver-*/ || true
