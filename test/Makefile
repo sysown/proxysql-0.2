@@ -43,26 +43,7 @@ MICROHTTPD_IDIR := $(MICROHTTPD_PATH)/src/include
 CURL_PATH := $(DEPS_PATH)/curl/curl
 CURL_IDIR := -I$(CURL_PATH)/include
 
-CUSTOM_OPENSSL_PATH ?=
-
-OPENSSL_PACKAGE := openssl
-
-ifeq ($(DISTRO),almalinux)
-ifeq ($(CENTOSVER),8)
-    OPENSSL_PACKAGE := openssl3
-endif
-endif
-
-$(info OPENSSL_PACKAGE: $(OPENSSL_PACKAGE))
-
 include ../common_mk/openssl_flags.mk
-
-# Check if required flags are set and provide feedback
-ifneq ($(SSL_IDIR),)
-    $(info SSL_IDIR: $(SSL_IDIR))
-else
-    $(error Warning: OpenSSL headers not found. Exiting. Please install OpenSSL version 3.)
-endif
 
 EV_PATH := $(DEPS_PATH)/libev/libev/
 EV_IDIR := $(EV_PATH)
