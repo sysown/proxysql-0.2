@@ -67,7 +67,6 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.gh_token }}
       run: |
-        ls -l proxysql_3p_testing/test_laravel-framework
         echo "Wating for cache '${BLDCACHE}' ..."
         sleep $(( $RANDOM / 1024 ))
         PROBE="$(gh cache list --limit 300 --repo ${{ github.repository }} | grep -i ${BLDCACHE} || echo '')"
@@ -116,7 +115,7 @@ jobs:
         set +e
         
         cd proxysql_3p_testing/test_laravel-framework
-        #sed -i 's/docker-compose/docker compose/g' run-tests.bash
+        git rebase main 
         INFRADB=${INFRADB} CONNECTOR=${CONNECTOR} ./run-tests.bash
         RC=$?
         
