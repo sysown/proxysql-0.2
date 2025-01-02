@@ -290,6 +290,8 @@ class PgSQL_Protocol;
 #define PGSQL_QUERY_RESULT_READY	0x04
 #define PGSQL_QUERY_RESULT_ERROR	0x08
 #define PGSQL_QUERY_RESULT_EMPTY	0x10
+#define PGSQL_QUERY_RESULT_COPY_OUT	0x20
+#define PGSQL_QUERY_RESULT_COPY_IN	0x30
 
 class PgSQL_Query_Result {
 public:
@@ -434,6 +436,40 @@ public:
 	 *       ready for a new query and that any previous query has completed.
 	 */
 	unsigned int add_ready_status(PGTransactionStatusType txn_status);
+
+    /**
+     * @brief Adds the start of a COPY OUT response to the packet.
+     *
+     * This function adds the initial part of a COPY OUT response to the packet.
+     * It uses the provided PGresult object to determine the necessary information
+     * to include in the response.
+     *
+     * @param result A pointer to the PGresult object containing the response data.
+     * @return The number of bytes added to the packet.
+     */
+    unsigned int add_copy_out_response_start(const PGresult* result);
+
+    /**
+     * @brief Adds a row of data to the COPY OUT response.
+     *
+     * This function adds a row of data to the ongoing COPY OUT response. The data
+     * is provided as a pointer to the row data and its length.
+     *
+     * @param data A pointer to the row data to be added.
+     * @param len The length of the row data in bytes.
+     * @return The number of bytes added to the packet.
+     */
+    unsigned int add_copy_out_row(const void* data, unsigned int len);
+
+    /**
+     * @brief Adds the end of a COPY OUT response to the packet.
+     *
+     * This function adds the final part of a COPY OUT response to the packet,
+     * indicating the end of the response.
+     *
+     * @return The number of bytes added to the packet.
+     */
+    unsigned int add_copy_out_response_end();
 
 	/**
 	 * @brief Retrieves the query result set and copies it to a PtrSizeArray.
@@ -869,6 +905,45 @@ public:
 	 * @return The number of bytes copied to the `PgSQL_Query_Result` object.
 	 */
 	unsigned int copy_buffer_to_PgSQL_Query_Result(bool send, PgSQL_Query_Result* pg_query_result, const PSresult* result);
+
+    /**
+     * @brief Copies the start of a response to a PgSQL_Query_Result.
+     *
+     * This function copies the initial part of a response to the provided
+     * PgSQL_Query_Result object. It can optionally send the response.
+     *
+     * @param send Whether to send the response.
+     * @param pg_query_result The PgSQL_Query_Result object to copy the response to.
+     * @param result The PGresult object containing the response data.
+     * @return The number of bytes copied.
+     */
+    unsigned int copy_out_response_start_to_PgSQL_Query_Result(bool send, PgSQL_Query_Result* pg_query_result, const PGresult* result);
+
+    /**
+     * @brief Copies a row to a PgSQL_Query_Result.
+     *
+     * This function copies a single row of data to the provided PgSQL_Query_Result
+     * object. It can optionally send the row data.
+     *
+     * @param send Whether to send the row data.
+     * @param pg_query_result The PgSQL_Query_Result object to copy the row to.
+     * @param data The row data to copy.
+     * @param len The length of the row data.
+     * @return The number of bytes copied.
+     */
+    unsigned int copy_out_row_to_PgSQL_Query_Result(bool send, PgSQL_Query_Result* pg_query_result, const unsigned char* data, unsigned int len);
+
+    /**
+     * @brief Copies the end of a response to a PgSQL_Query_Result.
+     *
+     * This function copies the final part of a response to the provided
+     * PgSQL_Query_Result object. It can optionally send the response.
+     *
+     * @param send Whether to send the response.
+     * @param pg_query_result The PgSQL_Query_Result object to copy the response to.
+     * @return The number of bytes copied.
+     */
+    unsigned int copy_out_response_end_to_PgSQL_Query_Result(bool send, PgSQL_Query_Result* pg_query_result);
 
 private:
 

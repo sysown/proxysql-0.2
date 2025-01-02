@@ -62,9 +62,23 @@ LIBINJECTION_DIR := $(DEPS_PATH)/libinjection/libinjection
 LIBINJECTION_IDIR := $(LIBINJECTION_DIR)/src
 LIBINJECTION_LDIR := $(LIBINJECTION_DIR)/src
 
-SSL_DIR := $(DEPS_PATH)/libssl/openssl/
-SSL_IDIR := $(SSL_DIR)/include
-SSL_LDIR := $(SSL_DIR)
+libssl_path := $(shell find /usr /usr/local /opt -name "libssl.so" 2>/dev/null | head -n 1)
+
+ifneq ($(libssl_path),)
+    SSL_LDIR := $(dir $(libssl_path))
+    $(info Found OpenSSL libs at $(SSL_LDIR))
+else
+    $(error Warning: OpenSSL library not found. exiting, please install openssl.)
+endif
+
+ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl/*" 2>/dev/null | head -n 1)
+
+ifneq ($(ssl_header_path),)
+    SSL_IDIR := $(shell dirname $(ssl_header_path))
+    $(info Found OpenSSL headers at $(SSL_IDIR))
+else
+    $(error Warning: OpenSSL headers not found. exiting, please install openssl.)
+endif
 
 EV_DIR := $(DEPS_PATH)/libev/libev/
 EV_IDIR := $(EV_DIR)
@@ -128,13 +142,13 @@ OBJ := $(PROXYSQL_PATH)/src/obj/proxysql_global.o $(PROXYSQL_PATH)/src/obj/main.
 
 IDIRS := -I$(TAP_IDIR) -I$(RE2_IDIR) -I$(PROXYSQL_IDIR) -I$(JEMALLOC_IDIR) -I$(LIBCONFIG_IDIR) -I$(MARIADB_IDIR)\
 		 -I$(DAEMONPATH_IDIR) -I$(MICROHTTPD_IDIR) -I$(LIBHTTPSERVER_IDIR) -I$(CURL_IDIR) -I$(EV_IDIR)\
-		 -I$(PROMETHEUS_IDIR) -I$(DOTENV_DYN_IDIR) -I$(SSL_IDIR) -I$(SQLITE3_IDIR) -I$(JSON_IDIR) -I$(POSTGRESQL_IDIR)\
-		 -I$(LIBSCRAM_IDIR) -I$(LIBUSUAL_IDIR) 
+		 -I$(PROMETHEUS_IDIR) -I$(DOTENV_DYN_IDIR) -I$(SQLITE3_IDIR) -I$(JSON_IDIR) -I$(POSTGRESQL_IDIR)\
+		 -I$(LIBSCRAM_IDIR) -I$(LIBUSUAL_IDIR) -I$(SSL_IDIR)
 
 LDIRS := -L$(TAP_LDIR) -L$(RE2_LDIR) -L$(PROXYSQL_LDIR) -L$(JEMALLOC_LDIR) -L$(LIBCONFIG_LDIR) -L$(MARIADB_LDIR)\
 		 -L$(DAEMONPATH_LDIR) -L$(MICROHTTPD_LDIR) -L$(LIBHTTPSERVER_LDIR) -L$(CURL_LDIR) -L$(EV_LDIR)\
-		 -L$(PROMETHEUS_LDIR) -L$(DOTENV_DYN_LDIR) -L$(SSL_LDIR) -L$(PCRE_LDIR) -L$(LIBINJECTION_LDIR) -L$(POSTGRESQL_LDIR)\
-		 -L$(LIBSCRAM_LDIR) -L$(LIBUSUAL_LDIR)
+		 -L$(PROMETHEUS_LDIR) -L$(DOTENV_DYN_LDIR) -L$(PCRE_LDIR) -L$(LIBINJECTION_LDIR) -L$(POSTGRESQL_LDIR)\
+		 -L$(LIBSCRAM_LDIR) -L$(LIBUSUAL_LDIR) -L$(SSL_LDIR)
 
 #SOURCES := ../tap/utils.cpp
 
@@ -195,8 +209,8 @@ OPT := $(STDCPP) -O2 -ggdb -Wl,--no-as-needed -Wl,-rpath,$(TAP_LDIR) $(WGCOV) $(
 .PHONY: default
 default: all
 
-CUSTOMARGS := -I$(TAP_IDIR) -I$(CURL_IDIR) -I$(SQLITE3_IDIR) -I$(PROXYSQL_IDIR) -I$(JSON_IDIR) -I$(SSL_IDIR) -I$(RE2_IDIR)
-CUSTOMARGS += -L$(TAP_LDIR) -L$(CURL_LDIR) -L$(SSL_LDIR) -L$(RE2_LDIR)
+CUSTOMARGS := -I$(TAP_IDIR) -I$(CURL_IDIR) -I$(SQLITE3_IDIR) -I$(PROXYSQL_IDIR) -I$(JSON_IDIR) -I$(RE2_IDIR) -I$(SSL_IDIR)
+CUSTOMARGS += -L$(TAP_LDIR) -L$(CURL_LDIR) -L$(RE2_LDIR) -L$(SSL_LDIR)
 CUSTOMARGS += -Wl,-Bdynamic -lcpp_dotenv -lcurl -lssl -lcrypto -lre2 -lpthread -lz -ldl
 
 .PHONY: all

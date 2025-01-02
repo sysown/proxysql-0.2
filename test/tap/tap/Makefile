@@ -92,27 +92,26 @@ default: all
 
 .PHONY: all
 all: libtap_mariadb.a libtap_mysql57.a libtap_mysql8.a \
-	libtap.so libssl.so.3 libcrypto.so.3 libcpp_dotenv.so libre2.so
+	libtap.so libcpp_dotenv.so libre2.so
 
 debug: OPT := $(STDCPP) -O0 -DDEBUG -ggdb -Wl,--no-as-needed $(WASAN)
 debug: libtap_mariadb.a libtap_mysql57.a libtap_mysql8.a libtap.so
 
-
 ### helper targets
 
-command_line.o: command_line.cpp cpp-dotenv/static/cpp-dotenv/libcpp_dotenv.a libcurl.so libssl.so.3 libcrypto.so.3 libcpp_dotenv.so
+command_line.o: command_line.cpp cpp-dotenv/static/cpp-dotenv/libcpp_dotenv.a libcurl.so -lssl -lcrypto libcpp_dotenv.so
 	$(CXX) -fPIC -c command_line.cpp $(IDIRS) $(OPT)
 
-utils_mariadb.o: utils.cpp cpp-dotenv/static/cpp-dotenv/libcpp_dotenv.a libcurl.so libssl.so.3 libcrypto.so.3 libcpp_dotenv.so
+utils_mariadb.o: utils.cpp cpp-dotenv/static/cpp-dotenv/libcpp_dotenv.a libcurl.so -lssl -lcrypto libcpp_dotenv.so
 	$(CXX) -fPIC -c utils.cpp $(IDIRS) -I$(MARIADB_IDIR) $(OPT) -o $@
 
-utils_mysql57.o: utils.cpp cpp-dotenv/static/cpp-dotenv/libcpp_dotenv.a libcurl.so libssl.so.3 libcrypto.so.3 libcpp_dotenv.so
+utils_mysql57.o: utils.cpp cpp-dotenv/static/cpp-dotenv/libcpp_dotenv.a libcurl.so -lssl -lcrypto libcpp_dotenv.so
 	$(CXX) -DDISABLE_WARNING_COUNT_LOGGING -fPIC -c utils.cpp $(IDIRS) -I$(TEST_MYSQL_IDIR) -I$(TEST_MYSQL_EDIR) $(OPT) -o $@
 
-utils_mysql8.o: utils.cpp cpp-dotenv/static/cpp-dotenv/libcpp_dotenv.a libcurl.so libssl.so.3 libcrypto.so.3 libcpp_dotenv.so
+utils_mysql8.o: utils.cpp cpp-dotenv/static/cpp-dotenv/libcpp_dotenv.a libcurl.so -lssl -lcrypto libcpp_dotenv.so
 	$(CXX) -DDISABLE_WARNING_COUNT_LOGGING -fPIC -c utils.cpp $(IDIRS) -I$(TEST_MYSQL8_IDIR) -I$(TEST_MYSQL_EDIR) $(OPT) -o $@
 
-tap.o: tap.cpp cpp-dotenv/static/cpp-dotenv/libcpp_dotenv.a libcurl.so libssl.so.3 libcrypto.so.3 libcpp_dotenv.so
+tap.o: tap.cpp cpp-dotenv/static/cpp-dotenv/libcpp_dotenv.a libcurl.so -lssl -lcrypto libcpp_dotenv.so
 	$(CXX) -fPIC -c tap.cpp $(IDIRS) $(OPT)
 
 libtap_mariadb.a: tap.o command_line.o utils_mariadb.o cpp-dotenv/static/cpp-dotenv/libcpp_dotenv.a
@@ -129,12 +128,6 @@ libtap.so: libtap_mariadb.a cpp-dotenv/dynamic/cpp-dotenv/libcpp_dotenv.so libre
 
 
 ### tap deps targets
-
-libssl.so.3: $(DEPS_PATH)/libssl/openssl/libssl.so.3
-	cp -a $(DEPS_PATH)/libssl/openssl/libssl.so* .
-
-libcrypto.so.3: $(DEPS_PATH)/libssl/openssl/libcrypto.so.3
-	cp -a $(DEPS_PATH)/libssl/openssl/libcrypto.so* .
 
 libcpp_dotenv.so: cpp-dotenv/dynamic/cpp-dotenv/libcpp_dotenv.so
 	find cpp-dotenv/dynamic/cpp-dotenv/ -name '*.so' -exec cp -a {} . \;

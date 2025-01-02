@@ -640,10 +640,10 @@ public:
 	inline int get_pg_is_nonblocking() { return PQisnonblocking(pgsql_conn); }
 	inline int get_pg_is_threadsafe() { return PQisthreadsafe(); }
 	inline const char* get_pg_error_message() { return PQerrorMessage(pgsql_conn); }
+	inline SSL* get_pg_ssl_object() { return (SSL*)PQsslStruct(pgsql_conn, "OpenSSL"); }
 	const char* get_pg_server_version_str(char* buff, int buff_size);
 	const char* get_pg_connection_status_str();
 	const char* get_pg_transaction_status_str();
-
 	unsigned int get_memory_usage() const;
 
 	//PgSQL_Conn_Param conn_params;
@@ -655,10 +655,16 @@ public:
 	PgSQL_Query_Result* query_result;
 	PgSQL_Query_Result* query_result_reuse;
 	bool new_result;
+	bool is_copy_out;
 	//PgSQL_SrvC* parent;
 	//PgSQL_Connection_userinfo* userinfo;
 	//PgSQL_Data_Stream* myds;
 	//int fd;
+
+private:
+	// Handles the COPY OUT response from the server.
+	// Returns true if it consumes all buffer data, or false if the threshold for result size is reached
+	bool handle_copy_out(const PGresult* result, uint64_t* processed_bytes);
 };
 
 #endif /* __CLASS_PGSQL_CONNECTION_H */

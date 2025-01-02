@@ -1158,7 +1158,11 @@ int PgSQL_Threads_Handler::listener_del(const char* iface) {
 		}
 		for (i = 0; i < num_threads; i++) {
 			PgSQL_Thread* thr = (PgSQL_Thread*)pgsql_threads[i].worker;
-			while (__sync_fetch_and_add(&thr->mypolls.pending_listener_del, 0));
+			while (__sync_fetch_and_add(&thr->mypolls.pending_listener_del, 0)) {
+				// Since 'listeners_stop' is performed in 'maintenance_loops' by the
+				// workers this active-wait is likely to take some time.
+				usleep(std::min(std::max(pgsql_thread___poll_timeout/20, 10000), 40000));
+			}
 		}
 		MLM->del(idx);
 #ifdef SO_REUSEPORT
@@ -2792,6 +2796,12 @@ PgSQL_Thread::~PgSQL_Thread() {
 		free(match_regexes);
 		match_regexes = NULL;
 	}
+
+	if (copy_cmd_matcher) {
+		delete copy_cmd_matcher;
+		copy_cmd_matcher = NULL;
+	}
+
 	if (thr_SetParser != NULL) {
 		delete thr_SetParser;
 		thr_SetParser = NULL;
@@ -2845,6 +2855,8 @@ bool PgSQL_Thread::init() {
 
 	match_regexes[2] = new Session_Regex((char*)"^SET(?: +)(|SESSION +)TRANSACTION(?: +)(?:(?:(ISOLATION(?: +)LEVEL)(?: +)(REPEATABLE(?: +)READ|READ(?: +)COMMITTED|READ(?: +)UNCOMMITTED|SERIALIZABLE))|(?:(READ)(?: +)(WRITE|ONLY)))");
 	match_regexes[3] = new Session_Regex((char*)"^(set)(?: +)((charset)|(character +set))(?: )");
+
+	copy_cmd_matcher = new CopyCmdMatcher();
 
 	return true;
 }
@@ -2998,26 +3010,19 @@ void PgSQL_Thread::run() {
 #endif // IDLE_THREADS
 
 		pthread_mutex_unlock(&thread_mutex);
-		if (unlikely(mypolls.bootstrapping_listeners == true)) {
-			while ( // spin here if ...
-				(n = __sync_add_and_fetch(&mypolls.pending_listener_add, 0)) // there is a new listener to add
-				||
-				(GloPTH->bootstrapping_listeners == true) // PgSQL_Thread_Handlers has more listeners to configure
-				) {
-				if (n) {
-					poll_listener_add(n);
-					assert(__sync_bool_compare_and_swap(&mypolls.pending_listener_add, n, 0));
-				}
-				else {
-					if (GloPTH->bootstrapping_listeners == false) {
-						// we stop looping
-						mypolls.bootstrapping_listeners = false;
-					}
-				}
-#ifdef DEBUG
-				usleep(5 + rand() % 10);
-#endif
+		while ( // spin here if ...
+			(n = __sync_add_and_fetch(&mypolls.pending_listener_add, 0)) // there is a new listener to add
+			||
+			(GloPTH->bootstrapping_listeners == true) // PgSQL_Thread_Handlers has more listeners to configure
+		) {
+			if (n) {
+				poll_listener_add(n);
+				assert(__sync_bool_compare_and_swap(&mypolls.pending_listener_add, n, 0));
 			}
+			// The delay for the active-wait is a fraction of 'poll_timeout'. Since other
+			// threads may be waiting on poll for further operations, checks are meaningless
+			// until that timeout expires (other workers make progress).
+			usleep(std::min(std::max(pgsql_thread___poll_timeout/20, 10000), 40000) + (rand() % 2000));
 		}
 
 		proxy_debug(PROXY_DEBUG_NET, 7, "poll_timeout=%u\n", mypolls.poll_timeout);
@@ -3682,7 +3687,7 @@ void PgSQL_Thread::process_all_sessions() {
 			char _buf[1024];
 			if (sess->client_myds) {
 				if (pgsql_thread___log_unhealthy_connections) {
-					if (sess->session_fast_forward == false) {
+					if (sess->session_fast_forward == SESSION_FORWARD_TYPE_NONE) {
 						proxy_warning(
 							"Closing unhealthy client connection %s:%d\n", sess->client_myds->addr.addr,
 							sess->client_myds->addr.port
@@ -3690,8 +3695,8 @@ void PgSQL_Thread::process_all_sessions() {
 					}
 					else {
 						proxy_warning(
-							"Closing 'fast_forward' client connection %s:%d\n", sess->client_myds->addr.addr,
-							sess->client_myds->addr.port
+							"Closing 'fast_forward' client connection %s:%d (Session Type:0x%02X)\n", sess->client_myds->addr.addr,
+							sess->client_myds->addr.port, sess->session_fast_forward
 						);
 					}
 				}
@@ -4041,6 +4046,7 @@ PgSQL_Thread::PgSQL_Thread() {
 		status_variables.stvar[i] = 0;
 	}
 	match_regexes = NULL;
+	copy_cmd_matcher = NULL;
 
 	variables.min_num_servers_lantency_awareness = 1000;
 	variables.aurora_max_lag_ms_only_read_from_replicas = 2;

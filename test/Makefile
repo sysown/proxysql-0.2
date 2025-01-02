@@ -43,8 +43,14 @@ MICROHTTPD_IDIR := $(MICROHTTPD_PATH)/src/include
 CURL_PATH := $(DEPS_PATH)/curl/curl
 CURL_IDIR := -I$(CURL_PATH)/include
 
-SSL_PATH := $(DEPS_PATH)/libssl/openssl/
-SSL_IDIR := $(SSL_PATH)/include
+ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl/*" 2>/dev/null | head -n 1)
+
+ifneq ($(ssl_header_path),)
+    SSL_IDIR := $(shell dirname $(ssl_header_path))
+    $(info Found OpenSSL headers at $(SSL_IDIR))
+else
+    $(error Warning: OpenSSL headers not found. exiting, please install openssl.)
+endif
 
 EV_PATH := $(DEPS_PATH)/libev/libev/
 EV_IDIR := $(EV_PATH)

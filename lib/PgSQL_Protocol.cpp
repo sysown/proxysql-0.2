@@ -771,9 +771,9 @@ EXECUTION_STATE PgSQL_Protocol::process_handshake_response_packet(unsigned char*
 		(*myds)->sess->user_attributes = attributes; // just the pointer is passed
 		//(*myds)->sess->schema_locked = schema_locked;
 		(*myds)->sess->transaction_persistent = transaction_persistent;
-		(*myds)->sess->session_fast_forward = false; // default
+		(*myds)->sess->session_fast_forward = SESSION_FORWARD_TYPE_NONE; // default
 		if ((*myds)->sess->session_type == PROXYSQL_SESSION_PGSQL) {
-			(*myds)->sess->session_fast_forward = fast_forward;
+			(*myds)->sess->session_fast_forward = fast_forward ? SESSION_FORWARD_TYPE_PERMANENT : SESSION_FORWARD_TYPE_NONE;
 		}
 		(*myds)->sess->user_max_connections = max_connections;
 	} else {
@@ -790,7 +790,7 @@ EXECUTION_STATE PgSQL_Protocol::process_handshake_response_packet(unsigned char*
 				(*myds)->sess->default_schema = strdup((char*)"main"); // just the pointer is passed
 				(*myds)->sess->schema_locked = false;
 				(*myds)->sess->transaction_persistent = false;
-				(*myds)->sess->session_fast_forward = false;
+				(*myds)->sess->session_fast_forward = SESSION_FORWARD_TYPE_NONE;
 				(*myds)->sess->user_max_connections = 0;
 				password = l_strdup(pgsql_thread___monitor_password);
 			}
@@ -1106,7 +1106,7 @@ void PgSQL_Protocol::generate_error_packet(bool send, bool ready, const char* ms
 		case STATE_OK:
 			break;
 		case STATE_SLEEP:
-			if ((*myds)->sess->session_fast_forward == true) { // see issue #733
+			if ((*myds)->sess->session_fast_forward) { // see issue #733
 				break;
 			}
 		default:
@@ -1437,7 +1437,7 @@ unsigned int PgSQL_Protocol::copy_row_description_to_PgSQL_Query_Result(bool sen
 unsigned int PgSQL_Protocol::copy_row_to_PgSQL_Query_Result(bool send, PgSQL_Query_Result* pg_query_result, const PGresult* result) {
 	assert(pg_query_result);
 	assert(result);
-	assert(pg_query_result->num_fields);
+	//assert(pg_query_result->num_fields);
 
 	const unsigned int numRows = PQntuples(result);
 	unsigned int total_size = 0;
@@ -1807,6 +1807,130 @@ unsigned int PgSQL_Protocol::copy_buffer_to_PgSQL_Query_Result(bool send, PgSQL_
 	return size;
 }
 
+unsigned int PgSQL_Protocol::copy_out_response_start_to_PgSQL_Query_Result(bool send, PgSQL_Query_Result* pg_query_result, const PGresult* result) {
+	assert(pg_query_result);
+	assert(result);
+
+	const int fields_cnt = PQnfields(result);
+	unsigned int size = 1 + 4 + 1 + 2 + (fields_cnt * 2);
+
+	bool alloced_new_buffer = false;
+	unsigned char* _ptr = pg_query_result->buffer_reserve_space(size);
+
+	// buffer is not enough to store the new row description. Remember we have already pushed data to PSarrayOUT
+	if (_ptr == NULL) {
+		_ptr = (unsigned char*)l_alloc(size);
+		alloced_new_buffer = true;
+	}
+
+	PG_pkt pgpkt(_ptr, size);
+	pgpkt.put_char('H');
+	pgpkt.put_uint32(size - 1);
+	pgpkt.put_char(PQbinaryTuples(result) ? 1 : 0);
+	pgpkt.put_uint16(fields_cnt);
+
+	for (int i = 0; i < fields_cnt; i++) {
+		int format_code = PQfformat(result, i);
+		pgpkt.put_uint16(format_code);
+	}
+
+	if (send == true) {
+		// not supported
+		//(*myds)->PSarrayOUT->add((void*)_ptr, size); 
+	}
+
+	//#ifdef DEBUG
+	//	if (dump_pkt) { __dump_pkt(__func__, _ptr, size); }
+	//#endif
+
+	pg_query_result->resultset_size = size;
+
+	if (alloced_new_buffer) {
+		// we created new buffer
+		//pg_query_result->buffer_to_PSarrayOut();
+		pg_query_result->PSarrayOUT.add(_ptr, size);
+	}
+
+	pg_query_result->num_fields = fields_cnt;
+	pg_query_result->pkt_count++;
+	return size;
+}
+
+unsigned int PgSQL_Protocol::copy_out_row_to_PgSQL_Query_Result(bool send, PgSQL_Query_Result* pg_query_result, 
+	const unsigned char* data, unsigned int len) {
+	assert(pg_query_result);
+	//assert(result);
+	assert(pg_query_result->num_fields);
+
+	unsigned int size = 1 + 4 + len; // 'd', length, packet length
+		
+	bool alloced_new_buffer = false;
+	unsigned char* _ptr = pg_query_result->buffer_reserve_space(size);
+
+	// buffer is not enough to store the new row. Remember we have already pushed data to PSarrayOUT
+	if (_ptr == NULL) {
+		_ptr = (unsigned char*)l_alloc(size);
+		alloced_new_buffer = true;
+	}
+
+	PG_pkt pgpkt(_ptr, size);
+
+	pgpkt.put_char('d');
+	pgpkt.put_uint32(size - 1);
+	pgpkt.put_bytes(data, len);
+	
+	if (send == true) {
+		// not supported
+		//(*myds)->PSarrayOUT->add((void*)_ptr, size); 
+	}
+
+	pg_query_result->resultset_size += size;
+
+	if (alloced_new_buffer) {
+		// we created new buffer
+		//pg_query_result->buffer_to_PSarrayOut();
+		pg_query_result->PSarrayOUT.add(_ptr, size);
+	}
+	pg_query_result->pkt_count++;
+	pg_query_result->num_rows += 1;
+	return size;
+}
+
+unsigned int PgSQL_Protocol::copy_out_response_end_to_PgSQL_Query_Result(bool send, PgSQL_Query_Result* pg_query_result) {
+	assert(pg_query_result);
+
+	const unsigned int size = 1 + 4; // 'c', length
+	bool alloced_new_buffer = false;
+
+	unsigned char* _ptr = pg_query_result->buffer_reserve_space(size);
+
+	// buffer is not enough to store the new row. Remember we have already pushed data to PSarrayOUT
+	if (_ptr == NULL) {
+		_ptr = (unsigned char*)l_alloc(size);
+		alloced_new_buffer = true;
+	}
+
+	PG_pkt pgpkt(_ptr, size);
+
+	pgpkt.put_char('c');
+	pgpkt.put_uint32(size - 1);
+
+	if (send == true) {
+		// not supported
+		//(*myds)->PSarrayOUT->add((void*)_ptr, size); 
+	}
+
+	pg_query_result->resultset_size += size;
+
+	if (alloced_new_buffer) {
+		// we created new buffer
+		//pg_query_result->buffer_to_PSarrayOut();
+		pg_query_result->PSarrayOUT.add(_ptr, size);
+	}
+	pg_query_result->pkt_count++;
+	return size;
+}
+
 PgSQL_Query_Result::PgSQL_Query_Result() {
 	buffer = NULL;
 	transfer_started = false;
@@ -1872,6 +1996,26 @@ unsigned int PgSQL_Query_Result::add_row(const PSresult* result) {
 	result_packet_type |= PGSQL_QUERY_RESULT_TUPLE; // temporary
 	return res;
 }
+
+unsigned int PgSQL_Query_Result::add_copy_out_response_start(const PGresult* result) {
+	const unsigned int res = proto->copy_out_response_start_to_PgSQL_Query_Result(false, this, result);
+	result_packet_type |= PGSQL_QUERY_RESULT_COPY_OUT;
+	return res;
+}
+
+unsigned int PgSQL_Query_Result::add_copy_out_row(const void* data, unsigned int len) {
+	const unsigned int res = proto->copy_out_row_to_PgSQL_Query_Result(false, this, (const unsigned char*)data, len);
+	result_packet_type |= PGSQL_QUERY_RESULT_COPY_OUT; 
+	num_rows += 1;
+	return res;
+}
+
+unsigned int PgSQL_Query_Result::add_copy_out_response_end() {
+	const unsigned int res = proto->copy_out_response_end_to_PgSQL_Query_Result(false, this);
+	result_packet_type |= PGSQL_QUERY_RESULT_COPY_OUT;
+	return res;
+}
+
 
 unsigned int PgSQL_Query_Result::add_error(const PGresult* result) {
 	unsigned int size = 0;

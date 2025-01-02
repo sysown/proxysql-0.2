@@ -89,12 +89,12 @@ public:
 
 	PgSQL_Query_Info();
 	~PgSQL_Query_Info();
-	void init(unsigned char* _p, int len, bool mysql_header = false);
+	void init(unsigned char* _p, int len, bool header = false);
 	void query_parser_init();
 	enum PGSQL_QUERY_command query_parser_command_type();
 	void query_parser_free();
 	unsigned long long query_parser_update_counters();
-	void begin(unsigned char* _p, int len, bool mysql_header = false);
+	void begin(unsigned char* _p, int len, bool header = false);
 	void end();
 	char* get_digest_text();
 	bool is_select_NOT_for_update();
@@ -256,6 +256,29 @@ private:
 	void handler_WCD_SS_MCQ_qpo_error_msg(PtrSize_t* pkt);
 	void handler_WCD_SS_MCQ_qpo_LargePacket(PtrSize_t* pkt);
 
+	/**
+	 * @brief Switches session from normal mode to fast forward mode.
+	 *
+	 * This method transitions the session to fast forward mode based on session type.
+	 * (Currently only supports SESSION_FORWARD_TYPE_TEMPORARY and extended types)
+	 *
+	 * @param pkt Used solely to push the packet back to client_myds PSarrayIN,
+	 *			allowing it to be forwarded to the backend via the fast forward session
+	 * @param command Command that causes the session to switch to fast forward mode.
+	 * @param session_type SESSION_FORWARD_TYPE indicating the type of session.
+	 *
+	 * @return void.
+	 */
+	void switch_normal_to_fast_forward_mode(PtrSize_t& pkt, std::string_view command, SESSION_FORWARD_TYPE session_type);
+
+	/**
+	 * @brief Switches session from fast forward mode to normal mode.
+	 *
+	 * This method is used to revert session from fast forward mode back to normal mode.
+	 * 
+	 */
+	void switch_fast_forward_to_normal_mode();
+
 public:
 	bool handler_again___status_SETTING_GENERIC_VARIABLE(int* _rc, const char* var_name, const char* var_value, bool no_quote = false, bool set_transaction = false);
 #if 0
@@ -341,7 +364,7 @@ public:
 	bool schema_locked;
 	bool transaction_persistent;
 	bool session_fast_forward;
-	bool started_sending_data_to_client; // this status variable tracks if some result set was sent to the client, or if proxysql is still buffering everything
+	//bool started_sending_data_to_client; // this status variable tracks if some result set was sent to the client, or if proxysql is still buffering everything
 	bool use_ssl;
 #endif // 0
 	/**
@@ -359,6 +382,7 @@ public:
 //	StmtLongDataHandler* SLDH;
 
 	Session_Regex** match_regexes;
+	CopyCmdMatcher* copy_cmd_matcher;
 
 	ProxySQL_Node_Address* proxysql_node_address; // this is used ONLY for Admin, and only if the other party is another proxysql instance part of a cluster
 	bool use_ldap_auth;

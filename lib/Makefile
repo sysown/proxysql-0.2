@@ -6,10 +6,25 @@ ifndef GIT_VERSION
     $(error GIT_VERSION is not set)
 endif
 
-DEPS_PATH := ../deps
-
 UNAME_S := $(shell uname -s)
+UNAME_M := $(shell uname -m)
 
+DISTRO := $(shell grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
+
+CENTOSVER := Unknown
+ifneq (,$(wildcard /etc/system-release))
+	CENTOSVER := $(shell rpm --eval %rhel)
+endif
+
+IS_ARM := $(if $(findstring aarch64, $(UNAME_M)),true,false)
+IS_CENTOS := $(if $(findstring Unknown, $(CENTOSVER)),false,true)
+
+
+PROXYSQL_PATH := ..
+PROXYSQL_IDIR := $(PROXYSQL_PATH)/include
+PROXYSQL_LDIR := $(PROXYSQL_PATH)/lib
+
+DEPS_PATH := $(PROXYSQL_PATH)/deps
 
 MARIADB_PATH := $(DEPS_PATH)/mariadb-client-library/mariadb_client
 MARIADB_IDIR := $(MARIADB_PATH)/include
@@ -47,8 +62,26 @@ COREDUMPER_IDIR := $(COREDUMPER_DIR)/include
 CURL_DIR := $(DEPS_PATH)/curl/curl
 CURL_IDIR := $(CURL_DIR)/include
 
-SSL_DIR := $(DEPS_PATH)/libssl/openssl/
-SSL_IDIR := $(SSL_DIR)/include
+ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl/*" 2>/dev/null | head -n 1)
+LIB_SSL_PATH := $(shell find /usr /usr/local /opt -name "libssl.so" 2>/dev/null | head -n 1)
+LIB_CRYPTO_PATH := $(shell find /usr /usr/local /opt -name "libcrypto.so" 2>/dev/null | head -n 1)
+ifeq ($(DISTRO),almalinux)
+ifeq ($(CENTOSVER),8)
+	ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl3/*" 2>/dev/null | head -n 1)
+	LIB_SSL_PATH := $(shell find /usr /usr/local /opt -name "libssl.so.3" 2>/dev/null | head -n 1)
+	LIB_CRYPTO_PATH := $(shell find /usr /usr/local /opt -name "libcrypto.so.3" 2>/dev/null | head -n 1)endif
+endif
+endif
+SSL_LDIR := $(dir $(LIB_SSL_PATH))
+
+ifneq ($(ssl_header_path),)
+	SSL_IDIR := $(shell dirname $(shell dirname $(ssl_header_path)))
+    $(info Found OpenSSL headers at $(SSL_IDIR))
+    $(info OpenSSL lib full path is $(LIB_SSL_PATH))
+    $(info OpenSSL libs directory is $(SSL_LDIR))
+else
+    $(error Warning: OpenSSL headers not found. exiting, please install openssl version 3.)
+endif
 
 EV_DIR := $(DEPS_PATH)/libev/libev/
 EV_IDIR := $(EV_DIR)
@@ -71,7 +104,7 @@ POSTGRES_LDIR=$(POSTGRES_IFACES)/libpq/
 
 IDIR := ../include
 
-IDIRS := -I$(IDIR) -I$(JEMALLOC_IDIR) -I$(MARIADB_IDIR) $(LIBCONFIG_IDIR) -I$(RE2_IDIR) -I$(SQLITE3_DIR) -I$(PCRE_PATH) -I/usr/local/include -I$(CLICKHOUSE_CPP_DIR) -I$(CLICKHOUSE_CPP_DIR)/contrib/ $(MICROHTTPD_IDIR) $(LIBHTTPSERVER_IDIR) $(LIBINJECTION_IDIR) -I$(CURL_IDIR) -I$(EV_DIR) -I$(SSL_IDIR) -I$(PROMETHEUS_IDIR) -I$(LIBUSUAL_IDIR) -I$(LIBSCRAM_IDIR) -I$(POSTGRES_IFACE)
+IDIRS := -I$(IDIR) -I$(JEMALLOC_IDIR) -I$(MARIADB_IDIR) $(LIBCONFIG_IDIR) -I$(RE2_IDIR) -I$(SQLITE3_DIR) -I$(PCRE_PATH) -I/usr/local/include -I$(CLICKHOUSE_CPP_DIR) -I$(CLICKHOUSE_CPP_DIR)/contrib/ $(MICROHTTPD_IDIR) $(LIBHTTPSERVER_IDIR) $(LIBINJECTION_IDIR) -I$(CURL_IDIR) -I$(EV_DIR) -I$(PROMETHEUS_IDIR) -I$(LIBUSUAL_IDIR) -I$(LIBSCRAM_IDIR) -I$(POSTGRES_IFACE) -I$(SSL_IDIR)
 ifeq ($(UNAME_S),Linux)
 	IDIRS += -I$(COREDUMPER_IDIR)
 endif

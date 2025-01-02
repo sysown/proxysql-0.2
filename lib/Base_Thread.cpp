@@ -42,6 +42,10 @@ void Base_Thread::register_session(T thr, S _sess, bool up_start) {
 //		assert(0);
 //	}
 	_sess->match_regexes=match_regexes;
+	if constexpr (std::is_same_v<T, PgSQL_Thread*>) {
+		_sess->copy_cmd_matcher = (static_cast<PgSQL_Thread*>(this))->copy_cmd_matcher;
+	}
+
 	if (up_start)
 		_sess->start_time=curtime;
 	proxy_debug(PROXY_DEBUG_NET,1,"Thread=%p, Session=%p -- Registered new session\n", _sess->thread, _sess);

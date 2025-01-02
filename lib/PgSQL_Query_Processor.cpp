@@ -164,6 +164,7 @@ static char* commands_counters_desc[PGSQL_QUERY___NONE] = {
 	[PGSQL_QUERY_ALTER_TABLESPACE] = (char*)"ALTER_TABLESPACE",
 	[PGSQL_QUERY_DROP_TABLESPACE] = (char*)"DROP_TABLESPACE",
 	[PGSQL_QUERY_CLUSTER] = (char*)"PGSQL_QUERY_CLUSTER",
+	[PGSQL_QUERY_START_REPLICATION] = (char*)"START_REPLICATION",
 	[PGSQL_QUERY_UNKNOWN] = (char*)"UNKNOWN",
 };
 
@@ -1102,6 +1103,10 @@ __remove_parenthesis:
 		if (!strcasecmp("START", token)) {
 			token = (char*)tokenize(&tok);
 			if (token != NULL && !strcasecmp("TRANSACTION", token)) ret = PGSQL_QUERY_BEGIN;
+			break;
+		}
+		if (!strcasecmp("START_REPLICATION", token)) {
+			ret = PGSQL_QUERY_START_REPLICATION;
 			break;
 		}
 		break;

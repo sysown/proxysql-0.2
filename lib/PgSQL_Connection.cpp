@@ -1535,6 +1535,7 @@ PgSQL_Connection::PgSQL_Connection() {
 	query_result = NULL;
 	query_result_reuse = NULL;
 	new_result = true;
+	is_copy_out = false;
 	reset_error();
 }
 
@@ -1676,6 +1677,23 @@ handler_again:
 		if (!is_connected()) 
 			assert(0); // shouldn't ever reach here, we have messed up the state machine
 		
+		if (get_pg_ssl_in_use()) {
+			if (myds && myds->sess && myds->sess->session_fast_forward) {
+				assert(myds->ssl == NULL);
+				SSL* ssl_obj = get_pg_ssl_object();
+				if (ssl_obj != NULL) {
+					myds->encrypted = true;
+					myds->ssl = ssl_obj;
+					myds->rbio_ssl = BIO_new(BIO_s_mem());
+					myds->wbio_ssl = BIO_new(BIO_s_mem());
+					SSL_set_bio(myds->ssl, myds->rbio_ssl, myds->wbio_ssl);
+				}
+				else {
+					// it means that ProxySQL tried to use SSL to connect to the backend
+					// but the backend didn't support SSL				
+				}
+			}
+		}
 		__sync_fetch_and_add(&PgHGM->status.server_connections_connected, 1);
 		__sync_fetch_and_add(&parent->connect_OK, 1);
 		//MySQL_Monitor::update_dns_cache_from_mysql_conn(pgsql);
@@ -1802,11 +1820,25 @@ handler_again:
 				case PGRES_SINGLE_TUPLE:
 					break;
 				case PGRES_COPY_OUT:
+					if (handle_copy_out(result.get(), &processed_bytes) == false) {
+						next_event(ASYNC_USE_RESULT_CONT);
+						return async_state_machine; // Threashold for result size reached. Pause temporarily
+					}
+					NEXT_IMMEDIATE(ASYNC_USE_RESULT_CONT);
+					break;
 				case PGRES_COPY_IN:
 				case PGRES_COPY_BOTH:
-					// NOT IMPLEMENTED
-					proxy_error("COPY not supported\n");
-					assert(0);
+					// disconnect client session (and backend connection) if COPY (STDIN) command bypasses the initial checks.
+					// This scenario should be handled in fast-forward mode and should never occur at this point.
+					if (myds && myds->sess) {
+						proxy_warning("Unable to process the '%s' command from client %s:%d. Please report a bug for future enhancements.\n", 
+							myds->sess->CurrentQuery.QueryParserArgs.digest_text ? myds->sess->CurrentQuery.QueryParserArgs.digest_text : "COPY",
+							myds->sess->client_myds->addr.addr, myds->sess->client_myds->addr.port);
+					} else {
+						proxy_warning("Unable to process the 'COPY' command. Please report a bug for future enhancements.\n");
+					}
+					set_error(PGSQL_ERROR_CODES::ERRCODE_RAISE_EXCEPTION, "Unable to process 'COPY' command", true);
+					NEXT_IMMEDIATE(ASYNC_QUERY_END);
 					break;
 				case PGRES_BAD_RESPONSE:
 				case PGRES_NONFATAL_ERROR:
@@ -1931,6 +1963,7 @@ handler_again:
 		}
 		// should be NULL
 		assert(!pgsql_result);
+		assert(!is_copy_out);
 		break;
 	case ASYNC_RESET_SESSION_START:
 		reset_session_start();
@@ -2199,19 +2232,21 @@ void PgSQL_Connection::fetch_result_cont(short event) {
 	// This situation can happen when a multi-statement query has been executed.
 	if (pgsql_result)
 		return;
-
-	switch (PShandleRowData(pgsql_conn, new_result, &ps_result)) {
-	case 0:
-		result_type = 2;
-		return;
-	case 1:
-		// we already have data available in buffer
-		if (PQisBusy(pgsql_conn) == 0) {
-			result_type = 1;
-			pgsql_result = PQgetResult(pgsql_conn);
+	
+	if (is_copy_out == false) {
+		switch (PShandleRowData(pgsql_conn, new_result, &ps_result)) {
+		case 0:
+			result_type = 2;
 			return;
+		case 1:
+			// we already have data available in buffer
+			if (PQisBusy(pgsql_conn) == 0) {
+				result_type = 1;
+				pgsql_result = PQgetResult(pgsql_conn);
+				return;
+			}
+			break;
 		}
-		break;
 	}
 
 	if (PQconsumeInput(pgsql_conn) == 0) {
@@ -2946,4 +2981,48 @@ const char* PgSQL_Connection::get_pg_transaction_status_str() {
 		return "UNKNOWN";
 	}
 	return "INVALID";
+}
+
+bool PgSQL_Connection::handle_copy_out(const PGresult* result, uint64_t* processed_bytes) {
+
+	if (new_result == true) {
+		const unsigned int bytes_recv = query_result->add_copy_out_response_start(result);
+		update_bytes_recv(bytes_recv);
+		new_result = false;
+		is_copy_out = true;
+	}
+
+	char* buffer = NULL;
+	int copy_data_len = 0;
+
+	while ((copy_data_len = PQgetCopyData(pgsql_conn, &buffer, 1)) > 0) {
+		const unsigned int bytes_recv = query_result->add_copy_out_row(buffer, copy_data_len);
+		update_bytes_recv(bytes_recv);
+		PQfreemem(buffer);
+		buffer = NULL;
+		*processed_bytes += bytes_recv;	// issue #527 : this variable will store the amount of bytes processed during this event
+		if (
+			(*processed_bytes > (unsigned int)pgsql_thread___threshold_resultset_size * 8)
+			||
+			(pgsql_thread___throttle_ratio_server_to_client && pgsql_thread___throttle_max_bytes_per_second_to_client && (*processed_bytes > (uint64_t)pgsql_thread___throttle_max_bytes_per_second_to_client / 10 * (uint64_t)pgsql_thread___throttle_ratio_server_to_client))
+			) 
+		{
+			return false;
+		}
+	}
+
+	if (copy_data_len == -1) {
+		const unsigned int bytes_recv = query_result->add_copy_out_response_end();
+		update_bytes_recv(bytes_recv);
+		is_copy_out = false;
+	} else if (copy_data_len < 0) {
+		const PGresult* result = PQgetResultFromPGconn(pgsql_conn);
+		if (result || is_error_present() == false) {
+			set_error_from_result(result);
+			proxy_error("PQgetCopyData failed. %s\n", get_error_code_with_message().c_str());
+		}
+		is_copy_out = false;
+	}
+
+	return true;
 }

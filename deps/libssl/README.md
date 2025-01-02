@@ -16,3 +16,5 @@ Do not upgrade without extensive testing.
 See note about `struct bio_st` in MySQL_Data_Stream.cpp .
 
 Run `verify-bio_st-match.sh` to confirm compatibility.
+
+In ProxySQL 3.0.1, OpenSSL was changed from being statically linked to dynamically linked.

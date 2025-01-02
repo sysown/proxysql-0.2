@@ -845,7 +845,7 @@ void MySQL_Connection::connect_start_SetClientFlag(unsigned long& client_flags) 
 
 	if (myds != NULL) {
 		if (myds->sess != NULL) {
-			if (myds->sess->session_fast_forward == true) { // this is a fast_forward connection
+			if (myds->sess->session_fast_forward) { // this is a fast_forward connection
 				assert(myds->sess->client_myds != NULL);
 				MySQL_Connection * c = myds->sess->client_myds->myconn;
 				assert(c != NULL);
@@ -1230,7 +1230,7 @@ handler_again:
 				if (mysql->options.use_ssl == 1)
 					if (myds)
 						if (myds->sess != NULL)
-							if (myds->sess->session_fast_forward == true) {
+							if (myds->sess->session_fast_forward) {
 								assert(myds->ssl==NULL);
 								if (myds->ssl == NULL) {
 									// check the definition of P_MARIADB_TLS
