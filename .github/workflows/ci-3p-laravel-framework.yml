@@ -56,12 +56,12 @@ jobs:
         fetch-depth: 1
         path: 'proxysql_3p_testing'
         token: ${{ secrets.gh_token }}
-#        sparse-checkout: |
-#          common
-#          libs
-#          infra-docker-hoster
-#          test_laravel-framework
-##          proxysql
+        sparse-checkout: |
+          common
+          libs
+          infra-docker-hoster
+          test_laravel-framework
+#          proxysql
 
     - name: Wait for cache
       env:
