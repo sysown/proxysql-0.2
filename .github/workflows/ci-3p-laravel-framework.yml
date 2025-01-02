@@ -91,6 +91,7 @@ jobs:
         set +e
         
         cd proxysql_3p_testing/
+        git rebase main
         git sparse-checkout list
         ./setup.sh test_laravel-framework/laravel-framework
         
@@ -115,7 +116,6 @@ jobs:
         set +e
         
         cd proxysql_3p_testing/test_laravel-framework
-        git rebase main 
         INFRADB=${INFRADB} CONNECTOR=${CONNECTOR} ./run-tests.bash
         RC=$?
         
