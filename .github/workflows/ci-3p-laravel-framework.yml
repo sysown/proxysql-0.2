@@ -67,6 +67,9 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.gh_token }}
       run: |
+        ls -l proxysql_3p_testing/
+        git -C proxysql_3p_testing pull
+        ls -l proxysql_3p_testing/
         echo "Wating for cache '${BLDCACHE}' ..."
         sleep $(( $RANDOM / 1024 ))
         PROBE="$(gh cache list --limit 300 --repo ${{ github.repository }} | grep -i ${BLDCACHE} || echo '')"
