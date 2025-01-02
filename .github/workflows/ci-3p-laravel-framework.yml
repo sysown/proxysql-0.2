@@ -109,8 +109,8 @@ jobs:
         #sed -i 's/^fn_test_proxysql m/#fn_test_proxysql m/' run-tests.bash
         #sed -i 's/^fn_test_proxysql_dev m/#fn_test_proxysql_dev m/' run-tests.bash
         #sed -i '/^fn_start_prep$/a fn_test_proxysql_dev ${{ matrix.infradb }}' run-tests.bash
-        sed -i '/EXPDATA=/i pwd' run-tests.bash
-        sed -i '/EXPDATA=/i ls -l' run-tests.bash
+        sed -i '/EXPDATA=/i pwd' test_laravel-framework/run-tests.bash
+        sed -i '/EXPDATA=/i ls -l' test_laravel-framework/run-tests.bash
 
     - name: Run tests
       run: |
