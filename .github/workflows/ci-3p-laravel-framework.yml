@@ -130,29 +130,24 @@ jobs:
         GH_TOKEN: ${{ secrets.gh_token }}
       run: |
         cd proxysql_3p_testing/test_laravel-framework
-        BASELINE=$(gh variable -R ${{ github.repository }} list | grep -i BASELINE_3P_LARAVEL_FRAMEWORK_${INFRADB//./}_${CONNECTOR//./} | awk '{ print $2 }')
-        
-        FAILS=$(cat logs/*run-tests.log | grep -oP '^There were \d+ failures:' | awk '{ print $3 }')
+
+        GHUSER="$(id -u):$(id -g)"
+        sudo chown -R ${GHUSER} ./logs
+        cat ./logs/*_summary.log || true
+        FAILS=$(cat ./logs/*_summary.log | grep -oP '(?<=^FAIL: )\d+')
+        STATUS='PASS'
+        RC=0
         if [[ -z ${FAILS} ]]; then
-          FAILS=$(cat logs/*run-tests.log | grep -oP 'OK \(\d+ tests,')
-          if [[ -z ${FAILS} ]]; then
-            echo "Baseline '${BASELINE}' WARN: no results found"
-            exit 0
-          else
-            FAILS=0
-          fi
+          STATUS='ERROR'
+          RC=1
+        elif [[ ${FAILS} -ne 0 ]]; then
+          STATUS='FAIL'
+          RC=1
         fi
-        
-        if [[ ${FAILS} -gt ${BASELINE:-10000} ]]; then
-          echo "Baseline '${BASELINE:-10000}' FAIL: FAILS = ${FAILS}"
-          exit 1
-        else
-          echo "Baseline '${BASELINE:-10000}' PASS: FAILS = ${FAILS}"
-          MAIN=$(curl -s https://api.github.com/repos/${{ github.repository }} | jq --raw-output .default_branch)
-          if [[ ${MAIN} == ${{ github.ref_name }} ]]; then
-            gh variable -R ${{ github.repository }} set BASELINE_3P_LARAVEL_FRAMEWORK_${INFRADB//./}_${CONNECTOR//./} -b "${FAILS}"
-          fi
-        fi
+        SUM="{'STATUS':'${STATUS}','INFRADB':'${INFRADB}','CONNECTOR':'${CONNECTOR}','FAILS':${FAILS:-x}}"
+        echo "SUMMARY=${SUM}"
+        echo "SUMMARY="${SUM//\'/\"} >> $GITHUB_ENV
+        exit $RC
     
     - name: Archive artifacts logs
       if: ${{ failure() && !cancelled() }}
