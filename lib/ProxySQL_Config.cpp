@@ -70,7 +70,7 @@ int ProxySQL_Config::Read_Global_Variables_from_configfile(const char *prefix) {
 	//fprintf(stderr, "Found %d %s_variables\n",count, prefix);
 	int i;
 	admindb->execute("PRAGMA foreign_keys = OFF");
-	char *q=(char *)"INSERT OR REPLACE INTO global_variables VALUES (\"%s-%s\", \"%s\")";
+	char *q=(char *)"INSERT OR REPLACE INTO global_variables VALUES (\"%s-%s\", \'%s\')";
 	for (i=0; i< count; i++) {
 		const Setting &sett = group[i];
 		const char *n=sett.getName();
@@ -832,6 +832,7 @@ int ProxySQL_Config::Write_MySQL_Servers_to_configfile(std::string& data) {
 				addField(data, "use_ssl", r->fields[9], "");
 				addField(data, "max_latency_ms", r->fields[10], "");
 				addField(data, "comment", r->fields[11]);
+				addField(data, "server_version", r->fields[12]);
 
 				data += "\t}";
 				isNext = true;

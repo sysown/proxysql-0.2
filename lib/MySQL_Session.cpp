@@ -7572,11 +7572,11 @@ void MySQL_Session::handler___client_DSS_QUERY_SENT___server_DSS_NOT_INITIALIZED
 				}
 				uuid[n]='\0';
 #ifndef STRESSTEST_POOL
-				mc=thread->get_MyConn_local(mybe->hostgroup_id, this, uuid, trxid, -1);
+				mc=thread->get_MyConn_local(mybe->hostgroup_id, this, uuid, trxid, -1, target_server_version);
 #endif // STRESSTEST_POOL
 			} else {
 #ifndef STRESSTEST_POOL
-				mc=thread->get_MyConn_local(mybe->hostgroup_id, this, NULL, 0, (int)qpo->max_lag_ms);
+				mc=thread->get_MyConn_local(mybe->hostgroup_id, this, NULL, 0, (int)qpo->max_lag_ms, target_server_version);
 #endif // STRESSTEST_POOL
 			}
 		}

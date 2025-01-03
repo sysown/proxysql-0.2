@@ -229,7 +229,7 @@ class __attribute__((aligned(64))) MySQL_Thread
   void unregister_session_connection_handler(int idx, bool _new=false);
   void listener_handle_new_connection(MySQL_Data_Stream *myds, unsigned int n);
 	void Get_Memory_Stats();
-	MySQL_Connection * get_MyConn_local(unsigned int, MySQL_Session *sess, char *gtid_uuid, uint64_t gtid_trxid, int max_lag_ms);
+	MySQL_Connection * get_MyConn_local(unsigned int, MySQL_Session *sess, char *gtid_uuid, uint64_t gtid_trxid, int max_lag_ms, char* target_server_version);
 	void push_MyConn_local(MySQL_Connection *);
 	void return_local_connections();
 	void Scan_Sessions_to_Kill(PtrArray *mysess);

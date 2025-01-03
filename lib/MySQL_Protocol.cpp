@@ -969,7 +969,7 @@ bool MySQL_Protocol::generate_pkt_initial_handshake(bool send, void **ptr, unsig
 	int use_plugin_id = mysql_thread___default_authentication_plugin_int;
 	char* server_version = NULL;
 	if(!GloMTH->mth_server_version_map.empty()){
-		std::string iface = std::string((*myds)->proxy_addr.addr) + ((*myds)->proxy_addr.port ? (":" + std::to_string((*myds)->proxy_addr.port)) : "");
+		std::string iface = std::string(((*myds)->proxy_addr.addr)? (*myds)->proxy_addr.addr : "") + ((*myds)->proxy_addr.port ? (":" + std::to_string((*myds)->proxy_addr.port)) : "");
 		server_version = GloMTH->mth_get_server_version((char*)iface.c_str());
 	}
 	

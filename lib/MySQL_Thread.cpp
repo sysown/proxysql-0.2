@@ -5804,7 +5804,7 @@ void MySQL_Thread::Get_Memory_Stats() {
  * @param max_lag_ms The maximum lag time allowed for the connection in milliseconds.
  * @return A pointer to the retrieved MySQL connection if found; otherwise, NULL.
  */
-MySQL_Connection * MySQL_Thread::get_MyConn_local(unsigned int _hid, MySQL_Session *sess, char *gtid_uuid, uint64_t gtid_trxid, int max_lag_ms) {
+MySQL_Connection * MySQL_Thread::get_MyConn_local(unsigned int _hid, MySQL_Session *sess, char *gtid_uuid, uint64_t gtid_trxid, int max_lag_ms, char* target_server_version) {
 	// some sanity check
 	if (sess == NULL) return NULL;
 	if (sess->client_myds == NULL) return NULL;
@@ -5812,8 +5812,6 @@ MySQL_Connection * MySQL_Thread::get_MyConn_local(unsigned int _hid, MySQL_Sessi
 	if (sess->client_myds->myconn->userinfo == NULL) return NULL;
 	unsigned int i;
 	std::vector<MySrvC *> parents; // this is a vector of srvers that needs to be excluded in case gtid_uuid is used
-	std::string client_iface = std::string(sess->client_myds->proxy_addr.addr) + (sess->client_myds->proxy_addr.port? (std::to_string(sess->client_myds->proxy_addr.port)) : "");
-	char * target_server_version = get_server_version((char*) client_iface.c_str());
 	MySQL_Connection *c=NULL;
 	for (i=0; i<cached_connections->len; i++) {
 		c=(MySQL_Connection *)cached_connections->index(i);
