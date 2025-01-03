@@ -92,11 +92,11 @@ jobs:
         
         cd proxysql_3p_testing/
         git sparse-checkout list
-        git describe --long
+        git branch
         ls -l
         ls -l test_laravel-framework
         ./setup.sh test_laravel-framework/laravel-framework
-        git describe --long
+        git branch
         ls -l
         ls -l test_laravel-framework
         
