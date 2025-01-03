@@ -96,7 +96,7 @@ jobs:
         ls -l
         ls -l test_laravel-framework
         ./setup.sh test_laravel-framework/laravel-framework
-        git branch
+        git switch ${{ env.TESTTREE }}
         ls -l
         ls -l test_laravel-framework
         
