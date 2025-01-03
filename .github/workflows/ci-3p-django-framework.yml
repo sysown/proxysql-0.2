@@ -91,8 +91,8 @@ jobs:
         set +e
         
         cd proxysql_3p_testing/
-        #git sparse-checkout list
         ./setup.sh test_django-framework
+        git switch ${{ env.TESTTREE }}
         
         # use cached build
         rm -rf ./proxysql && mv ../proxysql .
@@ -116,7 +116,7 @@ jobs:
         
         cd proxysql_3p_testing/test_django-framework
         #sed -i 's/docker-compose/docker compose/g' run-tests.bash
-        INFRADB=${{ matrix.infradb }} CONNECTOR=${{ matrix.connector }} ./run-tests.bash
+        ./run-tests.bash
         RC=$?
         
         #sudo chmod -R 777 ${{ github.workspace }}/*

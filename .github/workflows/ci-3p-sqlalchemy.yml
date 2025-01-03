@@ -98,6 +98,7 @@ jobs:
 
         cd proxysql_3p_testing/
         ./setup.sh test_sqlalchemy/sqlalchemy
+        git switch ${{ env.TESTTREE }}
 
         # use cached build
         rm -rf ./proxysql && mv ../proxysql . || true
@@ -107,8 +108,8 @@ jobs:
         set +e
         
         cd proxysql_3p_testing/test_sqlalchemy
-        #INFRADB=${{ matrix.infradb }} CONNECTOR=${{ matrix.connector }} ./run-tests.bash test/dialect
-        INFRADB=${{ matrix.infradb }} CONNECTOR=${{ matrix.connector }} ./run-tests.bash
+        #./run-tests.bash test/dialect
+        ./run-tests.bash
         RC=$?
         
         #sudo chmod -R 777 ${{ github.workspace }}/*

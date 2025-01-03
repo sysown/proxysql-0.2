@@ -92,7 +92,8 @@ jobs:
         
         cd proxysql_3p_testing/
         git sparse-checkout list
-        ./setup.sh
+        ./setup.sh test_mariadb-connector-c/mariadb-connector-c
+        git switch ${{ env.TESTTREE }}
         #git -C ./proxysql switch ${{ env.SHA }}
         #git -C ./proxysql pull --tags
         

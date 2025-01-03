@@ -91,9 +91,9 @@ jobs:
         set +e
         
         cd proxysql_3p_testing/
-        git sparse-checkout list
-        ./setup.sh
-        
+        ./setup.sh test_php-pdo-mysql/php-src
+        git switch ${{ env.TESTTREE }}
+
         # use cached build
         rm -rf ./proxysql && mv ../proxysql .
 

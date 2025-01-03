@@ -91,7 +91,6 @@ jobs:
         set +e
         
         cd proxysql_3p_testing/
-        git sparse-checkout list
         ./setup.sh test_laravel-framework/laravel-framework
         git switch ${{ env.TESTTREE }}
         
@@ -119,7 +118,7 @@ jobs:
         set +e
         
         cd proxysql_3p_testing/test_laravel-framework
-        INFRADB=${INFRADB} CONNECTOR=${CONNECTOR} ./run-tests.bash
+        ./run-tests.bash
         RC=$?
         
         #sudo chmod -R 777 ${{ github.workspace }}/*
