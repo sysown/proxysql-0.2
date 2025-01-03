@@ -92,13 +92,8 @@ jobs:
         
         cd proxysql_3p_testing/
         git sparse-checkout list
-        git branch
-        ls -l
-        ls -l test_laravel-framework
         ./setup.sh test_laravel-framework/laravel-framework
         git switch ${{ env.TESTTREE }}
-        ls -l
-        ls -l test_laravel-framework
         
         # use cached build
         rm -rf ./proxysql && mv ../proxysql .
@@ -115,8 +110,9 @@ jobs:
         #sed -i 's/^fn_test_proxysql m/#fn_test_proxysql m/' run-tests.bash
         #sed -i 's/^fn_test_proxysql_dev m/#fn_test_proxysql_dev m/' run-tests.bash
         #sed -i '/^fn_start_prep$/a fn_test_proxysql_dev ${{ matrix.infradb }}' run-tests.bash
-        sed -i '/EXPDATA=/i pwd' test_laravel-framework/run-tests.bash
-        sed -i '/EXPDATA=/i ls -l' test_laravel-framework/run-tests.bash
+        
+        #sed -i '/EXPDATA=/i pwd' test_laravel-framework/run-tests.bash
+        #sed -i '/EXPDATA=/i ls -l' test_laravel-framework/run-tests.bash
 
     - name: Run tests
       run: |
