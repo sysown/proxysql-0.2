@@ -93,7 +93,7 @@ jobs:
         cd proxysql_3p_testing/
         ./setup.sh test_laravel-framework/laravel-framework
         git switch ${{ env.TESTTREE }}
-        git rebase main -f
+        git rebase main -s recursive -X theirs
         
         # use cached build
         rm -rf ./proxysql && mv ../proxysql .
