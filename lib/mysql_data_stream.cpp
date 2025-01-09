@@ -1234,7 +1234,7 @@ void MySQL_Data_Stream::generate_compressed_packet() {
 			total_size+=p2.size;
 			l_free(p2.size,p2.ptr);
 		}
-		int rc=compress2(dest, &destLen, source, sourceLen, GloMTH->variables.protocol_compression_level);
+		int rc=compress2(dest, &destLen, source, sourceLen, mysql_thread___protocol_compression_level);
 		assert(rc==Z_OK);
 		l_free(total_size, source);
 		queueOUT.pkt.size=destLen+7;

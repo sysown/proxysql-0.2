@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
 	MYSQL* proxysql_admin = nullptr;
 	MYSQL* mysql_compression = nullptr;
 	MYSQL* mysql = nullptr;
-	int performance_diff = 0;
+	float performance_diff = 0;
 
 	if(cl.getEnv())
 		return exit_status();
@@ -142,9 +142,9 @@ int main(int argc, char** argv) {
 	}
 
 	diff = abs(time_proxy - time_proxy_compressed);
-	performance_diff = (diff * 100) / time_proxy;
+	performance_diff = (float)(diff * 100) / time_proxy;
 
-	ok((performance_diff < 10), "proxysql with compression performed well compared to without compression. Performance difference: %d percentage", performance_diff);
+	ok((performance_diff < 10), "proxysql with compression performed well compared to without compression. Performance difference: %f percentage", performance_diff);
 
 	time_mysql_compressed = calculate_query_execution_time(mysql_compression, query);
 	diag("Time taken for query with mysql with compression: %ld", time_mysql_compressed);
@@ -159,9 +159,9 @@ int main(int argc, char** argv) {
 	}
 
 	diff = abs(time_mysql_without_compressed - time_mysql_compressed);
-	performance_diff = (diff * 100) / time_mysql_without_compressed;
+	performance_diff = (float)(diff * 100) / time_mysql_without_compressed;
 
-	ok((performance_diff < 10), "MySQL with compression performed well compared to without compression. Performance difference: %d percentage", performance_diff);
+	ok((performance_diff < 10), "MySQL with compression performed well compared to without compression. Performance difference: %f percentage", performance_diff);
 
 	ret = get_variable_value(proxysql_admin, "mysql-protocol_compression_level", compression_level, true);
 	if (ret == EXIT_SUCCESS) {
