@@ -21,12 +21,6 @@ mysql-init_connect
 We configure both hostgroup 0 and 1
 */
 
-inline unsigned long long monotonic_time() {
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return (((unsigned long long) ts.tv_sec) * 1000000) + (ts.tv_nsec / 1000);
-}
-
 int main(int argc, char** argv) {
 	CommandLine cl;
 
