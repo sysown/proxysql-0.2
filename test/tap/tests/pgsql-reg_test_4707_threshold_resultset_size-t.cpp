@@ -100,7 +100,8 @@ int main(int argc, char** argv) {
     ok(success, "Query executed successfully. %s", PQerrorMessage(backend_conn.get()));
 
     std::chrono::duration<double, std::milli> duration = end - start;
-    ok(duration.count() < 10.00, "Execution time should be less than 10 ms. Actual: %f ms", duration.count());
+	// increased threshold value in case no backend connections are available in the connection pool and a new connection is established.
+    ok(duration.count() < 50.00, "Execution time should be less than 50 ms. Actual: %f ms", duration.count());
 
 	if (!executeQueries(admin_conn.get(), {
         "SET pgsql-threshold_resultset_size=536870912",

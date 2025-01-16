@@ -1185,171 +1185,6 @@ bool PgSQL_Connection_Placeholder::IsKeepMultiplexEnabledVariables(char *query_d
 	return true;
 }
 
-void PgSQL_Connection_Placeholder::ProcessQueryAndSetStatusFlags(char *query_digest_text) {
-	if (query_digest_text==NULL) return;
-	// unknown what to do with multiplex
-	int mul=-1;
-	if (myds) {
-		if (myds->sess) {
-			if (myds->sess->qpo) {
-				mul=myds->sess->qpo->multiplex;
-				if (mul==0) {
-					set_status(true, STATUS_MYSQL_CONNECTION_NO_MULTIPLEX);
-				} else {
-					if (mul==1) {
-						set_status(false, STATUS_MYSQL_CONNECTION_NO_MULTIPLEX);
-					}
-				}
-			}
-		}
-	}
-	// checking warnings and disabling multiplexing will be effective only when the pgsql-query_digests is enabled
-	if (get_status(STATUS_MYSQL_CONNECTION_HAS_WARNINGS) == false) {
-		if (warning_count > 0) {
-			// 'warning_in_hg' will be used if the next query is 'SHOW WARNINGS' or
-			// 'SHOW COUNT(*) WARNINGS'
-			if (myds && myds->sess)
-				myds->sess->warning_in_hg = myds->sess->current_hostgroup;
-			// enabling multiplexing
-			set_status(true, STATUS_MYSQL_CONNECTION_HAS_WARNINGS);
-		}
-	} else { // reset warning_in_hg 
-		const char* dig = query_digest_text;
-		const size_t dig_len = strlen(dig);
-		// disable multiplexing and reset the 'warning_in_hg' flag only when the current executed query is not 
-		// 'SHOW WARNINGS' or 'SHOW COUNT(*) WARNINGS', as these queries do not clear the warning message list
-		// on backend.
-		if (!((dig_len == 22 && strncasecmp(dig, "SHOW COUNT(*) WARNINGS", 22) == 0) ||
-			(dig_len == 13 && strncasecmp(dig, "SHOW WARNINGS", 13) == 0))) {
-			if (myds && myds->sess)
-				myds->sess->warning_in_hg = -1;
-			warning_count = 0;
-			// disabling multiplexing
-			set_status(false, STATUS_MYSQL_CONNECTION_HAS_WARNINGS);
-		}
-	}
-	
-	if (get_status(STATUS_MYSQL_CONNECTION_USER_VARIABLE)==false) { // we search for variables only if not already set
-//			if (
-//				strncasecmp(query_digest_text,"SELECT @@tx_isolation", strlen("SELECT @@tx_isolation"))
-//				&&
-//				strncasecmp(query_digest_text,"SELECT @@version", strlen("SELECT @@version"))
-		if (strncasecmp(query_digest_text,"SET ",4)==0) {
-			// For issue #555 , multiplexing is disabled if --safe-updates is used (see session_vars definition)
-			int sqloh = pgsql_thread___set_query_lock_on_hostgroup;
-			switch (sqloh) {
-				case 0: // old algorithm
-					if (mul!=2) {
-						if (index(query_digest_text,'@')) { // mul = 2 has a special meaning : do not disable multiplex for variables in THIS QUERY ONLY
-							if (!IsKeepMultiplexEnabledVariables(query_digest_text)) {
-								set_status(true, STATUS_MYSQL_CONNECTION_USER_VARIABLE);
-							}
-/* deprecating session_vars[] because we are introducing a better algorithm
-						} else {
-							for (unsigned int i = 0; i < sizeof(session_vars)/sizeof(char *); i++) {
-								if (strcasestr(query_digest_text,session_vars[i])!=NULL)  {
-									set_status(true, STATUS_MYSQL_CONNECTION_USER_VARIABLE);
-									break;
-								}
-							}
-*/
-						}
-					}
-					break;
-				case 1: // new algorithm
-					if (myds->sess->locked_on_hostgroup > -1) {
-						// locked_on_hostgroup was set, so some variable wasn't parsed
-						set_status(true, STATUS_MYSQL_CONNECTION_USER_VARIABLE);
-					}
-					break;
-				default:
-					break;
-			}
-		} else {
-			if (mul!=2 && index(query_digest_text,'@')) { // mul = 2 has a special meaning : do not disable multiplex for variables in THIS QUERY ONLY
-				if (!IsKeepMultiplexEnabledVariables(query_digest_text)) {
-					set_status(true, STATUS_MYSQL_CONNECTION_USER_VARIABLE);
-				}
-			}
-		}
-	}
-	if (get_status(STATUS_MYSQL_CONNECTION_PREPARED_STATEMENT)==false) { // we search if prepared was already executed
-		if (!strncasecmp(query_digest_text,"PREPARE ", strlen("PREPARE "))) {
-			set_status(true, STATUS_MYSQL_CONNECTION_PREPARED_STATEMENT);
-		}
-	}
-	if (get_status(STATUS_MYSQL_CONNECTION_TEMPORARY_TABLE)==false) { // we search for temporary if not already set
-		if (!strncasecmp(query_digest_text,"CREATE TEMPORARY TABLE ", strlen("CREATE TEMPORARY TABLE "))) {
-			set_status(true, STATUS_MYSQL_CONNECTION_TEMPORARY_TABLE);
-		}
-	}
-	if (get_status(STATUS_MYSQL_CONNECTION_LOCK_TABLES)==false) { // we search for lock tables only if not already set
-		if (!strncasecmp(query_digest_text,"LOCK TABLE", strlen("LOCK TABLE"))) {
-			set_status(true, STATUS_MYSQL_CONNECTION_LOCK_TABLES);
-		}
-	}
-	if (get_status(STATUS_MYSQL_CONNECTION_LOCK_TABLES)==false) { // we search for lock tables only if not already set
-		if (!strncasecmp(query_digest_text,"FLUSH TABLES WITH READ LOCK", strlen("FLUSH TABLES WITH READ LOCK"))) { // issue 613
-			set_status(true, STATUS_MYSQL_CONNECTION_LOCK_TABLES);
-		}
-	}
-	if (get_status(STATUS_MYSQL_CONNECTION_LOCK_TABLES)==true) {
-		if (!strncasecmp(query_digest_text,"UNLOCK TABLES", strlen("UNLOCK TABLES"))) {
-			set_status(false, STATUS_MYSQL_CONNECTION_LOCK_TABLES);
-		}
-	}
-	if (get_status(STATUS_MYSQL_CONNECTION_GET_LOCK)==false) { // we search for get_lock if not already set
-		if (strcasestr(query_digest_text,"GET_LOCK(")) {
-			set_status(true, STATUS_MYSQL_CONNECTION_GET_LOCK);
-		}
-	}
-	if (get_status(STATUS_MYSQL_CONNECTION_FOUND_ROWS)==false) { // we search for SQL_CALC_FOUND_ROWS if not already set
-		if (strcasestr(query_digest_text,"SQL_CALC_FOUND_ROWS")) {
-			set_status(true, STATUS_MYSQL_CONNECTION_FOUND_ROWS);
-		}
-	}
-	if (get_status(STATUS_MYSQL_CONNECTION_HAS_SAVEPOINT)==false) {
-		if (pgsql) {
-			if (
-				(pgsql->server_status & SERVER_STATUS_IN_TRANS)
-				||
-				((pgsql->server_status & SERVER_STATUS_AUTOCOMMIT) == 0)
-			) {
-				if (!strncasecmp(query_digest_text,"SAVEPOINT ", strlen("SAVEPOINT "))) {
-					set_status(true, STATUS_MYSQL_CONNECTION_HAS_SAVEPOINT);
-				}
-			}
-		}
-	} else {
-		if ( // get_status(STATUS_MYSQL_CONNECTION_HAS_SAVEPOINT) == true
-			(
-				// make sure we don't have a transaction running
-				// checking just for COMMIT and ROLLBACK is not enough, because `SET autocommit=1` can commit too
-				(pgsql->server_status & SERVER_STATUS_AUTOCOMMIT)
-				&&
-				( (pgsql->server_status & SERVER_STATUS_IN_TRANS) == 0 )
-			)
-			||
-			(strcasecmp(query_digest_text,"COMMIT") == 0)
-			||
-			(strcasecmp(query_digest_text,"ROLLBACK") == 0)
-		) {
-			set_status(false, STATUS_MYSQL_CONNECTION_HAS_SAVEPOINT);
-		}
-	}
-	if (pgsql) {
-		if (myds && myds->sess) {
-			if (myds->sess->client_myds && myds->sess->client_myds->myconn) {
-				// if SERVER_STATUS_NO_BACKSLASH_ESCAPES is changed it is likely
-				// because of sql_mode was changed
-				// we set the same on the client connection
-				unsigned int ss = pgsql->server_status & SERVER_STATUS_NO_BACKSLASH_ESCAPES;
-				myds->sess->client_myds->myconn->set_no_backslash_escapes(ss);
-			}
-		}
-	}
-}
-
 void PgSQL_Connection_Placeholder::optimize() {
 	if (pgsql->net.max_packet > 65536) { // FIXME: temporary, maybe for very long time . This needs to become a global variable
 		if ( ( pgsql->net.buff == pgsql->net.read_pos ) &&  ( pgsql->net.read_pos == pgsql->net.write_pos ) ) {
@@ -1961,6 +1796,7 @@ handler_again:
 		} else {
 			unknown_transaction_status = false;
 		}
+		PQsetNoticeReceiver(pgsql_conn, &PgSQL_Connection::unhandled_notice_cb, this);
 		// should be NULL
 		assert(!pgsql_result);
 		assert(!is_copy_out);
@@ -2198,6 +2034,9 @@ void PgSQL_Connection::query_start() {
 	reset_error();
 	processing_multi_statement = false;
 	async_exit_status = PG_EVENT_NONE;
+
+	PQsetNoticeReceiver(pgsql_conn, &PgSQL_Connection::notice_handler_cb, this);
+
 	if (PQsendQuery(pgsql_conn, query.ptr) == 0) {
 		// WARNING: DO NOT RELEASE this PGresult
 		const PGresult* result = PQgetResultFromPGconn(pgsql_conn);
@@ -3025,4 +2864,152 @@ bool PgSQL_Connection::handle_copy_out(const PGresult* result, uint64_t* process
 	}
 
 	return true;
+}
+
+void PgSQL_Connection::notice_handler_cb(void* arg, const PGresult* result) {
+	assert(arg);
+	PgSQL_Connection* conn = (PgSQL_Connection*)arg;
+	const unsigned int bytes_recv = conn->query_result->add_notice(result);
+	conn->update_bytes_recv(bytes_recv);
+}
+
+void PgSQL_Connection::unhandled_notice_cb(void* arg, const PGresult* result) {
+	assert(arg);
+	PgSQL_Connection* conn = (PgSQL_Connection*)arg;
+	proxy_error("Unhandled notice: '%s' received from backend [PID: %d] (Host: %s, Port: %d, User: %s, FD: %d, State: %d). Please report this issue for further investigation and enhancements.\n",
+		PQresultErrorMessage(result), conn->get_pg_backend_pid(), conn->get_pg_host(), atoi(conn->get_pg_port()), conn->get_pg_user(), conn->get_pg_socket_fd(), (int)conn->async_state_machine);
+#ifdef DEBUG
+	assert(0);
+#endif
+}
+
+void PgSQL_Connection::ProcessQueryAndSetStatusFlags(char* query_digest_text) {
+	if (query_digest_text == NULL) return;
+	// unknown what to do with multiplex
+	int mul = -1;
+	if (myds) {
+		if (myds->sess) {
+			if (myds->sess->qpo) {
+				mul = myds->sess->qpo->multiplex;
+				if (mul == 0) {
+					set_status(true, STATUS_MYSQL_CONNECTION_NO_MULTIPLEX);
+				}
+				else {
+					if (mul == 1) {
+						set_status(false, STATUS_MYSQL_CONNECTION_NO_MULTIPLEX);
+					}
+				}
+			}
+		}
+	}
+
+	if (get_status(STATUS_MYSQL_CONNECTION_USER_VARIABLE) == false) { // we search for variables only if not already set
+		if (strncasecmp(query_digest_text, "SET ", 4) == 0) {
+			// For issue #555 , multiplexing is disabled if --safe-updates is used (see session_vars definition)
+			int sqloh = pgsql_thread___set_query_lock_on_hostgroup;
+			switch (sqloh) {
+			case 0: // old algorithm
+				if (mul != 2) {
+					if (index(query_digest_text, '@')) { // mul = 2 has a special meaning : do not disable multiplex for variables in THIS QUERY ONLY
+						if (!IsKeepMultiplexEnabledVariables(query_digest_text)) {
+							set_status(true, STATUS_MYSQL_CONNECTION_USER_VARIABLE);
+						}
+					}
+				}
+				break;
+			case 1: // new algorithm
+				if (myds->sess->locked_on_hostgroup > -1) {
+					// locked_on_hostgroup was set, so some variable wasn't parsed
+					set_status(true, STATUS_MYSQL_CONNECTION_USER_VARIABLE);
+				}
+				break;
+			default:
+				break;
+			}
+		}
+		else {
+			if (mul != 2 && index(query_digest_text, '@')) { // mul = 2 has a special meaning : do not disable multiplex for variables in THIS QUERY ONLY
+				if (!IsKeepMultiplexEnabledVariables(query_digest_text)) {
+					set_status(true, STATUS_MYSQL_CONNECTION_USER_VARIABLE);
+				}
+			}
+		}
+	}
+	if (get_status(STATUS_MYSQL_CONNECTION_PREPARED_STATEMENT) == false) { // we search if prepared was already executed
+		if (!strncasecmp(query_digest_text, "PREPARE ", strlen("PREPARE "))) {
+			set_status(true, STATUS_MYSQL_CONNECTION_PREPARED_STATEMENT);
+		}
+	}
+	if (get_status(STATUS_MYSQL_CONNECTION_TEMPORARY_TABLE) == false) { // we search for temporary if not already set
+		if (!strncasecmp(query_digest_text, "CREATE TEMPORARY TABLE ", strlen("CREATE TEMPORARY TABLE ")) || 
+			!strncasecmp(query_digest_text, "CREATE TEMP TABLE ", strlen("CREATE TEMP TABLE "))) {
+			set_status(true, STATUS_MYSQL_CONNECTION_TEMPORARY_TABLE);
+		}
+	}
+	if (get_status(STATUS_MYSQL_CONNECTION_LOCK_TABLES) == false) { // we search for lock tables only if not already set
+		if (!strncasecmp(query_digest_text, "LOCK TABLE", strlen("LOCK TABLE"))) {
+			set_status(true, STATUS_MYSQL_CONNECTION_LOCK_TABLES);
+		}
+	}
+	if (get_status(STATUS_MYSQL_CONNECTION_LOCK_TABLES) == false) { // we search for lock tables only if not already set
+		if (!strncasecmp(query_digest_text, "FLUSH TABLES WITH READ LOCK", strlen("FLUSH TABLES WITH READ LOCK"))) { // issue 613
+			set_status(true, STATUS_MYSQL_CONNECTION_LOCK_TABLES);
+		}
+	}
+	if (get_status(STATUS_MYSQL_CONNECTION_LOCK_TABLES) == true) {
+		if (!strncasecmp(query_digest_text, "UNLOCK TABLES", strlen("UNLOCK TABLES"))) {
+			set_status(false, STATUS_MYSQL_CONNECTION_LOCK_TABLES);
+		}
+	}
+	if (get_status(STATUS_MYSQL_CONNECTION_GET_LOCK) == false) { // we search for get_lock if not already set
+		if (strcasestr(query_digest_text, "GET_LOCK(")) {
+			set_status(true, STATUS_MYSQL_CONNECTION_GET_LOCK);
+		}
+	}
+	/*if (get_status(STATUS_MYSQL_CONNECTION_FOUND_ROWS) == false) { // we search for SQL_CALC_FOUND_ROWS if not already set
+		if (strcasestr(query_digest_text, "SQL_CALC_FOUND_ROWS")) {
+			set_status(true, STATUS_MYSQL_CONNECTION_FOUND_ROWS);
+		}
+	}*/
+	if (get_status(STATUS_MYSQL_CONNECTION_HAS_SAVEPOINT) == false) {
+		if (pgsql) {
+			if (
+				(pgsql->server_status & SERVER_STATUS_IN_TRANS)
+				||
+				((pgsql->server_status & SERVER_STATUS_AUTOCOMMIT) == 0)
+				) {
+				if (!strncasecmp(query_digest_text, "SAVEPOINT ", strlen("SAVEPOINT "))) {
+					set_status(true, STATUS_MYSQL_CONNECTION_HAS_SAVEPOINT);
+				}
+			}
+		}
+	}
+	else {
+		if ( // get_status(STATUS_MYSQL_CONNECTION_HAS_SAVEPOINT) == true
+			(
+				// make sure we don't have a transaction running
+				// checking just for COMMIT and ROLLBACK is not enough, because `SET autocommit=1` can commit too
+				(pgsql->server_status & SERVER_STATUS_AUTOCOMMIT)
+				&&
+				((pgsql->server_status & SERVER_STATUS_IN_TRANS) == 0)
+				)
+			||
+			(strcasecmp(query_digest_text, "COMMIT") == 0)
+			||
+			(strcasecmp(query_digest_text, "ROLLBACK") == 0)
+			) {
+			set_status(false, STATUS_MYSQL_CONNECTION_HAS_SAVEPOINT);
+		}
+	}
+	/*if (pgsql) {
+		if (myds && myds->sess) {
+			if (myds->sess->client_myds && myds->sess->client_myds->myconn) {
+				// if SERVER_STATUS_NO_BACKSLASH_ESCAPES is changed it is likely
+				// because of sql_mode was changed
+				// we set the same on the client connection
+				unsigned int ss = pgsql->server_status & SERVER_STATUS_NO_BACKSLASH_ESCAPES;
+				myds->sess->client_myds->myconn->set_no_backslash_escapes(ss);
+			}
+		}
+	}*/
 }
