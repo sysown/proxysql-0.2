@@ -817,6 +817,100 @@ void execute_query_cache_store_empty_result_test(PGconn* admin_conn, PGconn* con
 		return;
 }
 
+void execute_query_cache_notice_test(PGconn* admin_conn, PGconn* conn) {
+
+    if (!executeQueries(admin_conn, {
+        "DELETE FROM pgsql_query_rules",
+        "INSERT INTO pgsql_query_rules (rule_id,active,match_digest,cache_ttl) VALUES (2,1,'^SELECT',4000)",
+        "LOAD PGSQL QUERY RULES TO RUNTIME",
+        "UPDATE global_variables SET variable_value=0 WHERE variable_name='pgsql-query_cache_soft_ttl_pct'",
+        "LOAD PGSQL VARIABLES TO RUNTIME"
+        }))
+        return;
+
+    const char* create_function_query =
+        "CREATE OR REPLACE FUNCTION select_and_warn() RETURNS integer AS $$"
+        "DECLARE "
+        "    result integer; "
+        "BEGIN "
+        "    SELECT 1 INTO result; "
+        "    RAISE WARNING 'This is a warning message'; "
+        "    RETURN result; "
+        "END; "
+        "$$ LANGUAGE plpgsql;";
+
+	if (!executeQueries(conn, { create_function_query }))
+		return;
+
+    metrics.before = getQueryCacheMetrics(admin_conn);
+
+    if (!executeQueries(conn, { "SELECT select_and_warn()" }))
+        return;
+
+    metrics.after = getQueryCacheMetrics(admin_conn);
+
+    printQueryCacheMetrics();
+
+    // difference query cache metrics
+    checkMetricDelta<>("Query_Cache_Memory_bytes", 1, std::greater<int>());
+    checkMetricDelta<>("Query_Cache_count_GET", 1, std::equal_to<int>());
+    checkMetricDelta<>("Query_Cache_count_GET_OK", 0, std::equal_to<int>());
+    checkMetricDelta<>("Query_Cache_count_SET", 1, std::equal_to<int>());
+    checkMetricDelta<>("Query_Cache_bytes_IN", 1, std::greater<int>());
+    checkMetricDelta<>("Query_Cache_bytes_OUT", 0, std::equal_to<int>());
+    checkMetricDelta<>("Query_Cache_Purged", 0, std::equal_to<int>());
+    checkMetricDelta<>("Query_Cache_Entries", 1, std::equal_to<int>());
+
+    metrics.swap();
+
+    if (!executeQueries(conn, { "SELECT select_and_warn()" }))
+        return;
+
+    metrics.after = getQueryCacheMetrics(admin_conn);
+
+    printQueryCacheMetrics();
+
+    checkMetricDelta<>("Query_Cache_Memory_bytes", 0, std::equal_to<int>());
+    checkMetricDelta<>("Query_Cache_count_GET", 1, std::equal_to<int>());
+    checkMetricDelta<>("Query_Cache_count_GET_OK", 1, std::equal_to<int>());
+    checkMetricDelta<>("Query_Cache_count_SET", 0, std::equal_to<int>());
+    checkMetricDelta<>("Query_Cache_bytes_IN", 0, std::equal_to<int>());
+    checkMetricDelta<>("Query_Cache_bytes_OUT", 1, std::greater<int>());
+    checkMetricDelta<>("Query_Cache_Purged", 0, std::equal_to<int>());
+    checkMetricDelta<>("Query_Cache_Entries", 0, std::equal_to<int>());
+
+    metrics.swap();
+
+    usleep(4000000);
+
+    if (!executeQueries(conn, { "SELECT select_and_warn()" }))
+        return;
+
+    metrics.after = getQueryCacheMetrics(admin_conn);
+
+    printQueryCacheMetrics();
+
+    checkMetricDelta<>("Query_Cache_Memory_bytes", 1, std::greater<int>());
+    checkMetricDelta<>("Query_Cache_count_GET", 1, std::equal_to<int>());
+    checkMetricDelta<>("Query_Cache_count_GET_OK", 0, std::equal_to<int>());
+    checkMetricDelta<>("Query_Cache_count_SET", 1, std::equal_to<int>());
+    checkMetricDelta<>("Query_Cache_bytes_IN", 1, std::greater<int>());
+    checkMetricDelta<>("Query_Cache_bytes_OUT", 0, std::equal_to<int>());
+    checkMetricDelta<>("Query_Cache_Purged", 0, std::equal_to<int>());
+    checkMetricDelta<>("Query_Cache_Entries", 1, std::equal_to<int>());
+
+
+    executeQueries(conn, { "DROP FUNCTION IF EXISTS select_and_warn()" });
+
+    if (!executeQueries(admin_conn, {
+        "DELETE FROM pgsql_query_rules",
+        "LOAD PGSQL QUERY RULES TO RUNTIME",
+        "UPDATE global_variables SET variable_value=256 WHERE variable_name='pgsql-query_cache_size_MB'",
+        "LOAD PGSQL VARIABLES TO RUNTIME",
+        }))
+        return;
+}
+
 std::vector<std::pair<std::string, void (*)(PGconn*, PGconn*)>> tests = {
 	{ "Basic Test", execute_basic_test },
 	{ "Data Manipulation Test", execute_data_manipulation_test },
@@ -825,7 +919,8 @@ std::vector<std::pair<std::string, void (*)(PGconn*, PGconn*)>> tests = {
 	{ "Multi Threaded Test", execute_multi_threaded_test },
 	{ "Multi Threaded Purge Test", execute_multi_threaded_purge_test },
 	{ "Transaction Status Test", execute_transaction_status_test },
-    { "Query Cache Store Empty Result Test", execute_query_cache_store_empty_result_test }
+    { "Query Cache Store Empty Result Test", execute_query_cache_store_empty_result_test },
+    { "Query Cache Store Notice Result Test", execute_query_cache_notice_test }
 };
 
 void execute_tests(bool with_ssl, bool diff_conn) {
@@ -872,7 +967,7 @@ void execute_tests(bool with_ssl, bool diff_conn) {
 
 int main(int argc, char** argv) {
 
-    plan(165*2); // Total number of tests planned
+    plan(189*2); // Total number of tests planned
 
     if (cl.getEnv())
         return exit_status();
