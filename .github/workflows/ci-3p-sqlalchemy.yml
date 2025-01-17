@@ -44,7 +44,7 @@ jobs:
       id: checks
       if: always()
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.GH_TOKEN_SYSOWN }}
         name: '${{ github.workflow }} / ${{ github.job }} ${{ env.MATRIX }}'
         repo: ${{ github.repository }}
         sha: ${{ env.SHA }}
@@ -59,7 +59,7 @@ jobs:
         ref: ${{ env.TESTTREE }}
         fetch-depth: 1
         path: 'proxysql_3p_testing'
-        token: ${{ secrets.gh_token_proxysql }}
+        token: ${{ secrets.GH_TOKEN_PROXYSQL }}
         sparse-checkout: |
           common
           libs
@@ -70,7 +70,7 @@ jobs:
     - name: Wait for cache
       if: ${{ env.BRANCH != 'none' }}
       env:
-        GH_TOKEN: ${{ secrets.gh_token }}
+        GH_TOKEN: ${{ secrets.GH_TOKEN_SYSOWN }}
       run: |
         echo "Wating for cache '${BLDCACHE}' ..."
         sleep $(( $RANDOM / 1024 ))
@@ -119,7 +119,7 @@ jobs:
       if: ${{ !cancelled() }}
       id: check_baseline
       env:
-        GH_TOKEN: ${{ secrets.gh_token }}
+        GH_TOKEN: ${{ secrets.GH_TOKEN_SYSOWN }}
       run: |
         cd proxysql_3p_testing/test_sqlalchemy
         #BASELINE=$(gh variable -R ${{ github.repository }} list | grep -i BASELINE_3P_SQLALCHEMY_${INFRADB//./}_${CONNECTOR//./} | awk '{ print $2 }')
@@ -160,7 +160,7 @@ jobs:
     - uses: LouisBrunner/checks-action@v2.0.0
       if: always()
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.GH_TOKEN_SYSOWN }}
         check_id: ${{ steps.checks.outputs.check_id }}
         repo: ${{ github.repository }}
         sha: ${{ env.SHA }}

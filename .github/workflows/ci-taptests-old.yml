@@ -63,7 +63,7 @@ jobs:
         ref: 'kubernetes'
 #        fetch-depth: 0
         path: 'jenkins-build-scripts'
-        token: ${{ secrets.GH_TOKEN }}
+        token: ${{ secrets.GH_TOKEN_SYSOWN }}
         submodules: 'false'
 
     - name: Patch TAP-tests
@@ -221,7 +221,7 @@ jobs:
         ref: 'kubernetes'
 #        fetch-depth: 0
         path: 'jenkins-build-scripts'
-        token: ${{ secrets.GH_TOKEN }}
+        token: ${{ secrets.GH_TOKEN_PROXYSQL }}
         submodules: 'false'
         
     - name: Configure env.sh

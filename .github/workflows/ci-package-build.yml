@@ -18,7 +18,7 @@ jobs:
     steps:
     - name: Clean packages
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GH_TOKEN_SYSOWN }}
       run: |
         # gh release delete-asset ${BRANCH}-head
         gh release delete ${BRANCH}-head --repo ${{ github.repository }} --cleanup-tag || true
@@ -93,7 +93,7 @@ jobs:
       id: checks
       if: always()
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.GH_TOKEN_SYSOWN }}
         name: '${{ github.workflow }} / ${{ github.job }} ${{ env.MATRIX }}'
         repo: ${{ github.repository }}
         sha: ${{ env.SHA }}
@@ -116,7 +116,7 @@ jobs:
     - name: Update release
       if: ${{ !cancelled() }}
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GH_TOKEN_SYSOWN }}
       run: |
         if [[ "${{ matrix.dist }}" = "centos9" ]] && [[ "${{ matrix.type }}" = "" ]]; then
         gh release edit ${BRANCH}-head --draft --prerelease --repo ${{ github.repository }} --tag ${BRANCH}-head --title "${BRANCH}-head - ${GIT_VERSION}" --notes-file - << EOF
@@ -143,7 +143,7 @@ jobs:
 
     - name: Push packages
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GH_TOKEN_SYSOWN }}
       run: |
         # git tag --force -a ${BRANCH}-head -m 'GH-Actions - Development Snapshot Build'
         # git push origin --tags
@@ -153,7 +153,7 @@ jobs:
     - uses: LouisBrunner/checks-action@v2.0.0
       if: always()
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.GH_TOKEN_SYSOWN }}
         check_id: ${{ steps.checks.outputs.check_id }}
         repo: ${{ github.repository }}
         sha: ${{ env.SHA }}
@@ -167,7 +167,7 @@ jobs:
     steps:
     - name: Update release
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GH_TOKEN_SYSOWN }}
       run: |
         GIT_VERSION=$(gh release --repo ${{ github.repository }} view ${BRANCH}-head | tr -d '*' | grep -Po "(?<=Version : ).*")
         gh release edit ${BRANCH}-head --draft --prerelease --repo ${{ github.repository }} --tag ${BRANCH}-head --notes-file - << EOF

@@ -31,7 +31,7 @@ jobs:
       id: checks
       if: always()
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.GH_TOKEN_SYSOWN }}
         name: '${{ github.workflow }} / ${{ github.job }} ${{ env.MATRIX }}'
         repo: ${{ github.repository }}
         sha: ${{ env.SHA }}
@@ -41,7 +41,7 @@ jobs:
     
     - name: Wait for cache
       env:
-        GH_TOKEN: ${{ secrets.gh_token }}
+        GH_TOKEN: ${{ secrets.GH_TOKEN_SYSOWN }}
       run: |
         echo "BASELINE: '${BASELINE}'"
         echo "Wating for cache '${BLDCACHE}' ..."
@@ -149,7 +149,7 @@ jobs:
     - uses: LouisBrunner/checks-action@v2.0.0
       if: always()
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.GH_TOKEN_SYSOWN }}
         check_id: ${{ steps.checks.outputs.check_id }}
         repo: ${{ github.repository }}
         sha: ${{ env.SHA }}

@@ -32,7 +32,7 @@ jobs:
 
     - name: Wait for cache
       env:
-        GH_TOKEN: ${{ secrets.gh_token }}
+        GH_TOKEN: ${{ secrets.GH_TOKEN_SYSOWN }}
       run: |
         echo "Wating for cache '${BLDCACHE}' ..."
         sleep $(( $RANDOM / 1024 ))
@@ -154,7 +154,7 @@ jobs:
         ref: 'kubernetes'
 #        fetch-depth: 0
         path: 'jenkins-build-scripts'
-        token: ${{ secrets.GH_TOKEN }}
+        token: ${{ secrets.GH_TOKEN_PROXYSQL }}
         submodules: 'false'
 
     - name: Configure jenkins/

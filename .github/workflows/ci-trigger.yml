@@ -11,7 +11,7 @@ jobs:
     steps:
     - name: Trigger workflow_run[in_progress]
       env:
-        GH_TOKEN: ${{ secrets.gh_token }}
+        GH_TOKEN: ${{ secrets.GH_TOKEN_SYSOWN }}
       run: |
         sleep 5
         RUNID=$(gh -R ${{ github.repository }} run list | grep '${{ github.ref_name }} CI-builds ${{ github.sha }}' | grep -Po '(?<=workflow_run)\s+\d+')
