@@ -1961,12 +1961,6 @@ int print_jemalloc_conf() {
 #endif
 
 int main(int argc, const char * argv[]) {
-	// Output current jemalloc conf; no action taken when disabled
-	{
-		int rc = print_jemalloc_conf();
-		if (rc) { exit(EXIT_FAILURE); }
-	}
-
 	{
 		MYSQL *my = mysql_init(NULL);
 		mysql_close(my);
@@ -1992,6 +1986,12 @@ int main(int argc, const char * argv[]) {
 #ifdef DEBUG
 		std::cerr << "Main init global variables completed in ";
 #endif
+	}
+
+	// Output current jemalloc conf; no action taken when disabled
+	{
+		int rc = print_jemalloc_conf();
+		if (rc) { exit(EXIT_FAILURE); }
 	}
 
 	struct rlimit nlimit;
