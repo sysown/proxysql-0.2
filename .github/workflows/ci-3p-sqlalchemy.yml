@@ -59,7 +59,7 @@ jobs:
         ref: ${{ env.TESTTREE }}
         fetch-depth: 1
         path: 'proxysql_3p_testing'
-        token: ${{ secrets.gh_token }}
+        token: ${{ secrets.gh_token_proxysql }}
         sparse-checkout: |
           common
           libs
