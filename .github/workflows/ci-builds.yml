@@ -84,7 +84,7 @@ jobs:
       id: checks
       if: always()
       with:
-        token: ${{ secrets.GH_TOKEN_SYSOWN }}
+        token: ${{ secrets.GH_TOKEN }}
         name: '${{ github.workflow }} / ${{ github.job }} ${{ env.MATRIX }}'
         repo: ${{ github.repository }}
         sha: ${{ env.SHA }}
