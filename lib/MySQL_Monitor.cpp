@@ -1561,10 +1561,12 @@ __exit_set_wait_timeout:
 bool MySQL_Monitor_State_Data::create_new_connection() {
 		mysql=mysql_init(NULL);
 		assert(mysql);
-		MySQLServers_SslParams * ssl_params = NULL;
+		std::unique_ptr<MySQLServers_SslParams> ssl_params { nullptr };
 		if (use_ssl && port) {
-			ssl_params = MyHGM->get_Server_SSL_Params(hostname, port, mysql_thread___monitor_username);
-			MySQL_Connection::set_ssl_params(mysql,ssl_params);
+			ssl_params = std::unique_ptr<MySQLServers_SslParams>(
+				MyHGM->get_Server_SSL_Params(hostname, port, mysql_thread___monitor_username)
+			);
+			MySQL_Connection::set_ssl_params(mysql, ssl_params.get());
 			mysql_options(mysql, MARIADB_OPT_SSL_KEYLOG_CALLBACK, (void*)proxysql_keylog_write_line_callback);
 		}
 		unsigned int timeout=mysql_thread___monitor_connect_timeout/1000;
