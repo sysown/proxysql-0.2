@@ -144,6 +144,8 @@ int create_table_test_sbtest1(int num_rows, MYSQL *mysql);
 int create_table_test_sqlite_sbtest1(int num_rows, MYSQL *mysql); // as above, but for SQLite3 server
 int add_more_rows_test_sbtest1(int num_rows, MYSQL *mysql, bool sqlite=false);
 
+unsigned long long monotonic_time();
+
 using mysql_res_row = std::vector<std::string>;
 
 /**
