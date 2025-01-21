@@ -9,6 +9,7 @@
 
 //#define PARSERDEBUG
 
+template<typename S>
 class SetParser {
 	private:
 	// parse1v2 variables used for compile the RE only once

@@ -244,7 +244,7 @@ public:
 	pthread_mutex_t thread_mutex;
 
 	// if set_parser_algorithm == 2 , a single thr_SetParser is used
-	SetParser* thr_SetParser;
+	SetParser<PgSQL_Session>* thr_SetParser;
 
 	/**
 	 * @brief Default constructor for the PgSQL_Thread class.

@@ -2325,7 +2325,7 @@ int main(int argc, const char * argv[]) {
 #ifdef DEBUG
 	{
 		// Automated testing
-		SetParser parser("");
+		SetParser<MySQL_Session> parser("");
 		parser.test_parse_USE_query();
 	}
 #endif // DEBUG

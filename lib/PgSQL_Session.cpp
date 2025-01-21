@@ -5013,7 +5013,7 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 				) {
 				proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "Parsing SET command %s\n", nq.c_str());
 				proxy_debug(PROXY_DEBUG_MYSQL_QUERY_PROCESSOR, 5, "Parsing SET command = %s\n", nq.c_str());
-				SetParser parser(nq);
+				SetParser<PgSQL_Session> parser(nq);
 				std::map<std::string, std::vector<std::string>> set = {};
 				if (pgsql_thread___set_parser_algorithm == 1) { // legacy behavior
 					set = parser.parse1();

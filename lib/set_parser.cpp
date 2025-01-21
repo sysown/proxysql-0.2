@@ -39,20 +39,23 @@ static void remove_quotes(string& v) {
 SetParser::SetParser(std::string nq, int verb) {
 	verbosity = verb;
 #else
-SetParser::SetParser(std::string nq) {
+template<typename S>
+SetParser<S>::SetParser(std::string nq) {
 #endif
 	parse1v2_init = false;
 	set_query(nq);
 }
 
-SetParser::~SetParser() {
+template<typename S>
+SetParser<S>::~SetParser() {
 	if (parse1v2_init == true) {
 		delete parse1v2_opt2;
 		delete parse1v2_re;
 	}
 }
 
-void SetParser::set_query(const std::string& nq) {
+template<typename S>
+void SetParser<S>::set_query(const std::string& nq) {
 	int query_no_space_length = nq.length();
 	char *query_no_space=(char *)malloc(query_no_space_length+1);
 	memcpy(query_no_space,nq.c_str(),query_no_space_length);
@@ -80,7 +83,8 @@ void SetParser::set_query(const std::string& nq) {
 #define VAR_VALUE_P1_6 "|(?: )+"
 #define VAR_VALUE_P1 "(" VAR_VALUE_P1_1 VAR_VALUE_P1_2 VAR_VALUE_P1_3 VAR_VALUE_P1_4 VAR_VALUE_P1_5 VAR_VALUE_P1_6 ")"
 
-std::map<std::string,std::vector<std::string>> SetParser::parse1() {
+template<typename S>
+std::map<std::string,std::vector<std::string>> SetParser<S>::parse1() {
 #ifdef DEBUG
 	proxy_debug(PROXY_DEBUG_MYSQL_QUERY_PROCESSOR, 4, "Parsing query %s\n", query.c_str());
 #endif // DEBUG
@@ -148,7 +152,8 @@ VALGRIND_ENABLE_ERROR_REPORTING;
 	return result;
 }
 
-void SetParser::generateRE_parse1v2() {
+template<typename S>
+void SetParser<S>::generateRE_parse1v2() {
 	vector<string> quote_symbol = {"\"", "'", "`"};
 	vector<string> var_patterns = {};
 	{
@@ -306,7 +311,15 @@ void SetParser::generateRE_parse1v2() {
 	}
 #endif
 
-	const std::string pattern="(?:" NAMES SPACES + name_value + "(?: +COLLATE +" + name_value + "|)" "|" + var_1 + SPACES "(?:|:)=" SPACES + var_value + ") *,? *";
+	std::string pattern;
+	if constexpr (std::is_same_v<S, MySQL_Session>) {
+		pattern = "(?:" NAMES SPACES + name_value + "(?: +COLLATE +" + name_value + "|)" "|" + var_1 + SPACES "(?:|:)=" SPACES + var_value + ") *,? *";
+	} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
+		pattern = "(?:" NAMES SPACES + name_value + "(?: +COLLATE +" + name_value + "|)" "|" + var_1 + SPACES "(?:|:)(?:TO|=)" SPACES + var_value + ") *,? *";
+	} else {
+		assert(0);
+	}
+
 #ifdef DEBUG
 VALGRIND_DISABLE_ERROR_REPORTING;
 #endif // DEBUG
@@ -320,7 +333,8 @@ VALGRIND_DISABLE_ERROR_REPORTING;
 	parse1v2_init = true;
 }
 
-std::map<std::string,std::vector<std::string>> SetParser::parse1v2() {
+template<typename S>
+std::map<std::string,std::vector<std::string>> SetParser<S>::parse1v2() {
 
 	std::map<std::string,std::vector<std::string>> result = {};
 
@@ -391,8 +405,8 @@ VALGRIND_ENABLE_ERROR_REPORTING;
 	return result;
 }
 
-
-std::map<std::string,std::vector<std::string>> SetParser::parse2() {
+template<typename S>
+std::map<std::string,std::vector<std::string>> SetParser<S>::parse2() {
 
 #ifdef DEBUG
 	proxy_debug(PROXY_DEBUG_MYSQL_QUERY_PROCESSOR, 4, "Parsing query %s\n", query.c_str());
@@ -438,7 +452,8 @@ std::map<std::string,std::vector<std::string>> SetParser::parse2() {
 	return result;
 }
 
-std::string SetParser::parse_character_set() {
+template<>
+std::string SetParser<MySQL_Session>::parse_character_set() {
 #ifdef DEBUG
 	proxy_debug(PROXY_DEBUG_MYSQL_QUERY_PROCESSOR, 4, "Parsing query %s\n", query.c_str());
 #endif // DEBUG
@@ -462,7 +477,32 @@ std::string SetParser::parse_character_set() {
 	return value4;
 }
 
-std::string SetParser::parse_USE_query(std::string& errmsg) {
+template<>
+std::string SetParser<PgSQL_Session>::parse_character_set() {
+#ifdef DEBUG
+	proxy_debug(PROXY_DEBUG_MYSQL_QUERY_PROCESSOR, 4, "Parsing query %s\n", query.c_str());
+#endif // DEBUG
+	re2::RE2::Options *opt2=new re2::RE2::Options(RE2::Quiet);
+	opt2->set_case_sensitive(false);
+	opt2->set_longest_match(false);
+
+	re2::RE2 re0("^\\s*SET\\s+", *opt2);
+	re2::RE2::Replace(&query, re0, "");
+
+	std::map<std::string,std::vector<std::string>> result;
+	const std::string pattern = "(client_encoding|names)\\s*(|=|TO)\\s*['\"]?([A-Z_0-9]+)['\"]?";
+	re2::RE2 re(pattern, *opt2);
+	std::string var;
+	std::string value1, value2, value3;
+	re2::StringPiece input(query);
+	re2::RE2::Consume(&input, re, &value1, &value2, &value3);
+
+	delete opt2;
+	return value3;
+}
+
+template<typename S>
+std::string SetParser<S>::parse_USE_query(std::string& errmsg) {
 #ifdef DEBUG
 	proxy_debug(PROXY_DEBUG_MYSQL_QUERY_PROCESSOR, 4, "Parsing query %s\n", query.c_str());
 #endif // DEBUG
@@ -513,8 +553,8 @@ std::string SetParser::parse_USE_query(std::string& errmsg) {
 	return dbname;
 }
 
-
-std::string SetParser::remove_comments(const std::string& q) {
+template<typename S>
+std::string SetParser<S>::remove_comments(const std::string& q) {
     std::string result = "";
     bool in_multiline_comment = false;
 
@@ -558,7 +598,8 @@ std::string SetParser::remove_comments(const std::string& q) {
 
 
 #ifdef DEBUG
-void SetParser::test_parse_USE_query() {
+template<typename S>
+void SetParser<S>::test_parse_USE_query() {
 
 	// Define vector of pairs (query, expected dbname)
 	std::vector<std::pair<std::string, std::string>> testCases = {
@@ -621,3 +662,6 @@ void SetParser::test_parse_USE_query() {
 	}
 }
 #endif // DEBUG
+
+template class SetParser<PgSQL_Session>;
+template class SetParser<MySQL_Session>;

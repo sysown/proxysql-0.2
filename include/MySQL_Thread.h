@@ -192,7 +192,7 @@ class __attribute__((aligned(64))) MySQL_Thread : public Base_Thread
 	pthread_mutex_t thread_mutex;
 
 	// if set_parser_algorithm == 2 , a single thr_SetParser is used
-	SetParser *thr_SetParser;
+	SetParser<MySQL_Session> *thr_SetParser;
 
 	MySQL_Thread();
 	~MySQL_Thread();
