@@ -9932,6 +9932,17 @@ void ProxySQL_Admin::stats___mysql_global() {
 		statsdb->execute(query);
 		free(query);
 	}
+	if (GloMyLogger != nullptr) {
+		const string prefix = "MySQL_Logger-";
+		std::unordered_map<std::string, unsigned long long> metrics = GloMyLogger->getAllMetrics();
+		for (std::unordered_map<std::string, unsigned long long>::iterator it = metrics.begin(); it != metrics.end(); it++) {
+			unsigned int l = strlen(a) + prefix.length() + it->first.length() + 32;
+			char *query = (char *)malloc(l);
+			sprintf(query, a, string(prefix + it->first).c_str(),std::to_string(it->second).c_str());
+			statsdb->execute(query);
+			free(query);
+		}
+	}
 	statsdb->execute("COMMIT");
 }
 

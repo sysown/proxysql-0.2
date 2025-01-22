@@ -1367,14 +1367,14 @@ int MySQL_Logger::processEvents(SQLite3DB * statsdb , SQLite3DB * statsdb_disk) 
 		delete event;
 	}
 	size_t ret = events.size();
-#if 1 // FIXME: TEMPORARY , TO REMOVE
+#if 0
 	std::cerr << "Circular:" << endl;
 	std::cerr << "  EventsAddedCount:   " << MyLogCB->getEventsAddedCount() << endl;
 	std::cerr << "  EventsDroppedCount: " << MyLogCB->getEventsDroppedCount() << endl;
 	std::cerr << "  Size:               " << MyLogCB->size() << endl;
 	std::cerr << "memoryCopy: Count: " << metrics.memoryCopyCount << " , TimeUs: " << metrics.totalMemoryCopyTimeMicros << endl;
 	std::cerr << "diskCopy:   Count: " << metrics.diskCopyCount   << " , TimeUs: " << metrics.totalDiskCopyTimeMicros << endl;
-#endif // 1 , FIXME: TEMPORARY , TO REMOVE
+#endif // 0
 	return ret;
 }
 
