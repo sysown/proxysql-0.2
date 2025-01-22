@@ -89,7 +89,7 @@ class ConsumerThread : public Thread {
 					m_queue.add(item);
 				}
 				// this is intentional to EXIT immediately
-				return NULL;
+				goto cleanup;
 			}
 
 
@@ -109,6 +109,9 @@ class ConsumerThread : public Thread {
 			delete item->data;
 			delete item;
 		}
+cleanup:
+		// De-initializes per-thread structures. Required in all auxiliary threads using MySQL and SSL.
+		mysql_thread_end();
 		return NULL;
 	}
 };

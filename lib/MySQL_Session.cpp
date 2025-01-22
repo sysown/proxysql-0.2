@@ -380,6 +380,8 @@ __exit_kill_query_thread:
 		delete ssl_params;
 		ssl_params = NULL;
 	}
+	// De-initializes per-thread structures. Required in all auxiliary threads using MySQL and SSL.
+	mysql_thread_end();
 	return NULL;
 }
 
