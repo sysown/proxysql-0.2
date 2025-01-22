@@ -317,10 +317,10 @@ inline unsigned long long realtime_time() {
 template<int FACTOR, typename T>
 inline T overflow_safe_multiply(T val) {
 	static_assert(std::is_integral<T>::value, "T must be an integer type.");
-	static_assert(std::is_unsigned_v<T>, "T must be an unsigned integer type.");
+	static_assert(std::is_unsigned<T>::value, "T must be an unsigned integer type.");
 	static_assert(FACTOR > 0, "Negative factors are not supported.");
 
-	if constexpr (FACTOR == 0) return 0;
+	if (FACTOR == 0) return 0;
 	if (val == 0)  return 0;
 	if (val > std::numeric_limits<T>::max() / FACTOR) return std::numeric_limits<T>::max();
 	return (val * FACTOR);

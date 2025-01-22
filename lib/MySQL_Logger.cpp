@@ -555,7 +555,7 @@ uint64_t MySQL_Event::write_query_format_2_json(std::fstream *f) {
 
 extern Query_Processor *GloQPro;
 
-MySQL_Logger::MySQL_Logger() : metrics{0, 0, 0, 0, 0, 0, 0, 0, 0} {
+MySQL_Logger::MySQL_Logger() : metrics{{0},{0},{0},{0},{0},{0},{0},{0},{0}} {
 	events.enabled=false;
 	events.base_filename=NULL;
 	events.datadir=NULL;
