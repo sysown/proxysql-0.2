@@ -289,6 +289,7 @@ public:
 	PgSQL_Query_Info CurrentQuery;
 	PtrSize_t mirrorPkt;
 	PtrSize_t pkt;
+	std::string untracked_option_parameters;
 
 #if 0
 	// uint64_t
@@ -388,7 +389,7 @@ public:
 	bool use_ldap_auth;
 
 	// this variable is relevant only if status == SETTING_VARIABLE
-	enum mysql_variable_name changing_variable_idx;
+	enum pgsql_variable_name changing_variable_idx;
 
 	PgSQL_Session();
 	~PgSQL_Session();

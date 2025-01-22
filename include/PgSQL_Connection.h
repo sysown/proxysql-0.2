@@ -335,11 +335,11 @@ class PgSQL_Connection_Placeholder {
 
 	PgSQL_Conn_Param conn_params;
 
-	PgSQL_Variable variables[SQL_NAME_LAST_HIGH_WM];
-	uint32_t var_hash[SQL_NAME_LAST_HIGH_WM];
+	PgSQL_Variable variables[PGSQL_NAME_LAST_HIGH_WM];
+	uint32_t var_hash[PGSQL_NAME_LAST_HIGH_WM];
 	// for now we store possibly missing variables in the lower range
 	// we may need to fix that, but this will cost performance
-	bool var_absent[SQL_NAME_LAST_HIGH_WM] = {false};
+	bool var_absent[PGSQL_NAME_LAST_HIGH_WM] = {false};
 
 	std::vector<uint32_t> dynamic_variables_idx;
 	unsigned int reorder_dynamic_variables_idx();

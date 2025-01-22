@@ -107,7 +107,7 @@ mythr_g_st_vars_t PgSQL_Thread_status_variables_gauge_array[]{
 	/*{st_var_hostgroup_locked,            p_th_gauge::client_connections_hostgroup_locked,  (char*)"Client_Connections_hostgroup_locked"}*/
 };
 
-extern mysql_variable_st mysql_tracked_variables[];
+extern pgsql_variable_st pgsql_tracked_variables[];
 
 #ifdef __cplusplus
 extern "C" {
@@ -408,7 +408,7 @@ static char* pgsql_thread_variables_names[] = {
 	(char*)"poll_timeout_on_failure",
 	(char*)"server_capabilities",
 	(char*)"server_version",
-	(char*)"default_client_encoding",
+	(char*)"server_encoding",
 	(char*)"keep_multiplexing_variables",
 	(char*)"kill_backend_connection_when_disconnect",
 	(char*)"client_session_track_gtid",
@@ -917,7 +917,7 @@ PgSQL_Threads_Handler::PgSQL_Threads_Handler() {
 
 	variables.authentication_method = (int)AUTHENTICATION_METHOD::SASL_SCRAM_SHA_256; //SCRAM Authentication method
 	variables.server_version = strdup((char*)"16.1"); 
-	variables.default_client_encoding = strdup((char*)"UTF8");
+	variables.server_encoding = strdup((char*)"UTF8");
 	variables.shun_on_failures = 5;
 	variables.shun_recovery_time_sec = 10;
 	variables.unshun_algorithm = 0;
@@ -1020,8 +1020,8 @@ PgSQL_Threads_Handler::PgSQL_Threads_Handler() {
 	variables.init_connect = NULL;
 	variables.ldap_user_variable = NULL;
 	variables.add_ldap_user_comment = NULL;
-	for (int i = 0; i < SQL_NAME_LAST_LOW_WM; i++) {
-		variables.default_variables[i] = strdup(mysql_tracked_variables[i].default_value);
+	for (int i = 0; i < PGSQL_NAME_LAST_LOW_WM; i++) {
+		variables.default_variables[i] = strdup(pgsql_tracked_variables[i].default_value);
 	}
 	variables.default_session_track_gtids = strdup((char*)MYSQL_DEFAULT_SESSION_TRACK_GTIDS);
 	variables.ping_interval_server_msec = 10000;
@@ -1289,28 +1289,21 @@ char* PgSQL_Threads_Handler::get_variable_string(char* name) {
 		}
 	}
 	if (!strncmp(name, "default_", 8)) {
-		for (int i = 0; i < SQL_NAME_LAST_LOW_WM; i++) {
-			if (mysql_tracked_variables[i].is_global_variable == false)
+		for (int i = 0; i < PGSQL_NAME_LAST_LOW_WM; i++) {
+			if (IS_PGTRACKED_VAR_OPTION_SET_GLOBAL_VARIABLE(pgsql_tracked_variables[i]) == false)
 				continue;
 			char buf[128];
-			sprintf(buf, "default_%s", mysql_tracked_variables[i].internal_variable_name);
+			sprintf(buf, "default_%s", pgsql_tracked_variables[i].internal_variable_name);
 			if (!strcmp(name, buf)) {
 				if (variables.default_variables[i] == NULL) {
-					variables.default_variables[i] = strdup(mysql_tracked_variables[i].default_value);
+					variables.default_variables[i] = strdup(pgsql_tracked_variables[i].default_value);
 				}
 				return strdup(variables.default_variables[i]);
 			}
 		}
-		if (!strcmp(name, "default_session_track_gtids")) {
-			if (variables.default_session_track_gtids == NULL) {
-				variables.default_session_track_gtids = strdup((char*)MYSQL_DEFAULT_SESSION_TRACK_GTIDS);
-			}
-			return strdup(variables.default_session_track_gtids);
-		}
-		if (!strcmp(name, "default_schema")) return strdup(variables.default_schema);
 	}
 	if (!strcmp(name, "server_version")) return strdup(variables.server_version);
-	if (!strcmp(name, "default_client_encoding")) return strdup(variables.default_client_encoding);
+	if (!strcmp(name, "server_encoding")) return strdup(variables.server_encoding);
 	if (!strcmp(name, "eventslog_filename")) return strdup(variables.eventslog_filename);
 	if (!strcmp(name, "auditlog_filename")) return strdup(variables.auditlog_filename);
 	if (!strcmp(name, "interfaces")) return strdup(variables.interfaces);
@@ -1429,11 +1422,11 @@ char* PgSQL_Threads_Handler::get_variable(char* name) {	// this is the public fu
 	}
 	if (strlen(name) > 8) {
 		if (strncmp(name, "default_", 8) == 0) {
-			for (unsigned int i = 0; i < SQL_NAME_LAST_LOW_WM; i++) {
-				if (mysql_tracked_variables[i].is_global_variable) {
-					size_t var_len = strlen(mysql_tracked_variables[i].internal_variable_name);
+			for (unsigned int i = 0; i < PGSQL_NAME_LAST_LOW_WM; i++) {
+				if (IS_PGTRACKED_VAR_OPTION_SET_GLOBAL_VARIABLE(pgsql_tracked_variables[i])) {
+					size_t var_len = strlen(pgsql_tracked_variables[i].internal_variable_name);
 					if (strlen(name) == (var_len + 8)) {
-						if (!strncmp(name + 8, mysql_tracked_variables[i].internal_variable_name, var_len)) {
+						if (!strncmp(name + 8, pgsql_tracked_variables[i].internal_variable_name, var_len)) {
 							return strdup(variables.default_variables[i]);
 						}
 					}
@@ -1443,7 +1436,7 @@ char* PgSQL_Threads_Handler::get_variable(char* name) {	// this is the public fu
 	}
 	if (!strcasecmp(name, "firewall_whitelist_errormsg")) return strdup(variables.firewall_whitelist_errormsg);
 	if (!strcasecmp(name, "server_version")) return strdup(variables.server_version);
-	if (!strcasecmp(name, "default_client_encoding")) return strdup(variables.default_client_encoding);
+	if (!strcasecmp(name, "server_encoding")) return strdup(variables.server_encoding);
 	if (!strcasecmp(name, "auditlog_filename")) return strdup(variables.auditlog_filename);
 	if (!strcasecmp(name, "eventslog_filename")) return strdup(variables.eventslog_filename);
 	if (!strcasecmp(name, "default_schema")) return strdup(variables.default_schema);
@@ -1736,10 +1729,16 @@ bool PgSQL_Threads_Handler::set_variable(char* name, const char* value) {	// thi
 			return false;
 		}
 	}
-	if (!strcasecmp(name, "default_client_encoding")) {
+	if (!strcasecmp(name, "server_encoding")) {
 		if (vallen) {
-			free(variables.default_client_encoding);
-			variables.default_client_encoding = strdup(value);
+			int char_encoding = PgSQL_Connection::char_to_encoding(value);
+			if (char_encoding != -1) {
+				free(variables.server_encoding);
+				variables.server_encoding = strdup(value);
+			} else {
+				proxy_error("Invalid server_encoding: %s\n", value);
+				return false;
+			}
 			return true;
 		}
 		else {
@@ -1803,11 +1802,11 @@ bool PgSQL_Threads_Handler::set_variable(char* name, const char* value) {	// thi
 	}
 
 	if (!strncmp(name, "default_", 8)) {
-		for (int i = 0; i < SQL_NAME_LAST_LOW_WM; i++) {
-			if (mysql_tracked_variables[i].is_global_variable == false)
+		for (int i = 0; i < PGSQL_NAME_LAST_LOW_WM; i++) {
+			if (IS_PGTRACKED_VAR_OPTION_SET_GLOBAL_VARIABLE(pgsql_tracked_variables[i]) == false)
 				continue;
 			char buf[128];
-			sprintf(buf, "default_%s", mysql_tracked_variables[i].internal_variable_name);
+			sprintf(buf, "default_%s", pgsql_tracked_variables[i].internal_variable_name);
 			if (!strcmp(name, buf)) {
 				if (variables.default_variables[i]) free(variables.default_variables[i]);
 				variables.default_variables[i] = NULL;
@@ -1816,7 +1815,7 @@ bool PgSQL_Threads_Handler::set_variable(char* name, const char* value) {	// thi
 						variables.default_variables[i] = strdup(value);
 				}
 				if (variables.default_variables[i] == NULL)
-					variables.default_variables[i] = strdup(mysql_tracked_variables[i].default_value);
+					variables.default_variables[i] = strdup(pgsql_tracked_variables[i].default_value);
 				return true;
 			}
 		}
@@ -2035,7 +2034,7 @@ bool PgSQL_Threads_Handler::set_variable(char* name, const char* value) {	// thi
 }
 
 
-// return variables from both pgsql_thread_variables_names AND mysql_tracked_variables
+// return variables from both pgsql_thread_variables_names AND pgsql_tracked_variables
 char** PgSQL_Threads_Handler::get_variables_list() {
 
 
@@ -2230,16 +2229,16 @@ char** PgSQL_Threads_Handler::get_variables_list() {
 	const size_t l = sizeof(pgsql_thread_variables_names) / sizeof(char*);
 	unsigned int i;
 	size_t ltv = 0;
-	for (i = 0; i < SQL_NAME_LAST_LOW_WM; i++) {
-		if (mysql_tracked_variables[i].is_global_variable)
+	for (i = 0; i < PGSQL_NAME_LAST_LOW_WM; i++) {
+		if (IS_PGTRACKED_VAR_OPTION_SET_GLOBAL_VARIABLE(pgsql_tracked_variables[i]))
 			ltv++;
 	}
 	char** ret = (char**)malloc(sizeof(char*) * (l + ltv)); // not adding + 1 because pgsql_thread_variables_names is already NULL terminated
 	size_t fv = 0;
-	for (i = 0; i < SQL_NAME_LAST_LOW_WM; i++) {
-		if (mysql_tracked_variables[i].is_global_variable) {
-			char* m = (char*)malloc(strlen(mysql_tracked_variables[i].internal_variable_name) + 1 + strlen((char*)"default_"));
-			sprintf(m, "default_%s", mysql_tracked_variables[i].internal_variable_name);
+	for (i = 0; i < PGSQL_NAME_LAST_LOW_WM; i++) {
+		if (IS_PGTRACKED_VAR_OPTION_SET_GLOBAL_VARIABLE(pgsql_tracked_variables[i])) {
+			char* m = (char*)malloc(strlen(pgsql_tracked_variables[i].internal_variable_name) + 1 + strlen((char*)"default_"));
+			sprintf(m, "default_%s", pgsql_tracked_variables[i].internal_variable_name);
 			ret[fv] = m;
 			fv++;
 		}
@@ -2254,15 +2253,15 @@ char** PgSQL_Threads_Handler::get_variables_list() {
 }
 
 // Returns true if the given name is the name of an existing mysql variable
-// scan both pgsql_thread_variables_names AND mysql_tracked_variables
+// scan both pgsql_thread_variables_names AND pgsql_tracked_variables
 bool PgSQL_Threads_Handler::has_variable(const char* name) {
 	if (strlen(name) > 8) {
 		if (strncmp(name, "default_", 8) == 0) {
-			for (unsigned int i = 0; i < SQL_NAME_LAST_LOW_WM; i++) {
-				if (mysql_tracked_variables[i].is_global_variable) {
-					size_t var_len = strlen(mysql_tracked_variables[i].internal_variable_name);
+			for (unsigned int i = 0; i < PGSQL_NAME_LAST_LOW_WM; i++) {
+				if (IS_PGTRACKED_VAR_OPTION_SET_GLOBAL_VARIABLE(pgsql_tracked_variables[i])) {
+					size_t var_len = strlen(pgsql_tracked_variables[i].internal_variable_name);
 					if (strlen(name) == (var_len + 8)) {
-						if (!strncmp(name + 8, mysql_tracked_variables[i].internal_variable_name, var_len)) {
+						if (!strncmp(name + 8, pgsql_tracked_variables[i].internal_variable_name, var_len)) {
 							return true;
 						}
 					}
@@ -2620,7 +2619,7 @@ PgSQL_Threads_Handler::~PgSQL_Threads_Handler() {
 	if (variables.default_schema) free(variables.default_schema);
 	if (variables.interfaces) free(variables.interfaces);
 	if (variables.server_version) free(variables.server_version);
-	if (variables.default_client_encoding) free(variables.default_client_encoding);
+	if (variables.server_encoding) free(variables.server_encoding);
 	if (variables.keep_multiplexing_variables) free(variables.keep_multiplexing_variables);
 	if (variables.firewall_whitelist_errormsg) free(variables.firewall_whitelist_errormsg);
 	if (variables.init_connect) free(variables.init_connect);
@@ -2637,7 +2636,7 @@ PgSQL_Threads_Handler::~PgSQL_Threads_Handler() {
 	if (variables.ssl_p2s_crl) free(variables.ssl_p2s_crl);
 	if (variables.ssl_p2s_crlpath) free(variables.ssl_p2s_crlpath);
 
-	for (int i = 0; i < SQL_NAME_LAST_LOW_WM; i++) {
+	for (int i = 0; i < PGSQL_NAME_LAST_LOW_WM; i++) {
 		if (variables.default_variables[i]) {
 			free(variables.default_variables[i]);
 			variables.default_variables[i] = NULL;
@@ -2764,9 +2763,9 @@ PgSQL_Thread::~PgSQL_Thread() {
 	//if (mysql_thread___default_session_track_gtids) { free(mysql_thread___default_session_track_gtids); mysql_thread___default_session_track_gtids = NULL; }
 	
 	if (pgsql_thread___server_version) { free(pgsql_thread___server_version); pgsql_thread___server_version = NULL; }
-	if (pgsql_thread___default_client_encoding) { free(pgsql_thread___default_client_encoding); pgsql_thread___default_client_encoding = NULL; }
+	if (pgsql_thread___server_encoding) { free(pgsql_thread___server_encoding); pgsql_thread___server_encoding = NULL; }
 
-	for (int i = 0; i < SQL_NAME_LAST_LOW_WM; i++) {
+	for (int i = 0; i < PGSQL_NAME_LAST_LOW_WM; i++) {
 		if (mysql_thread___default_variables[i]) {
 			free(mysql_thread___default_variables[i]);
 			mysql_thread___default_variables[i] = NULL;
@@ -2806,7 +2805,6 @@ PgSQL_Thread::~PgSQL_Thread() {
 		delete thr_SetParser;
 		thr_SetParser = NULL;
 	}
-
 }
 
 bool PgSQL_Thread::init() {
@@ -2850,11 +2848,11 @@ bool PgSQL_Thread::init() {
 	match_regexes[0] = NULL; // NOTE: historically we used match_regexes[0] for SET SQL_LOG_BIN . Not anymore
 
 	std::stringstream ss;
-	ss << "^SET (|SESSION |@@|@@session.|@@local.)`?(" << pgsql_variables.variables_regexp << "SESSION_TRACK_GTIDS|TX_ISOLATION|TX_READ_ONLY|TRANSACTION_ISOLATION|TRANSACTION_READ_ONLY)`?( *)(:|)=( *)";
+	//ss << "^SET (|SESSION |@@|@@session.|@@local.)`?(" << pgsql_variables.variables_regexp << "SESSION_TRACK_GTIDS|TX_ISOLATION|TX_READ_ONLY|TRANSACTION_ISOLATION|TRANSACTION_READ_ONLY)`?( *)(:|)=( *)";
+	ss << "^SET(?: +)(|SESSION +)`?(" << pgsql_variables.variables_regexp << ")`?( *)(|=|TO)( *)";
 	match_regexes[1] = new Session_Regex((char*)ss.str().c_str());
-
 	match_regexes[2] = new Session_Regex((char*)"^SET(?: +)(|SESSION +)TRANSACTION(?: +)(?:(?:(ISOLATION(?: +)LEVEL)(?: +)(REPEATABLE(?: +)READ|READ(?: +)COMMITTED|READ(?: +)UNCOMMITTED|SERIALIZABLE))|(?:(READ)(?: +)(WRITE|ONLY)))");
-	match_regexes[3] = new Session_Regex((char*)"^(set)(?: +)((charset)|(character +set))(?: )");
+	match_regexes[3] = new Session_Regex((char*)"^SET(?: +)(|SESSION +)`?(client_encoding|names)`?( *)(|=|TO)( *)");
 
 	copy_cmd_matcher = new CopyCmdMatcher();
 
@@ -3890,19 +3888,20 @@ void PgSQL_Thread::refresh_variables() {
 	mysql_thread___add_ldap_user_comment = GloPTH->get_variable_string((char*)"add_ldap_user_comment");
 	if (mysql_thread___default_session_track_gtids) free(mysql_thread___default_session_track_gtids);
 	mysql_thread___default_session_track_gtids = GloPTH->get_variable_string((char*)"default_session_track_gtids");
-
-	for (int i = 0; i < SQL_NAME_LAST_LOW_WM; i++) {
-		if (mysql_thread___default_variables[i]) {
-			free(mysql_thread___default_variables[i]);
-			mysql_thread___default_variables[i] = NULL;
+	*/
+	
+	for (int i = 0; i < PGSQL_NAME_LAST_LOW_WM; i++) {
+		if (pgsql_thread___default_variables[i]) {
+			free(pgsql_thread___default_variables[i]);
+			pgsql_thread___default_variables[i] = NULL;
 		}
 		char buf[128];
-		if (mysql_tracked_variables[i].is_global_variable) {
-			sprintf(buf, "default_%s", mysql_tracked_variables[i].internal_variable_name);
-			mysql_thread___default_variables[i] = GloPTH->get_variable_string(buf);
+		if (IS_PGTRACKED_VAR_OPTION_SET_GLOBAL_VARIABLE(pgsql_tracked_variables[i])) {
+			sprintf(buf, "default_%s", pgsql_tracked_variables[i].internal_variable_name);
+			pgsql_thread___default_variables[i] = GloPTH->get_variable_string(buf);
 		}
 	}
-*/
+
 	if (pgsql_thread___init_connect) free(pgsql_thread___init_connect);
 	pgsql_thread___init_connect = GloPTH->get_variable_string((char*)"init_connect");
 
@@ -3924,8 +3923,8 @@ void PgSQL_Thread::refresh_variables() {
 
 	if (pgsql_thread___server_version) free(pgsql_thread___server_version);
 	pgsql_thread___server_version = GloPTH->get_variable_string((char*)"server_version");
-	if (pgsql_thread___default_client_encoding) free(pgsql_thread___default_client_encoding);
-	pgsql_thread___default_client_encoding = GloPTH->get_variable_string((char*)"default_client_encoding");
+	if (pgsql_thread___server_encoding) free(pgsql_thread___server_encoding);
+	pgsql_thread___server_encoding = GloPTH->get_variable_string((char*)"server_encoding");
 
 	pgsql_thread___have_ssl = (bool)GloPTH->get_variable_int((char*)"have_ssl");
 
@@ -3946,9 +3945,11 @@ void PgSQL_Thread::refresh_variables() {
 	if (pgsql_thread___keep_multiplexing_variables) free(pgsql_thread___keep_multiplexing_variables);
 	pgsql_thread___keep_multiplexing_variables = GloPTH->get_variable_string((char*)"keep_multiplexing_variables");
 
+	pgsql_thread___handle_unknown_charset = GloPTH->get_variable_int((char*)"handle_unknown_charset");
+
 	/*
 	mysql_thread___server_capabilities = GloPTH->get_variable_uint16((char*)"server_capabilities");
-	mysql_thread___handle_unknown_charset = GloPTH->get_variable_int((char*)"handle_unknown_charset");
+	
 	mysql_thread___have_compress = (bool)GloPTH->get_variable_int((char*)"have_compress");
 	
 	mysql_thread___enforce_autocommit_on_reads = (bool)GloPTH->get_variable_int((char*)"enforce_autocommit_on_reads");
@@ -3967,6 +3968,10 @@ void PgSQL_Thread::refresh_variables() {
 	pgsql_thread___query_digests_keep_comment = (bool)GloPTH->get_variable_int((char*)"query_digests_keep_comment");
 
 	variables.query_cache_stores_empty_result = (bool)GloPTH->get_variable_int((char*)"query_cache_stores_empty_result");
+
+#ifdef IDLE_THREADS
+	pgsql_thread___session_idle_show_processlist = (bool)GloPTH->get_variable_int((char*)"session_idle_show_processlist");
+#endif // IDLE_THREADS
 	/*
 	variables.min_num_servers_lantency_awareness = GloPTH->get_variable_int((char*)"min_num_servers_lantency_awareness");
 	variables.aurora_max_lag_ms_only_read_from_replicas = GloPTH->get_variable_int((char*)"aurora_max_lag_ms_only_read_from_replicas");
@@ -3975,10 +3980,6 @@ void PgSQL_Thread::refresh_variables() {
 
 	mysql_thread___client_session_track_gtid = (bool)GloPTH->get_variable_int((char*)"client_session_track_gtid");
 
-#ifdef IDLE_THREADS
-	mysql_thread___session_idle_show_processlist = (bool)GloPTH->get_variable_int((char*)"session_idle_show_processlist");
-#endif // IDLE_THREADS
-	
 	mysql_thread___enable_client_deprecate_eof = (bool)GloPTH->get_variable_int((char*)"enable_client_deprecate_eof");
 	mysql_thread___enable_server_deprecate_eof = (bool)GloPTH->get_variable_int((char*)"enable_server_deprecate_eof");
 	*/
@@ -4015,7 +4016,7 @@ PgSQL_Thread::PgSQL_Thread() {
 	last_processing_idles = 0;
 	__thread_PgSQL_Thread_Variables_version = 0;
 	pgsql_thread___server_version = NULL;
-	pgsql_thread___default_client_encoding = NULL;
+	pgsql_thread___server_encoding = NULL;
 	pgsql_thread___have_ssl = true;
 	//pgsql_thread___default_schema = NULL;
 	pgsql_thread___init_connect = NULL;
@@ -4054,7 +4055,7 @@ PgSQL_Thread::PgSQL_Thread() {
 	variables.stats_time_query_processor = false;
 	variables.query_cache_stores_empty_result = true;
 
-	for (int i = 0; i < SQL_NAME_LAST_LOW_WM; i++) {
+	for (int i = 0; i < PGSQL_NAME_LAST_LOW_WM; i++) {
 		mysql_thread___default_variables[i] = NULL;
 	}
 	shutdown = 0;
@@ -4584,7 +4585,7 @@ SQLite3_result* PgSQL_Threads_Handler::SQL3_Processlist() {
 #ifdef IDLE_THREADS
 		}
 		else {
-			if (GloVars.global.idle_threads && mysql_thread___session_idle_show_processlist && pgsql_threads_idles) {
+			if (GloVars.global.idle_threads && pgsql_thread___session_idle_show_processlist && pgsql_threads_idles) {
 				thr = (PgSQL_Thread*)pgsql_threads_idles[i - num_threads].worker;
 			}
 #endif // IDLE_THREADS
@@ -4788,9 +4789,9 @@ SQLite3_result* PgSQL_Threads_Handler::SQL3_Processlist() {
 				case SETTING_VARIABLE:
 				{
 					int idx = sess->changing_variable_idx;
-					if (idx < SQL_NAME_LAST_HIGH_WM) {
+					if (idx < PGSQL_NAME_LAST_HIGH_WM) {
 						char buf[128];
-						sprintf(buf, "Setting variable %s", mysql_tracked_variables[idx].set_variable_name);
+						sprintf(buf, "Setting variable %s", pgsql_tracked_variables[idx].set_variable_name);
 						pta[11] = strdup(buf);
 					}
 					else {

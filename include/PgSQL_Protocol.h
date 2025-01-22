@@ -571,6 +571,8 @@ private:
 	 */
 	void reset();
 
+	void clear();
+
 	PtrSizeArray PSarrayOUT;
 	unsigned long long resultset_size;
 	unsigned long long num_rows;
@@ -1037,6 +1039,9 @@ private:
 	 *       4. Sends the server's final message to the client.
 	 */
 	bool scram_handle_client_final(ScramState* scram_state, PgCredentials* user, const unsigned char* data, uint32_t datalen);
+
+	// parse options parameter
+	static std::vector<std::pair<std::string, std::string>> parse_options(const char* options);
 
 	PgSQL_Data_Stream** myds;
 	PgSQL_Connection_userinfo* userinfo;

@@ -713,6 +713,69 @@ char* extract_password(const pgsql_hdr* hdr, uint32_t* len) {
 	return pass;
 }
 
+std::vector<std::pair<std::string, std::string>> PgSQL_Protocol::parse_options(const char* options) {
+	std::vector<std::pair<std::string, std::string>> options_list;
+
+	if (!options) return options_list;
+
+	std::string input(options);
+	size_t pos = 0;
+
+	while (pos < input.size()) {
+		// Skip leading spaces
+		while (pos < input.size() && std::isspace(input[pos])) {
+			++pos;
+		}
+
+		// Check for -c or --
+		if (input.compare(pos, 2, "-c") == 0 || 
+			input.compare(pos, 2, "--") == 0) {
+			pos += 2; // Skip "-c", "--"
+		}
+
+		while (pos < input.size() && std::isspace(input[pos])) {
+			++pos;
+		}
+
+		// Parse key
+		size_t key_start = pos;
+		while (pos < input.size() && input[pos] != '=') {
+			++pos;
+		}
+		std::string key = input.substr(key_start, pos - key_start);
+
+		// Skip '='
+		if (pos < input.size() && input[pos] == '=') {
+			++pos;
+		}
+
+		// Parse value
+		std::string value;
+		bool last_was_escape = false;
+		while (pos < input.size()) {
+			char c = input[pos];
+			if (std::isspace(c) && !last_was_escape) {
+				break;
+			}
+			if (c == '\\' && !last_was_escape) {
+				last_was_escape = true;
+			}
+			else {
+				value += c;
+				last_was_escape = false;
+			}
+			++pos;
+		}
+
+		// Add key-value pair to the list
+		if (!key.empty()) {
+			options_list.emplace_back(std::move(key), std::move(value));
+		}
+	}
+
+	return options_list;
+}
+
 EXECUTION_STATE PgSQL_Protocol::process_handshake_response_packet(unsigned char* pkt, unsigned int len) {
 #ifdef DEBUG
 	//if (dump_pkt) { __dump_pkt(__func__, pkt, len); }
@@ -745,6 +808,26 @@ EXECUTION_STATE PgSQL_Protocol::process_handshake_response_packet(unsigned char*
 		return EXECUTION_STATE::FAILED;
 	}
 
+	/// set charset but first verify
+	const char* charset = (*myds)->myconn->conn_params.get_value(PG_CLIENT_ENCODING);
+
+	// if client does not provide client_encoding, PostgreSQL uses the default client encoding. 
+	// We need to save the default client encoding to send it to the client in case client doesn't provide one.
+	if (charset == NULL) charset = pgsql_thread___default_variables[PGSQL_CLIENT_ENCODING];
+
+	assert(charset);
+
+	int charset_encoding = (*myds)->myconn->char_to_encoding(charset);
+
+	if (charset_encoding == -1) {
+		proxy_error("Cannot find charset [%s]\n", charset);
+		proxy_debug(PROXY_DEBUG_MYSQL_AUTH, 5, "DS=%p , Session=%p , charset='%s'. Client charset not supported.\n", (*myds), (*myds)->sess, charset);
+		generate_error_packet(true, false, "Client charset not supported", PGSQL_ERROR_CODES::ERRCODE_PROTOCOL_VIOLATION, true);
+		return EXECUTION_STATE::FAILED;
+	}
+
+	(*myds)->sess->default_charset = charset_encoding;
+	
 	user = (char*)(*myds)->myconn->conn_params.get_value(PG_USER);
 
 	if (!user || *user == '\0') {
@@ -964,29 +1047,6 @@ EXECUTION_STATE PgSQL_Protocol::process_handshake_response_packet(unsigned char*
 		proxy_debug(PROXY_DEBUG_MYSQL_AUTH, 5, "Session=%p , DS=%p , user='%s'. User not found in the database.\n", (*myds), (*myds)->sess, user);
 		generate_error_packet(true, false, "User not found", PGSQL_ERROR_CODES::ERRCODE_PROTOCOL_VIOLATION, true);
 	}
-	// set the default session charset
-	//(*myds)->sess->default_charset = charset;
-	
-	/*if (pass_len == 0 && strlen(password) == 0) {
-		ret = true;
-		proxy_debug(PROXY_DEBUG_MYSQL_AUTH, 5, "Session=%p , DS=%p , username='%s' , password=''\n", (*myds), (*myds)->sess, user);
-	}*/
-
-	assert(sess);
-	assert(sess->client_myds);
-	//assert(sess->client_myds->myconn);
-	/*myconn->set_charset(charset, CONNECT_START);
-	{
-		std::stringstream ss;
-		ss << charset;
-
-		mysql_variables.client_set_value(sess, SQL_CHARACTER_SET_RESULTS, ss.str().c_str());
-		mysql_variables.client_set_value(sess, SQL_CHARACTER_SET_CLIENT, ss.str().c_str());
-		mysql_variables.client_set_value(sess, SQL_CHARACTER_SET_CONNECTION, ss.str().c_str());
-		mysql_variables.client_set_value(sess, SQL_COLLATION_CONNECTION, ss.str().c_str());
-	}
-*/
-
 
 	if (ret == EXECUTION_STATE::SUCCESSFUL) {
 
@@ -1001,7 +1061,46 @@ EXECUTION_STATE PgSQL_Protocol::process_handshake_response_packet(unsigned char*
 		const char* db = (*myds)->myconn->conn_params.get_value(PG_DATABASE);
 		userinfo->set_dbname(db ? db : userinfo->username);
 
-		const char* charset = (*myds)->myconn->conn_params.get_value(PG_CLIENT_ENCODING);
+		assert(sess);
+		assert(sess->client_myds);
+
+		PgSQL_Connection* myconn = sess->client_myds->myconn;
+		assert(myconn);
+		myconn->set_charset(charset);
+
+		// get datestyle from connection parameters
+		const char* datestyle = (*myds)->myconn->conn_params.get_value(PG_DATESTYLE);
+		if (datestyle) 
+			pgsql_variables.client_set_value(sess, PGSQL_DATESTYLE, datestyle);
+		
+		// get timezone from connection parameters
+		const char* timezone = (*myds)->myconn->conn_params.get_value(PG_TIMEZONE);
+		if (timezone)
+			pgsql_variables.client_set_value(sess, PGSQL_TIMEZONE, timezone);
+
+		const char* options = (*myds)->myconn->conn_params.get_value(PG_OPTIONS);
+
+		auto options_list = parse_options(options);
+
+		for (auto& option : options_list) {
+			int idx = PGSQL_NAME_LAST_HIGH_WM;
+			for (int i = PGSQL_NAME_LAST_LOW_WM + 1; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
+				if (variable_name_exists(pgsql_tracked_variables[i], option.first.c_str()) == true) {
+					idx = i;
+					break;
+				} 
+			}
+
+			if (idx != PGSQL_NAME_LAST_HIGH_WM)
+				pgsql_variables.client_set_value(sess, idx, option.second.c_str());
+			else {
+				const char* val = option.second.c_str();
+				const char* escaped_str = escape_string_backslash_spaces(val);
+				sess->untracked_option_parameters = "-c " + option.first + "=" + escaped_str + " ";
+				if (escaped_str != val)
+					free((char*)escaped_str);
+			}
+		}
 
 		//if (charset)
 		//	(*myds)->sess->default_charset = charset;
@@ -1045,18 +1144,21 @@ void PgSQL_Protocol::welcome_client() {
 	if (application_name)
 		pgpkt.write_ParameterStatus("application_name", application_name);
 
-	const char* client_encoding = (*myds)->myconn->conn_params.get_value(PG_CLIENT_ENCODING);
+	const char* client_encoding = pgsql_variables.client_get_value((*myds)->sess, PGSQL_CLIENT_ENCODING); //(*myds)->myconn->conn_params.get_value(PG_CLIENT_ENCODING);
 	if (client_encoding)
 		pgpkt.write_ParameterStatus("client_encoding", client_encoding);
-	// if client does not provide client_encoding, PostgreSQL uses the default client encoding. 
-	// We need to save the default client encoding to send it to the client in case client doesn't provide one.
-	else if (pgsql_thread___default_client_encoding) 
-		pgpkt.write_ParameterStatus("client_encoding", pgsql_thread___default_client_encoding);
+	else 
+		assert(0);
+
+	const char* datestyle = pgsql_variables.client_get_value((*myds)->sess, PGSQL_DATESTYLE);
+	if (datestyle)
+		pgpkt.write_ParameterStatus("datestyle", datestyle);
 
 	if (pgsql_thread___server_version)
 		pgpkt.write_ParameterStatus("server_version", pgsql_thread___server_version);
 
-	pgpkt.write_ParameterStatus("server_encoding", "UTF8");
+	if (pgsql_thread___server_encoding)
+		pgpkt.write_ParameterStatus("server_encoding", pgsql_thread___server_encoding);
 
 	pgpkt.write_ReadyForQuery();
 	pgpkt.set_multi_pkt_mode(false);
@@ -1971,8 +2073,7 @@ void PgSQL_Query_Result::init(PgSQL_Protocol* _proto, PgSQL_Data_Stream* _myds, 
 
 	if (conn->processing_multi_statement == false)
 		transfer_started = false;
-	buffer_init();
-	reset();
+	clear();
 
 	if (proto == NULL) {
 		return; // this is a mirror
@@ -2160,4 +2261,14 @@ void PgSQL_Query_Result::reset() {
 	pkt_count = 0;
 	affected_rows = -1;
 	result_packet_type = PGSQL_QUERY_RESULT_NO_DATA;
+}
+
+void PgSQL_Query_Result::clear() {
+	PtrSize_t pkt;
+	while (PSarrayOUT.len) {
+		PSarrayOUT.remove_index_fast(0, &pkt);
+		l_free(pkt.size, pkt.ptr);
+	}
+	buffer_init();
+	reset();
 }

@@ -490,7 +490,7 @@ std::string SetParser<PgSQL_Session>::parse_character_set() {
 	re2::RE2::Replace(&query, re0, "");
 
 	std::map<std::string,std::vector<std::string>> result;
-	const std::string pattern = "(client_encoding|names)\\s*(|=|TO)\\s*['\"]?([A-Z_0-9]+)['\"]?";
+	const std::string pattern = "(client_encoding|names)\\s*(=|TO)\\s*['\"]?([A-Z_0-9]+)['\"]?";
 	re2::RE2 re(pattern, *opt2);
 	std::string var;
 	std::string value1, value2, value3;

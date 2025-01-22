@@ -816,8 +816,6 @@ private:
 public:
 	struct {
 		int authentication_method;
-		char* server_version;
-
 		int monitor_history;
 		int monitor_connect_interval;
 		int monitor_connect_interval_window;
@@ -898,7 +896,6 @@ public:
 		char* default_schema;
 		char* interfaces;
 		char* keep_multiplexing_variables;
-		char* default_client_encoding;
 		//unsigned int default_charset; // removed in 2.0.13 . Obsoleted previously using PgSQL_Variables instead
 		int handle_unknown_charset;
 		bool servers_stats;
@@ -960,7 +957,7 @@ public:
 		char* ldap_user_variable;
 		char* add_ldap_user_comment;
 		char* default_session_track_gtids;
-		char* default_variables[SQL_NAME_LAST_LOW_WM];
+		char* default_variables[PGSQL_NAME_LAST_LOW_WM];
 		char* firewall_whitelist_errormsg;
 #ifdef DEBUG
 		bool session_debug;
@@ -998,6 +995,8 @@ public:
 		bool log_mysql_warnings_enabled;
 		int data_packets_history_size;
 		int handle_warnings;
+		char* server_version;
+		char* server_encoding;
 	} variables;
 	struct {
 		unsigned int mirror_sessions_current;

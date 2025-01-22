@@ -116,109 +116,11 @@ extern char * binary_sha1;
 #include "proxysql_find_charset.h"
 
 void PgSQL_Variable::fill_server_internal_session(json &j, int conn_num, int idx) {
-	if (idx == SQL_CHARACTER_SET_RESULTS || idx == SQL_CHARACTER_SET_CLIENT || idx == SQL_CHARACTER_SET_DATABASE) {
-		const MARIADB_CHARSET_INFO *ci = NULL;
-		if (!value) {
-			ci = proxysql_find_charset_name(mysql_tracked_variables[idx].default_value);
-		} else if (strcasecmp("NULL", value) && strcasecmp("binary", value)) {
-			ci = proxysql_find_charset_nr(atoi(value));
-		}
-		if (!ci) {
-			if (idx == SQL_CHARACTER_SET_RESULTS && (!strcasecmp("NULL", value) || !strcasecmp("binary", value))) {
-				if (!strcasecmp("NULL", value)) {
-					j["backends"][conn_num]["conn"][mysql_tracked_variables[idx].internal_variable_name] = "";
-				} else {
-					j["backends"][conn_num]["conn"][mysql_tracked_variables[idx].internal_variable_name] = value;
-				}
-			} else {
-				// LCOV_EXCL_START
-				proxy_error("Cannot find charset [%s] for variables %d\n", value, idx);
-				assert(0);
-				// LCOV_EXCL_STOP
-			}
-		} else {
-			j["backends"][conn_num]["conn"][mysql_tracked_variables[idx].internal_variable_name] = std::string((ci && ci->csname)?ci->csname:"");
-		}
-	} else if (idx == SQL_CHARACTER_SET_CONNECTION) {
-		const MARIADB_CHARSET_INFO *ci = NULL;
-		if (!value)
-			ci = proxysql_find_charset_name(mysql_tracked_variables[idx].default_value);
-		else
-			ci = proxysql_find_charset_nr(atoi(value));
-
-		j["backends"][conn_num]["conn"][mysql_tracked_variables[idx].internal_variable_name] = std::string((ci && ci->csname)?ci->csname:"");
-	} else if (idx == SQL_COLLATION_CONNECTION) {
-		const MARIADB_CHARSET_INFO *ci = NULL;
-		if (!value)
-			ci = proxysql_find_charset_collate(mysql_tracked_variables[idx].default_value);
-		else
-			ci = proxysql_find_charset_nr(atoi(value));
-
-		j["backends"][conn_num]["conn"][mysql_tracked_variables[idx].internal_variable_name] = std::string((ci && ci->name)?ci->name:"");
-/*
-//	NOTE: it seems we treat SQL_LOG_BIN in a special way
-//	it doesn't seem necessary
-	} else if (idx == SQL_SQL_LOG_BIN) {
-		if (!value)
-			j["backends"][conn_num]["conn"][mysql_tracked_variables[idx].internal_variable_name] = mysql_tracked_variables[idx].default_value;
-		else
-			j["backends"][conn_num]["conn"][mysql_tracked_variables[idx].internal_variable_name] = std::string(!strcmp("1",value)?"ON":"OFF");
-*/
-	} else {
-		j["backends"][conn_num]["conn"][mysql_tracked_variables[idx].internal_variable_name] = std::string(value?value:"");
-	}
+	j[conn_num]["conn"][pgsql_tracked_variables[idx].internal_variable_name] = std::string(value?value:"");
 }
 
 void PgSQL_Variable::fill_client_internal_session(json &j, int idx) {
-	if (idx == SQL_CHARACTER_SET_RESULTS || idx == SQL_CHARACTER_SET_CLIENT || idx == SQL_CHARACTER_SET_DATABASE) {
-		const MARIADB_CHARSET_INFO *ci = NULL;
-		if (!value) {
-			ci = proxysql_find_charset_name(mysql_tracked_variables[idx].default_value);
-		} else if (strcasecmp("NULL", value) && strcasecmp("binary", value)) {
-			ci = proxysql_find_charset_nr(atoi(value));
-		}
-		if (!ci) {
-			if (idx == SQL_CHARACTER_SET_RESULTS && (!strcasecmp("NULL", value) || !strcasecmp("binary", value))) {
-				if (!strcasecmp("NULL", value)) {
-					j["conn"][mysql_tracked_variables[idx].internal_variable_name] = "";
-				} else {
-					j["conn"][mysql_tracked_variables[idx].internal_variable_name] = value;
-				}
-			} else {
-				// LCOV_EXCL_START
-				proxy_error("Cannot find charset [%s] for variables %d\n", value, idx);
-				assert(0);
-				// LCOV_EXCL_STOP
-			}
-		} else {
-			j["conn"][mysql_tracked_variables[idx].internal_variable_name] = (ci && ci->csname)?ci->csname:"";
-		}
-	} else if (idx == SQL_CHARACTER_SET_CONNECTION) {
-		const MARIADB_CHARSET_INFO *ci = NULL;
-		if (!value)
-			ci = proxysql_find_charset_collate(mysql_tracked_variables[idx].default_value);
-		else
-			ci = proxysql_find_charset_nr(atoi(value));
-		j["conn"][mysql_tracked_variables[idx].internal_variable_name] = (ci && ci->csname)?ci->csname:"";
-	} else if (idx == SQL_COLLATION_CONNECTION) {
-		const MARIADB_CHARSET_INFO *ci = NULL;
-		if (!value)
-			ci = proxysql_find_charset_collate(mysql_tracked_variables[idx].default_value);
-		else
-			ci = proxysql_find_charset_nr(atoi(value));
-		j["conn"][mysql_tracked_variables[idx].internal_variable_name] = (ci && ci->name)?ci->name:"";
-/*
-//	NOTE: it seems we treat SQL_LOG_BIN in a special way
-//	it doesn't seem necessary
-	}  else if (idx == SQL_LOG_BIN) {
-		if (!value)
-			j["conn"][mysql_tracked_variables[idx].internal_variable_name] = mysql_tracked_variables[idx].default_value;
-		else
-			j["conn"][mysql_tracked_variables[idx].internal_variable_name] = !strcmp("1", value)?"ON":"OFF";
-*/
-	} else {
-		j["conn"][mysql_tracked_variables[idx].internal_variable_name] = value?value:"";
-	}
+	j["conn"][pgsql_tracked_variables[idx].internal_variable_name] = value?value:"";
 }
 
 static int
@@ -386,7 +288,7 @@ PgSQL_Connection_Placeholder::PgSQL_Connection_Placeholder() {
 	status_flags=0;
 	last_time_used=0;
 
-	for (auto i = 0; i < SQL_NAME_LAST_HIGH_WM; i++) {
+	for (auto i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
 		variables[i].value = NULL;
 		var_hash[i] = 0;
 	}
@@ -460,7 +362,7 @@ PgSQL_Connection_Placeholder::~PgSQL_Connection_Placeholder() {
 					mysql_result->handle->status = MYSQL_STATUS_READY; // avoid calling mthd_my_skip_result()
 				}
 			}
-			async_free_result();
+			//async_free_result();
 		}
 		close_mysql(); // this take care of closing pgsql connection
 		pgsql=NULL;
@@ -482,7 +384,7 @@ PgSQL_Connection_Placeholder::~PgSQL_Connection_Placeholder() {
 		options.session_track_gtids=NULL;
 	}
 
-	for (auto i = 0; i < SQL_NAME_LAST_HIGH_WM; i++) {
+	for (auto i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
 		if (variables[i].value) {
 			free(variables[i].value);
 			variables[i].value = NULL;
@@ -579,7 +481,7 @@ bool PgSQL_Connection_Placeholder::get_status_sql_log_bin0() {
 unsigned int PgSQL_Connection_Placeholder::reorder_dynamic_variables_idx() {
 	dynamic_variables_idx.clear();
 	// note that we are inserting the index already ordered
-	for (auto i = SQL_NAME_LAST_LOW_WM + 1 ; i < SQL_NAME_LAST_HIGH_WM ; i++) {
+	for (auto i = PGSQL_NAME_LAST_LOW_WM + 1 ; i < PGSQL_NAME_LAST_HIGH_WM ; i++) {
 		if (var_hash[i] != 0) {
 			dynamic_variables_idx.push_back(i);
 		}
@@ -590,7 +492,7 @@ unsigned int PgSQL_Connection_Placeholder::reorder_dynamic_variables_idx() {
 
 unsigned int PgSQL_Connection_Placeholder::number_of_matching_session_variables(const PgSQL_Connection *client_conn, unsigned int& not_matching) {
 	unsigned int ret=0;
-	for (auto i = 0; i < SQL_NAME_LAST_LOW_WM; i++) {
+	for (auto i = 0; i < PGSQL_NAME_LAST_LOW_WM; i++) {
 		if (client_conn->var_hash[i] && i != SQL_CHARACTER_ACTION) { // client has a variable set
 			if (var_hash[i] == client_conn->var_hash[i]) { // server conection has the variable set to the same value
 				ret++;
@@ -1148,7 +1050,7 @@ void PgSQL_Connection_Placeholder::reset() {
 	local_stmts=new MySQL_STMTs_local_v14(false);
 	creation_time = monotonic_time();
 
-	for (auto i = 0; i < SQL_NAME_LAST_HIGH_WM; i++) {
+	for (auto i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
 		var_hash[i] = 0;
 		if (variables[i].value) {
 			free(variables[i].value);
@@ -1226,7 +1128,6 @@ PgSQL_Connection::PgSQL_Connection() {
 }
 
 PgSQL_Connection::~PgSQL_Connection() {
-
 	if (userinfo) {
 		delete userinfo;
 		userinfo = NULL;
@@ -1236,6 +1137,9 @@ PgSQL_Connection::~PgSQL_Connection() {
 		pgsql_result = NULL;
 	}
 	if (pgsql_conn) {
+		if (is_connected())  
+			__sync_fetch_and_sub(&PgHGM->status.server_connections_connected, 1);
+		async_free_result();
 		PQfinish(pgsql_conn);
 		pgsql_conn = NULL;
 	}
@@ -1247,7 +1151,7 @@ PgSQL_Connection::~PgSQL_Connection() {
 		delete query_result_reuse;
 		query_result_reuse = NULL;
 	}
-	for (auto i = 0; i < SQL_NAME_LAST_HIGH_WM; i++) {
+	for (auto i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
 		if (variables[i].value) {
 			free(variables[i].value);
 			variables[i].value = NULL;
@@ -1263,7 +1167,6 @@ PgSQL_Connection::~PgSQL_Connection() {
 		free(connected_host_details.ip);
 		connected_host_details.hostname = NULL;
 	}
-
 }
 
 void PgSQL_Connection::next_event(PG_ASYNC_ST new_st) {
@@ -1776,20 +1679,75 @@ void PgSQL_Connection::connect_start() {
 		conninfo << "sslmode='disable' "; // not supporting SSL
 	}
 
+	if (myds && myds->sess) {
+		const char* charset = NULL;
+		uint32_t charset_hash = 0;
+
+		// Take client character set and use it to connect to backend 
+		charset_hash = pgsql_variables.client_get_hash(myds->sess, PGSQL_CLIENT_ENCODING);
+		if (charset_hash != 0)
+			charset = pgsql_variables.client_get_value(myds->sess, PGSQL_CLIENT_ENCODING);
+
+		//if (!charset) {
+		//	charset = pgsql_thread___default_variables[PGSQL_CLIENT_ENCODING];
+		//}
+
+		// Client Encoding should be always set
+		assert(charset);
+
+		connect_start_SetCharset(charset, charset_hash);
+
+		escaped_str = escape_string_single_quotes_and_backslashes((char*)charset, false);
+		conninfo << "client_encoding='" << escaped_str << "' ";
+		if (escaped_str != charset)
+			free(escaped_str);
+
+		std::vector<int> client_options;
+		client_options.reserve(PGSQL_NAME_LAST_HIGH_WM - PGSQL_NAME_LAST_LOW_WM - 1);
+		for (int idx = PGSQL_NAME_LAST_LOW_WM + 1; idx < PGSQL_NAME_LAST_HIGH_WM; idx++) {
+			if (pgsql_variables.client_get_hash(myds->sess, idx) == 0)
+				continue;
+			client_options.push_back(idx);
+		}
+		if (client_options.empty() == false ||
+			myds->sess->untracked_option_parameters.empty() == false) {
+
+			// optimized way to set client parameters on backend connection when creating a new connection
+			conninfo << "options='";
+			for (int idx : client_options) {
+				const char* value = pgsql_variables.client_get_value(myds->sess, idx);
+				const char* escaped_str = escape_string_backslash_spaces(value);
+				conninfo << "-c " << pgsql_tracked_variables[idx].set_variable_name << "=" << escaped_str << " ";
+				if (escaped_str != value)
+					free((char*)escaped_str);
+
+				const uint32_t hash = pgsql_variables.client_get_hash(myds->sess, idx);
+				pgsql_variables.server_set_hash_and_value(myds->sess, idx, value, hash);
+			}
+
+			reorder_dynamic_variables_idx();
+
+			// if there are untracked parameters, the session should lock on the host group
+			if (myds->sess->untracked_option_parameters.empty() == false) {
+				conninfo << myds->sess->untracked_option_parameters;
+			}
+			conninfo << "'";
+		}
+	}
+
 	/*conninfo << "postgres://";
-	conninfo << userinfo->username << ":" << userinfo->password; // username and password
-	conninfo << "@";
-	conninfo << parent->address << ":" << parent->port; // backend address and port
-	conninfo << "/";
-	conninfo << userinfo->schemaname; // currently schemaname consists of datasename (have to improve this in future). In PostgreSQL database and schema are NOT the same.
-	conninfo << "?";
-	//conninfo << "require_auth=" << AUTHENTICATION_METHOD_STR[pgsql_thread___authentication_method]; // authentication method
-	conninfo << "application_name=proxysql";
+	 conninfo << userinfo->username << ":" << userinfo->password; // username and password
+	 conninfo << "@";
+	 conninfo << parent->address << ":" << parent->port; // backend address and port
+	 conninfo << "/";
+	 conninfo << userinfo->schemaname; // currently schemaname consists of datasename (have to improve this in future). In PostgreSQL database and schema are NOT the same.
+	 conninfo << "?";
+	 //conninfo << "require_auth=" << AUTHENTICATION_METHOD_STR[pgsql_thread___authentication_method]; // authentication method
+	 conninfo << "application_name=proxysql";
 	*/
 
 	const std::string& conninfo_str = conninfo.str();
 	pgsql_conn = PQconnectStart(conninfo_str.c_str());
-	//pgsql_conn = PQconnectdb(conninfo_str.c_str());
 
 	//PQsetErrorVerbosity(pgsql_conn, PQERRORS_VERBOSE);
 	//PQsetErrorContextVisibility(pgsql_conn, PQSHOW_CONTEXT_ERRORS);
@@ -2552,7 +2510,7 @@ void PgSQL_Connection::reset_session_cont(short event) {
 }
 
 bool PgSQL_Connection::requires_RESETTING_CONNECTION(const PgSQL_Connection* client_conn) {
-	for (auto i = 0; i < SQL_NAME_LAST_LOW_WM; i++) {
+	for (auto i = 0; i < PGSQL_NAME_LAST_LOW_WM; i++) {
 		if (client_conn->var_hash[i] == 0) {
 			if (var_hash[i]) {
 				// this connection has a variable set that the
