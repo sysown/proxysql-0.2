@@ -68,7 +68,7 @@ int main(int argc, char** argv) {
 	unsigned long time_proxy = 0;
 	unsigned long time_proxy_compression_level_default = 0;
 	unsigned long time_proxy_compression_level_8 = 0;	
-	unsigned long diff = 0;
+	long diff = 0;
 	unsigned long time_mysql_compressed = 0;
 	unsigned long time_mysql_without_compressed = 0;
 	std::string compression_level = {""};
