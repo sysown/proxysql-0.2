@@ -16,6 +16,7 @@ struct p_ml_counter {
 		get_all_events_events_count,
 		total_memory_copy_time_us,
 		total_disk_copy_time_us,
+		total_get_all_events_time_us,
 		total_events_copied_to_memory,
 		total_events_copied_to_disk,
 		circular_buffer_events_added_count,
