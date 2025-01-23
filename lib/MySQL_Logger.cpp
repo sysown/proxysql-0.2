@@ -87,6 +87,12 @@ ml_metrics_map = std::make_tuple(
 			metric_tags { { "target", "disk" } }
 		),
 		std::make_tuple (
+			p_ml_counter::total_get_all_events_time_us,
+			"proxysql_mysql_logger_get_all_events_seconds_total",
+			"Total time spent in `get_all_events` method.",
+			metric_tags {}
+		),
+		std::make_tuple (
 			p_ml_counter::total_events_copied_to_memory,
 			"proxysql_mysql_logger_events_copied_total",
 			"Total number of events copied to the in-memory/on-disk databases.",
@@ -1516,6 +1522,7 @@ void MySQL_Logger::p_update_metrics() {
 	p_update_counter(counters[ml_c::get_all_events_events_count], metrics.getAllEventsEventsCount);
 	p_update_counter(counters[ml_c::total_memory_copy_time_us], metrics.totalMemoryCopyTimeMicros / (1000.0 * 1000));
 	p_update_counter(counters[ml_c::total_disk_copy_time_us], metrics.totalDiskCopyTimeMicros / (1000.0 * 1000));
+	p_update_counter(counters[ml_c::total_get_all_events_time_us], metrics.totalGetAllEventsTimeMicros / (1000.0 * 1000));
 	p_update_counter(counters[ml_c::total_events_copied_to_memory], metrics.totalEventsCopiedToMemory);
 	p_update_counter(counters[ml_c::total_events_copied_to_disk], metrics.totalEventsCopiedToDisk);
 
