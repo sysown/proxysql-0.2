@@ -1394,7 +1394,7 @@ std::unordered_map<std::string, unsigned long long> MySQL_Logger::getAllMetrics(
     allMetrics["totalEventsCopiedToDisk"] = metrics.totalEventsCopiedToDisk;
     //allMetrics["eventsAddedToBufferCount"] = metrics.eventsAddedToBufferCount;
     //allMetrics["eventsDroppedFromBufferCount"] = metrics.eventsDroppedFromBufferCount;
-    allMetrics["circularBuffereventsAddedCount"] = MyLogCB->getEventsAddedCount();
+    allMetrics["circularBufferEventsAddedCount"] = MyLogCB->getEventsAddedCount();
     allMetrics["circularBufferEventsDroppedCount"] = MyLogCB->getEventsDroppedCount();
     allMetrics["circularBufferEventsSize"] = MyLogCB->size();
 
