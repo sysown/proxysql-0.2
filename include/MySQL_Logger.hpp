@@ -357,7 +357,7 @@ private:
 		/** @brief Total time spent copying events to the on-disk database (microseconds). */
 		std::atomic<unsigned long long> totalDiskCopyTimeMicros;
 		/** @brief Total time spent in `get_all_events` (microseconds). */
-		std::atomic<unsigned long long> totalGetAllEventsDiskCopyTimeMicros;
+		std::atomic<unsigned long long> totalGetAllEventsTimeMicros;
 		/** @brief Total number of events copied to the in-memory database. */
 		std::atomic<unsigned long long> totalEventsCopiedToMemory;
 		/** @brief Total number of events copied to the on-disk database. */

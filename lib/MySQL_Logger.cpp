@@ -1428,7 +1428,7 @@ int MySQL_Logger::processEvents(SQLite3DB * statsdb , SQLite3DB * statsdb_disk) 
 
 	unsigned long long afterGetAllEventsTimeMicros = monotonic_time();
 	metrics.getAllEventsEventsCount += events.size();
-	metrics.totalGetAllEventsDiskCopyTimeMicros += (afterGetAllEventsTimeMicros-startTimeMicros);
+	metrics.totalGetAllEventsTimeMicros += (afterGetAllEventsTimeMicros-startTimeMicros);
 
 	if (statsdb_disk != nullptr) {
 		// Write to on-disk database first
@@ -1493,7 +1493,7 @@ std::unordered_map<std::string, unsigned long long> MySQL_Logger::getAllMetrics(
     allMetrics["getAllEventsEventsCount"] = metrics.getAllEventsEventsCount;
     allMetrics["totalMemoryCopyTimeMicros"] = metrics.totalMemoryCopyTimeMicros;
     allMetrics["totalDiskCopyTimeMicros"] = metrics.totalDiskCopyTimeMicros;
-    allMetrics["totalGetAllEventsDiskCopyTimeMicros"] = metrics.totalGetAllEventsDiskCopyTimeMicros;
+    allMetrics["totalGetAllEventsTimeMicros"] = metrics.totalGetAllEventsTimeMicros;
     allMetrics["totalEventsCopiedToMemory"] = metrics.totalEventsCopiedToMemory;
     allMetrics["totalEventsCopiedToDisk"] = metrics.totalEventsCopiedToDisk;
     //allMetrics["eventsAddedToBufferCount"] = metrics.eventsAddedToBufferCount;
