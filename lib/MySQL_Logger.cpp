@@ -23,6 +23,103 @@ using json = nlohmann::json;
 
 extern MySQL_Logger *GloMyLogger;
 
+using metric_name = std::string;
+using metric_help = std::string;
+using metric_tags = std::map<std::string, std::string>;
+
+using ml_counter_tuple =
+	std::tuple<
+		p_ml_counter::metric,
+		metric_name,
+		metric_help,
+		metric_tags
+	>;
+
+using ml_gauge_tuple =
+	std::tuple<
+		p_ml_gauge::metric,
+		metric_name,
+		metric_help,
+		metric_tags
+	>;
+
+using qc_counter_vector = std::vector<ml_counter_tuple>;
+using qc_gauge_vector = std::vector<ml_gauge_tuple>;
+
+const std::tuple<qc_counter_vector, qc_gauge_vector>
+ml_metrics_map = std::make_tuple(
+	qc_counter_vector {
+		std::make_tuple (
+			p_ml_counter::memory_copy_count,
+			"proxysql_mysql_logger_copy_total",
+			"Number of times events were copied to the in-memory/on-disk databases.",
+			metric_tags { { "target", "memory" } }
+		),
+		std::make_tuple (
+			p_ml_counter::disk_copy_count,
+			"proxysql_mysql_logger_copy_total",
+			"Number of times events were copied to the in-memory/on-disk databases.",
+			metric_tags { { "target", "disk" } }
+		),
+		std::make_tuple (
+			p_ml_counter::get_all_events_calls_count,
+			"proxysql_mysql_logger_get_all_events_calls_total",
+			"Number of times the 'get_all_events' method was called.",
+			metric_tags {}
+		),
+		std::make_tuple (
+			p_ml_counter::get_all_events_events_count,
+			"proxysql_mysql_logger_get_all_events_events_total",
+			"Number of events retrieved by the `get_all_events` method.",
+			metric_tags {}
+		),
+		std::make_tuple (
+			p_ml_counter::total_memory_copy_time_us,
+			"proxysql_mysql_logger_copy_seconds_total",
+			"Total time spent copying events to the in-memory/on-disk databases.",
+			metric_tags { { "target", "memory" } }
+		),
+		std::make_tuple (
+			p_ml_counter::total_disk_copy_time_us,
+			"proxysql_mysql_logger_copy_seconds_total",
+			"Total time spent copying events to the in-memory/on-disk databases.",
+			metric_tags { { "target", "disk" } }
+		),
+		std::make_tuple (
+			p_ml_counter::total_events_copied_to_memory,
+			"proxysql_mysql_logger_events_copied_total",
+			"Total number of events copied to the in-memory/on-disk databases.",
+			metric_tags { { "target", "memory" } }
+		),
+		std::make_tuple (
+			p_ml_counter::total_events_copied_to_disk,
+			"proxysql_mysql_logger_events_copied_total",
+			"Total number of events copied to the in-memory/on-disk databases.",
+			metric_tags { { "target", "disk" } }
+		),
+		std::make_tuple (
+			p_ml_counter::circular_buffer_events_added_count,
+			"proxysql_mysql_logger_circular_buffer_events_total",
+			"The total number of events added/dropped to/from the circular buffer.",
+			metric_tags { { "type", "added" } }
+		),
+		std::make_tuple (
+			p_ml_counter::circular_buffer_events_dropped_count,
+			"proxysql_mysql_logger_circular_buffer_events_total",
+			"The total number of events added/dropped to/from the circular buffer.",
+			metric_tags { { "type", "dropped" } }
+		),
+	},
+	qc_gauge_vector {
+		std::make_tuple (
+			p_ml_gauge::circular_buffer_events_size,
+			"proxysql_mysql_logger_circular_buffer_events",
+			"Number of events currently present in the circular buffer.",
+			metric_tags {}
+		),
+	}
+);
+
 static uint8_t mysql_encode_length(uint64_t len, unsigned char *hd) {
 	if (len < 251) return 1;
 	if (len < 65536) { if (hd) { *hd=0xfc; }; return 3; }
@@ -576,6 +673,14 @@ MySQL_Logger::MySQL_Logger() : metrics{{0},{0},{0},{0},{0},{0},{0},{0},{0}} {
 	audit.log_file_id=0;
 	audit.max_log_file_size=100*1024*1024;
 	MyLogCB = new MySQL_Logger_CircularBuffer(0);
+
+	// Initialize prometheus metrics
+	init_prometheus_counter_array<ml_metrics_map_idx, p_ml_counter>(
+		ml_metrics_map, this->prom_metrics.p_counter_array
+	);
+	init_prometheus_gauge_array<ml_metrics_map_idx, p_ml_gauge>(
+		ml_metrics_map, this->prom_metrics.p_gauge_array
+	);
 };
 
 MySQL_Logger::~MySQL_Logger() {
@@ -1398,4 +1503,25 @@ std::unordered_map<std::string, unsigned long long> MySQL_Logger::getAllMetrics(
     allMetrics["circularBufferEventsSize"] = MyLogCB->size();
 
     return allMetrics;
+}
+
+void MySQL_Logger::p_update_metrics() {
+	using ml_c = p_ml_counter;
+	const auto& counters { this->prom_metrics.p_counter_array };
+
+	p_update_counter(counters[ml_c::memory_copy_count], metrics.memoryCopyCount);
+	p_update_counter(counters[ml_c::disk_copy_count], metrics.diskCopyCount);
+	p_update_counter(counters[ml_c::get_all_events_calls_count], metrics.getAllEventsCallsCount);
+	p_update_counter(counters[ml_c::get_all_events_events_count], metrics.getAllEventsEventsCount);
+	p_update_counter(counters[ml_c::total_memory_copy_time_us], metrics.totalMemoryCopyTimeMicros / (1000.0 * 1000));
+	p_update_counter(counters[ml_c::total_disk_copy_time_us], metrics.totalDiskCopyTimeMicros / (1000.0 * 1000));
+	p_update_counter(counters[ml_c::total_events_copied_to_memory], metrics.totalEventsCopiedToMemory);
+	p_update_counter(counters[ml_c::total_events_copied_to_disk], metrics.totalEventsCopiedToDisk);
+
+	p_update_counter(counters[ml_c::circular_buffer_events_added_count], MyLogCB->getEventsAddedCount());
+	p_update_counter(counters[ml_c::circular_buffer_events_dropped_count], MyLogCB->getEventsDroppedCount());
+
+	using ml_g = p_ml_gauge;
+	const auto& gauges { this->prom_metrics.p_gauge_array };
+	gauges[ml_g::circular_buffer_events_size]->Set(MyLogCB->size());
 }

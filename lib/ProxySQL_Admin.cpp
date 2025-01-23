@@ -5970,6 +5970,10 @@ void update_modules_metrics() {
 	if (GloProxyCluster) {
 		GloProxyCluster->p_update_metrics();
 	}
+	// Update Logger metrics
+	if (GloMyLogger) {
+		GloMyLogger->p_update_metrics();
+	}
 
 	// Update admin metrics
 	GloAdmin->p_update_metrics();
