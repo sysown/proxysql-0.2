@@ -52,11 +52,11 @@ jobs:
           # recursive get targets
           [[ -z ${MKFL} ]] && MKFL=$(curl -s https://raw.githubusercontent.com/sysown/proxysql/${BRANCH}/Makefile)
           for TRG in ${@}; do
-          local SUBTRG=$(echo "${MKFL}" | grep "${TRG}:")
+            local SUBTRG=$(echo "${MKFL}" | grep "${TRG}:")
             if [[ "${SUBTRG#*:}" =~ (arm64|amd64) ]]; then
               fn_get_targets ${SUBTRG#*:}
             else
-              echo -n "${SUBTRG#*: }"
+              echo -n "${SUBTRG#*: }" | sed 's/ /\n/g'
             fi
           done
         }
