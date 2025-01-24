@@ -56,7 +56,7 @@ jobs:
             if [[ "${SUBTRG#*:}" =~ (arm64|amd64) ]]; then
               fn_get_targets ${SUBTRG#*:}
             else
-              echo -n "${SUBTRG#*: }" | sed 's/ /\n/g'
+              echo "${SUBTRG#*: }" | sed 's/ /\n/g'
             fi
           done
         }
