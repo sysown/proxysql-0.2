@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
 	if(cl.getEnv())
 		return exit_status();
 
-	plan(11);
+	plan(8);
 	diag("Testing SET CHARACTER SET");
 
 	MYSQL* mysql = mysql_init(NULL);
