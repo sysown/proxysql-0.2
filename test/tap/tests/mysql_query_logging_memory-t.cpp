@@ -291,7 +291,7 @@ int main() {
         return -1;
     }
 
-    if (mysql_query(nonExistentSchemaConn, "SELECT 1")) {
+    if (mysql_query(nonExistentSchemaConn, "SELECT /* create_new_connection=1 */ 1")) {
         int error_code = mysql_errno(nonExistentSchemaConn);
         ok(error_code == 1044, "Query on non-existent schema returned expected error (1044): %d", error_code);
     } else {
