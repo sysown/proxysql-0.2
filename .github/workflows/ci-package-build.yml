@@ -50,7 +50,7 @@ jobs:
           # make -n amd64-packages | grep -i binaries/proxysql | wc -l
           # make -n arm64-packages | grep -i binaries/proxysql | wc -l
           # recursive get targets
-          [[ -z ${MKFL} ]] && MKFL=$(curl -s https://raw.githubusercontent.com/sysown/proxysql/${sha1}/Makefile)
+          [[ -z ${MKFL} ]] && MKFL=$(curl -s https://raw.githubusercontent.com/sysown/proxysql/${BRANCH}/Makefile)
           for TRG in ${@}; do
           local SUBTRG=$(echo "${MKFL}" | grep "${TRG}:")
             if [[ "${SUBTRG#*:}" =~ (arm64|amd64) ]]; then
