@@ -59,8 +59,8 @@ jobs:
             fi
           done
         }
-        echo "dists=$(fn_get_targets amd64-packages | sed 's/-clang//g; s/-dbg//g' | sort | uniq | jq -Rcs 'split("\n") | .[:-1]')"
-        echo "dists=$(fn_get_targets amd64-packages | sed 's/-clang//g; s/-dbg//g' | sort | uniq | jq -Rcs 'split("\n") | .[:-1]')" >> $GITHUB_OUTPUT
+        #echo "dists=$(fn_get_targets amd64-packages | sed 's/-clang//g; s/-dbg//g' | sort | uniq | jq -Rcs 'split("\n") | .[:-1]')" >> $GITHUB_OUTPUT
+        echo "dists=$(make pkglist | sed 's/proxysql[_0-9.-]*//g; s/[._].*//; s/dbg-//; s/-clang//' | sort | uniq | jq -Rcs 'split("\n") | .[:-1]')" >> $GITHUB_OUTPUT
 
   build:
     runs-on: ubuntu-22.04
