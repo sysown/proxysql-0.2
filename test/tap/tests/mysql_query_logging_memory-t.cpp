@@ -159,7 +159,20 @@ bool checkQueryResult(MYSQL* conn, const std::string& query, const std::map<int,
     }
     mysql_free_result(result);
 
-    return actualResults == expectedResults;
+	bool ret = false;
+	ret = (actualResults == expectedResults);
+	if (ret == false) {
+		diag("Query: %s", query.c_str());
+		diag("ExpectedResult:");
+		for (std::map<int, int>::const_iterator it = expectedResults.begin() ; it != expectedResults.end() ; it++) {
+			diag("  %d : %d", it->first, it->second);
+		}
+		diag("ActualResult:");
+		for (std::map<int, int>::const_iterator it = actualResults.begin() ; it != actualResults.end() ; it++) {
+			diag("  %d : %d", it->first, it->second);
+		}
+	}
+    return ret;
 }
 
 
@@ -278,7 +291,7 @@ int main() {
         return -1;
     }
 
-    if (mysql_query(nonExistentSchemaConn, "SELECT 1")) {
+    if (mysql_query(nonExistentSchemaConn, "SELECT /* create_new_connection=1 */ 1")) {
         int error_code = mysql_errno(nonExistentSchemaConn);
         ok(error_code == 1044, "Query on non-existent schema returned expected error (1044): %d", error_code);
     } else {
