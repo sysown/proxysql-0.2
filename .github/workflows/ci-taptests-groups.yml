@@ -281,10 +281,13 @@ jobs:
         cd ${{ github.workspace }}/jenkins-build-scripts/infra-mysql57
         sed -i "s/\${INFRA}-\${CONTAINER}-1/\${INFRA}_\${CONTAINER}_1/" docker-compose-init.bash
         ./docker-compose-init.bash
-        
-        cd ${{ github.workspace }}/jenkins-build-scripts/docker-pgsql16-single
-        sed -i "s/\${INFRA}-\${CONTAINER}-1/\${INFRA}_\${CONTAINER}_1/" docker-compose-init.bash
-        ./docker-compose-init.bash
+
+        VERS=$(mysql -uadmin -padmin -h127.0.0.1 -P6032 -e "SELECT version() \G;" | grep version |  awk '{ print $2 }')
+        if [[ $VERS =~ ^3\. ]]; then
+          cd ${{ github.workspace }}/jenkins-build-scripts/docker-pgsql16-single
+          sed -i "s/\${INFRA}-\${CONTAINER}-1/\${INFRA}_\${CONTAINER}_1/" docker-compose-init.bash
+          ./docker-compose-init.bash
+        fi
         
         docker ps -a
         cat /etc/hosts
