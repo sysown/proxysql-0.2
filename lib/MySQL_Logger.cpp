@@ -1513,7 +1513,7 @@ std::unordered_map<std::string, unsigned long long> MySQL_Logger::getAllMetrics(
 
 void MySQL_Logger::p_update_metrics() {
 	using ml_c = p_ml_counter;
-	const auto& counters { this->prom_metrics.p_counter_array };
+	const auto& counters = this->prom_metrics.p_counter_array;
 
 	p_update_counter(counters[ml_c::memory_copy_count], metrics.memoryCopyCount);
 	p_update_counter(counters[ml_c::disk_copy_count], metrics.diskCopyCount);
@@ -1529,6 +1529,6 @@ void MySQL_Logger::p_update_metrics() {
 	p_update_counter(counters[ml_c::circular_buffer_events_dropped_count], MyLogCB->getEventsDroppedCount());
 
 	using ml_g = p_ml_gauge;
-	const auto& gauges { this->prom_metrics.p_gauge_array };
+	const auto& gauges = this->prom_metrics.p_gauge_array;
 	gauges[ml_g::circular_buffer_events_size]->Set(MyLogCB->size());
 }
