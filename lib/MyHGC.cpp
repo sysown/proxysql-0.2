@@ -52,7 +52,7 @@ MyHGC::~MyHGC() {
 	delete mysrvs;
 }
 
-MySrvC *MyHGC::get_random_MySrvC(char * gtid_uuid, uint64_t gtid_trxid, int max_lag_ms, MySQL_Session *sess) {
+MySrvC *MyHGC::get_random_MySrvC(char * gtid_uuid, uint64_t gtid_trxid, int max_lag_ms, MySQL_Session *sess, char * target_server_version) {
 	MySrvC *mysrvc=NULL;
 	unsigned int j;
 	unsigned int sum=0;
@@ -78,7 +78,7 @@ MySrvC *MyHGC::get_random_MySrvC(char * gtid_uuid, uint64_t gtid_trxid, int max_
 		//int j=0;
 		for (j=0; j<l; j++) {
 			mysrvc=mysrvs->idx(j);
-			if (mysrvc->get_status() == MYSQL_SERVER_STATUS_ONLINE) { // consider this server only if ONLINE
+			if (mysrvc->get_status() == MYSQL_SERVER_STATUS_ONLINE && strcmp(mysrvc->server_version, target_server_version) == 0) { // consider this server only if ONLINE
 				if (mysrvc->myhgc->num_online_servers.load(std::memory_order_relaxed) <= mysrvc->myhgc->attributes.max_num_online_servers) { // number of online servers in HG is within configured range
 					if (mysrvc->ConnectionsUsed->conns_length() < mysrvc->max_connections) { // consider this server only if didn't reach max_connections
 						if (mysrvc->current_latency_us < (mysrvc->max_latency_us ? mysrvc->max_latency_us : mysql_thread___default_max_latency_ms*1000)) { // consider the host only if not too far

@@ -7536,6 +7536,8 @@ void MySQL_Session::handler___client_DSS_QUERY_SENT___server_DSS_NOT_INITIALIZED
 		char * gtid_uuid=NULL;
 		uint64_t trxid = 0;
 		unsigned long long now_us = 0;
+		std::string client_iface = std::string(client_myds->proxy_addr.addr) + (client_myds->proxy_addr.port? (std::to_string(client_myds->proxy_addr.port)) : "");
+		char * target_server_version = thread->get_server_version((char*) client_iface.c_str());
 		if (qpo->max_lag_ms >= 0) {
 			if (qpo->max_lag_ms > 360000) { // this is an absolute time, we convert it to relative
 				if (now_us == 0) {
@@ -7583,11 +7585,11 @@ void MySQL_Session::handler___client_DSS_QUERY_SENT___server_DSS_NOT_INITIALIZED
 				}
 				uuid[n]='\0';
 #ifndef STRESSTEST_POOL
-				mc=thread->get_MyConn_local(mybe->hostgroup_id, this, uuid, trxid, -1);
+				mc=thread->get_MyConn_local(mybe->hostgroup_id, this, uuid, trxid, -1, target_server_version);
 #endif // STRESSTEST_POOL
 			} else {
 #ifndef STRESSTEST_POOL
-				mc=thread->get_MyConn_local(mybe->hostgroup_id, this, NULL, 0, (int)qpo->max_lag_ms);
+				mc=thread->get_MyConn_local(mybe->hostgroup_id, this, NULL, 0, (int)qpo->max_lag_ms, target_server_version);
 #endif // STRESSTEST_POOL
 			}
 		}
@@ -7608,9 +7610,9 @@ void MySQL_Session::handler___client_DSS_QUERY_SENT___server_DSS_NOT_INITIALIZED
 
 		if (mc==NULL) {
 			if (trxid) {
-				mc=MyHGM->get_MyConn_from_pool(mybe->hostgroup_id, this, (session_fast_forward || qpo->create_new_conn), uuid, trxid, -1);
+				mc=MyHGM->get_MyConn_from_pool(mybe->hostgroup_id, this, (session_fast_forward || qpo->create_new_conn), uuid, trxid, -1, target_server_version);
 			} else {
-				mc=MyHGM->get_MyConn_from_pool(mybe->hostgroup_id, this, (session_fast_forward || qpo->create_new_conn), NULL, 0, (int)qpo->max_lag_ms);
+				mc=MyHGM->get_MyConn_from_pool(mybe->hostgroup_id, this, (session_fast_forward || qpo->create_new_conn), NULL, 0, (int)qpo->max_lag_ms, target_server_version);
 			}
 #ifdef STRESSTEST_POOL
 			if (mc && (loops < NUM_SLOW_LOOPS - 1)) {

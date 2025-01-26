@@ -197,6 +197,8 @@ class __attribute__((aligned(64))) MySQL_Thread
 		bool query_cache_stores_empty_result;
 	} variables;
 
+	std::unordered_map<std::string, std::string> server_version_map;
+
 	pthread_mutex_t thread_mutex;
 
 	// if set_parser_algorithm == 2 , a single thr_SetParser is used
@@ -227,11 +229,12 @@ class __attribute__((aligned(64))) MySQL_Thread
   void unregister_session_connection_handler(int idx, bool _new=false);
   void listener_handle_new_connection(MySQL_Data_Stream *myds, unsigned int n);
 	void Get_Memory_Stats();
-	MySQL_Connection * get_MyConn_local(unsigned int, MySQL_Session *sess, char *gtid_uuid, uint64_t gtid_trxid, int max_lag_ms);
+	MySQL_Connection * get_MyConn_local(unsigned int, MySQL_Session *sess, char *gtid_uuid, uint64_t gtid_trxid, int max_lag_ms, char* target_server_version);
 	void push_MyConn_local(MySQL_Connection *);
 	void return_local_connections();
 	void Scan_Sessions_to_Kill(PtrArray *mysess);
 	void Scan_Sessions_to_Kill_All();
+	char * get_server_version(char* port);
 };
 
 
@@ -578,6 +581,7 @@ class MySQL_Threads_Handler
 	} status_variables;
 
 	std::atomic<bool> bootstrapping_listeners;
+	std::unordered_map<std::string, std::string> mth_server_version_map;
 
 	/**
 	 * @brief Update the client host cache with the supplied 'client_sockaddr',
@@ -667,6 +671,8 @@ class MySQL_Threads_Handler
 	bool set_variable(char *name, const char *value);
 	char **get_variables_list();
 	bool has_variable(const char * name);
+	bool parse_server_version_json(const char * json_str);
+	char *mth_get_server_version(char *port);
 
 	MySQL_Threads_Handler();
 	~MySQL_Threads_Handler();

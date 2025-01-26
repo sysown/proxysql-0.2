@@ -1358,7 +1358,9 @@ char * MySQL_Threads_Handler::get_variable_string(char *name) {
 		}
 		if (!strcmp(name,"default_schema")) return strdup(variables.default_schema);
 	}
-	if (!strcmp(name,"server_version")) return strdup(variables.server_version);
+	if (!strcmp(name,"server_version")) {
+		return strdup(variables.server_version);
+	}
 	if (!strcmp(name,"eventslog_filename")) return strdup(variables.eventslog_filename);
 	if (!strcmp(name,"auditlog_filename")) return strdup(variables.auditlog_filename);
 	if (!strcmp(name,"interfaces")) return strdup(variables.interfaces);
@@ -1514,7 +1516,10 @@ char * MySQL_Threads_Handler::get_variable(char *name) {	// this is the public f
 		}
 	}
 	if (!strcasecmp(name,"firewall_whitelist_errormsg")) return strdup(variables.firewall_whitelist_errormsg);
-	if (!strcasecmp(name,"server_version")) return strdup(variables.server_version);
+	if (!strcasecmp(name,"server_version")) {
+		//return mth_server_version_map.size() > 0 ? mth_get_server_version(variables.interfaces) : variables.server_version;
+		return strdup(variables.server_version);
+	}
 	if (!strcasecmp(name,"auditlog_filename")) return strdup(variables.auditlog_filename);
 	if (!strcasecmp(name,"eventslog_filename")) return strdup(variables.eventslog_filename);
 	if (!strcasecmp(name,"default_schema")) return strdup(variables.default_schema);
@@ -1779,10 +1784,27 @@ bool MySQL_Threads_Handler::set_variable(char *name, const char *value) {	// thi
 	if (!strcasecmp(name,"server_version")) {
 		if (vallen) {
 			free(variables.server_version);
-			if (strcmp(value,(const char *)"5.1.30")==0) { // per issue #632 , the default 5.1.30 is replaced with 5.5.30
-				variables.server_version=strdup((char *)"5.5.30");
+			
+			if (*value != '{'){
+				if (strcmp(value,(const char *)"5.1.30")==0) { // per issue #632 , the default 5.1.30 is replaced with 5.5.30
+					variables.server_version=strdup((char *)"5.5.30");
+				} else {
+					variables.server_version=strdup(value);
+				}
 			} else {
-				variables.server_version=strdup(value);
+				// parse JSON and assign default server_version
+				// server_version based on interface/port is assigned only after we received requests from client
+				if (parse_server_version_json(value)){
+					auto default_server_version = mth_server_version_map.find("default");
+					if (default_server_version != mth_server_version_map.end()){
+						variables.server_version = strdup((char*) default_server_version->second.c_str());
+					} else {
+						variables.server_version = strdup((char *)"5.5.30");	
+					}
+				} else {
+					variables.server_version = strdup((char *)"5.5.30");
+				}
+				
 			}
 			return true;
 		} else {
@@ -2111,6 +2133,38 @@ bool MySQL_Threads_Handler::set_variable(char *name, const char *value) {	// thi
 	return false;
 }
 
+bool MySQL_Threads_Handler::parse_server_version_json(const char * json_str){
+	try {	
+			// parse JSON string and fill the mth_server_version_map
+			json j = json::parse(json_str);
+			mth_server_version_map.clear();
+
+			for (const auto& item: j.items()) {
+				mth_server_version_map[item.key()] = item.value().get<std::string>();
+			}
+
+			// if a default value is not provided, add it to the map
+			if (mth_server_version_map.count("default") == 0){
+				mth_server_version_map["default"] = "5.5.30";
+			}
+		} catch (json::parse_error& e) {
+			proxy_error("Error in parsing server_version JSON: %s", e.what());
+			return false;
+		}
+	return true;
+}
+
+// redundant
+char* MySQL_Threads_Handler::mth_get_server_version(char* port) {
+	if (auto version = mth_server_version_map.find(port); version != mth_server_version_map.end()){
+		return (char*)version->second.c_str();
+	} else {
+		auto default_version = mth_server_version_map.find("default");
+		if (default_version != mth_server_version_map.end()) 
+		return (char*)default_version->second.c_str();
+	}
+	return strdup((char *)"5.5.30");
+}
 
 /**
  * Retrieves a list of all global configuration variables' names.
@@ -4409,6 +4463,9 @@ void MySQL_Thread::refresh_variables() {
 	}
 
 	REFRESH_VARIABLE_CHAR(server_version);
+	// copy the mth_server_version_map to the thread
+	server_version_map = GloMTH->mth_server_version_map;
+
 	REFRESH_VARIABLE_INT(eventslog_filesize);
 	REFRESH_VARIABLE_INT(eventslog_table_memory_size);
 	REFRESH_VARIABLE_INT(eventslog_buffer_history_size);
@@ -4660,10 +4717,14 @@ void MySQL_Thread::listener_handle_new_connection(MySQL_Data_Stream *myds, unsig
 		}
 
 		iface_info *ifi=NULL;
+		// char* server_version = NULL;
 		ifi=GloMTH->MLM_find_iface_from_fd(myds->fd); // here we try to get the info about the proxy bind address
 		if (ifi) {
 			sess->client_myds->proxy_addr.addr=strdup(ifi->address);
 			sess->client_myds->proxy_addr.port=ifi->port;
+
+			// std::string ifi_key = std::string(ifi->address) + (ifi->port ? (":" + ifi->port) : "");
+			// server_version = GloMTH->get_server_version((char*)ifi_key.c_str());
 		}
 		sess->client_myds->myprot.generate_pkt_initial_handshake(true,NULL,NULL, &sess->thread_session_id, true);
 		ioctl_FIONBIO(sess->client_myds->fd, 1);
@@ -5765,7 +5826,7 @@ void MySQL_Thread::Get_Memory_Stats() {
  * @param max_lag_ms The maximum lag time allowed for the connection in milliseconds.
  * @return A pointer to the retrieved MySQL connection if found; otherwise, NULL.
  */
-MySQL_Connection * MySQL_Thread::get_MyConn_local(unsigned int _hid, MySQL_Session *sess, char *gtid_uuid, uint64_t gtid_trxid, int max_lag_ms) {
+MySQL_Connection * MySQL_Thread::get_MyConn_local(unsigned int _hid, MySQL_Session *sess, char *gtid_uuid, uint64_t gtid_trxid, int max_lag_ms, char* target_server_version) {
 	// some sanity check
 	if (sess == NULL) return NULL;
 	if (sess->client_myds == NULL) return NULL;
@@ -5776,7 +5837,7 @@ MySQL_Connection * MySQL_Thread::get_MyConn_local(unsigned int _hid, MySQL_Sessi
 	MySQL_Connection *c=NULL;
 	for (i=0; i<cached_connections->len; i++) {
 		c=(MySQL_Connection *)cached_connections->index(i);
-		if (c->parent->myhgc->hid==_hid && sess->client_myds->myconn->match_tracked_options(c)) { // options are all identical
+		if (c->parent->myhgc->hid==_hid && strcmp(target_server_version, c->parent->server_version) == 0 && sess->client_myds->myconn->match_tracked_options(c)) { // options are all identical
 			if (
 				(gtid_uuid == NULL) || // gtid_uuid is not used
 				(gtid_uuid && find(parents.begin(), parents.end(), c->parent) == parents.end()) // the server is currently not excluded
@@ -6226,4 +6287,15 @@ void MySQL_Thread::configure_pollout(MySQL_Data_Stream *myds, unsigned int n) {
 	if (myds->myds_type==MYDS_BACKEND) {
 		set_backend_to_be_skipped_if_frontend_is_slow(myds, n);
 	}
+}
+
+char * MySQL_Thread::get_server_version(char* port) {
+	if (auto version = server_version_map.find(port); version != server_version_map.end()){
+		return (char*)version->second.c_str();
+	} else {
+		auto default_version = server_version_map.find("default");
+		if (default_version != server_version_map.end()) 
+		return (char*)default_version->second.c_str();
+	}
+	return strdup((char *)"5.5.30");
 }

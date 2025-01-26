@@ -2051,7 +2051,7 @@ void ProxySQL_Cluster::pull_mysql_servers_v2_from_peer(const mysql_servers_v2_ch
 						GloAdmin->mysql_servers_wrlock();
 						GloAdmin->admindb->execute("DELETE FROM mysql_servers");
 						MYSQL_ROW row;
-						char* q = (char*)"INSERT INTO mysql_servers (hostgroup_id, hostname, port, gtid_port, status, weight, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, comment) VALUES (%s, \"%s\", %s, %s, \"%s\", %s, %s, %s, %s, %s, %s, '%s')";
+						char* q = (char*)"INSERT INTO mysql_servers (hostgroup_id, hostname, port, gtid_port, status, weight, compression, max_connections, max_replication_lag, use_ssl, max_latency_ms, comment, server_version) VALUES (%s, \"%s\", %s, %s, \"%s\", %s, %s, %s, %s, %s, %s, '%s')";
 						while ((row = mysql_fetch_row(results[0]))) {
 							int l = 0;
 							for (int i = 0; i < 11; i++) {
