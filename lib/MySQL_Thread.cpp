@@ -361,6 +361,7 @@ static char * mysql_thread_variables_names[]= {
 	(char *)"handle_unknown_charset",
 	(char *)"free_connections_pct",
 	(char *)"connection_warming",
+	(char *)"connpool_match_client_deprecate_eof",
 #ifdef IDLE_THREADS
 	(char *)"session_idle_ms",
 #endif // IDLE_THREADS
@@ -982,6 +983,7 @@ MySQL_Threads_Handler::MySQL_Threads_Handler() {
 	variables.connect_timeout_client=10000;
 	variables.connect_timeout_server=1000;
 	variables.connect_timeout_server_max=10000;
+	variables.connpool_match_client_deprecate_eof=true;
 	variables.free_connections_pct=10;
 	variables.connect_retries_delay=1;
 	variables.monitor_enabled=true;
@@ -2132,6 +2134,7 @@ char ** MySQL_Threads_Handler::get_variables_list() {
 		VariablesPointers_bool["client_session_track_gtid"]       = make_tuple(&variables.client_session_track_gtid,       false);
 		VariablesPointers_bool["commands_stats"]                  = make_tuple(&variables.commands_stats,                  false);
 		VariablesPointers_bool["connection_warming"]              = make_tuple(&variables.connection_warming,              false);
+		VariablesPointers_bool["connpool_match_client_deprecate_eof"] = make_tuple(&variables.connpool_match_client_deprecate_eof, false);
 		VariablesPointers_bool["default_reconnect"]               = make_tuple(&variables.default_reconnect,               false);
 		VariablesPointers_bool["enable_client_deprecate_eof"]     = make_tuple(&variables.enable_client_deprecate_eof,     false);
 		VariablesPointers_bool["enable_server_deprecate_eof"]     = make_tuple(&variables.enable_server_deprecate_eof,     false);
@@ -3988,7 +3991,7 @@ void MySQL_Thread::process_all_sessions() {
 			if (sess->to_process==1) {
 				if (sess->pause_until <= curtime) {
 					rc=sess->handler();
-					//total_active_transactions_+=sess->active_transactions;
+
 					if (rc==-1 || sess->killed==true) {
 						char _buf[1024];
 						if (sess->client_myds && sess->killed)
@@ -4186,6 +4189,7 @@ void MySQL_Thread::refresh_variables() {
 	REFRESH_VARIABLE_BOOL(multiplexing);
 	REFRESH_VARIABLE_BOOL(log_unhealthy_connections);
 	REFRESH_VARIABLE_BOOL(connection_warming);
+	REFRESH_VARIABLE_BOOL(connpool_match_client_deprecate_eof);
 	REFRESH_VARIABLE_BOOL(enforce_autocommit_on_reads);
 	REFRESH_VARIABLE_BOOL(autocommit_false_not_reusable);
 	REFRESH_VARIABLE_BOOL(autocommit_false_is_transaction);
