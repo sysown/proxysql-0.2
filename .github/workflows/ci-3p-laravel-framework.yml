@@ -152,7 +152,7 @@ jobs:
         exit $RC
     
     - name: Archive artifacts logs
-      if: ${{ failure() && !cancelled() }}
+#      if: ${{ failure() && !cancelled() }}
       uses: actions/upload-artifact@v4
       with:
         name: ${{ github.workflow }}-${{ env.SHA }}-${{ matrix.infradb }}-${{ matrix.connector }}-logs-run#${{ github.run_number }}
