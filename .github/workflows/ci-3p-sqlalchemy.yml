@@ -70,7 +70,7 @@ jobs:
     - name: Wait for cache
       if: ${{ env.BRANCH != 'none' }}
       env:
-        GH_TOKEN: ${{ secrets.GH_TOKEN_SYSOWN }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         echo "Wating for cache '${BLDCACHE}' ..."
         sleep $(( $RANDOM / 1024 ))
@@ -119,7 +119,7 @@ jobs:
       if: ${{ !cancelled() }}
       id: check_baseline
       env:
-        GH_TOKEN: ${{ secrets.GH_TOKEN_SYSOWN }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         cd proxysql_3p_testing/test_sqlalchemy
         #BASELINE=$(gh variable -R ${{ github.repository }} list | grep -i BASELINE_3P_SQLALCHEMY_${INFRADB//./}_${CONNECTOR//./} | awk '{ print $2 }')

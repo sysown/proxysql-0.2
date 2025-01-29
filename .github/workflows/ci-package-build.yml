@@ -18,7 +18,7 @@ jobs:
     steps:
     - name: Clean packages
       env:
-        GITHUB_TOKEN: ${{ secrets.GH_TOKEN_SYSOWN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         # gh release delete-asset ${BRANCH}-head
         gh release delete ${BRANCH}-head --repo ${{ github.repository }} --cleanup-tag || true
@@ -119,7 +119,7 @@ jobs:
     - name: Update release
       if: ${{ !cancelled() }}
       env:
-        GITHUB_TOKEN: ${{ secrets.GH_TOKEN_SYSOWN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         if [[ "${{ matrix.dist }}" = "centos9" ]] && [[ "${{ matrix.type }}" = "" ]]; then
         gh release edit ${BRANCH}-head --draft --prerelease --repo ${{ github.repository }} --tag ${BRANCH}-head --title "${BRANCH}-head - ${GIT_VERSION}" --notes-file - << EOF
@@ -146,7 +146,7 @@ jobs:
 
     - name: Push packages
       env:
-        GITHUB_TOKEN: ${{ secrets.GH_TOKEN_SYSOWN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         # git tag --force -a ${BRANCH}-head -m 'GH-Actions - Development Snapshot Build'
         # git push origin --tags
@@ -170,7 +170,7 @@ jobs:
     steps:
     - name: Update release
       env:
-        GITHUB_TOKEN: ${{ secrets.GH_TOKEN_SYSOWN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         GIT_VERSION=$(gh release --repo ${{ github.repository }} view ${BRANCH}-head | tr -d '*' | grep -Po "(?<=Version : ).*")
         gh release edit ${BRANCH}-head --draft --prerelease --repo ${{ github.repository }} --tag ${BRANCH}-head --notes-file - << EOF

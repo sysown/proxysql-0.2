@@ -18,7 +18,7 @@ jobs:
 #  lock:
 #    runs-on: ubuntu-22.04
 #    env:
-#      GH_TOKEN: ${{ secrets.GH_TOKEN_SYSOWN }}
+#      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 #
 #    steps:
 #
@@ -243,7 +243,7 @@ jobs:
 #    if: ${{ always() }}
 #    needs: [ builds ]
 #    env:
-#      GH_TOKEN: ${{ secrets.GH_TOKEN_SYSOWN }}
+#      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 #
 #    steps:
 #    

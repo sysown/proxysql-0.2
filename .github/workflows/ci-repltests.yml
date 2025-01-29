@@ -46,7 +46,7 @@ jobs:
       
     - name: Wait for cache
       env:
-        GH_TOKEN: ${{ secrets.GH_TOKEN_SYSOWN }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         echo "BASELINE: '${BASELINE}'"
         echo "Wating for cache '${BLDCACHE}' ..."
