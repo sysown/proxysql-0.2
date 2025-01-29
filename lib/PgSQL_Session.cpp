@@ -79,56 +79,20 @@ static inline char is_normal_char(char c) {
 }
 
 static const std::set<std::string> pgsql_variables_boolean = {
-	"standard_conforming_strings"
-	/*"aurora_read_replica_read_committed",
-	"foreign_key_checks",
-	"innodb_strict_mode",
-	"innodb_table_locks",
-	"sql_auto_is_null",
-	"sql_big_selects",
-	"sql_generate_invisible_primary_key",
-	"sql_log_bin",
-	"sql_quote_show_create",
-	"sql_require_primary_key",
-	"sql_safe_updates",
-	"unique_checks",*/
+	"standard_conforming_strings",
+	"escape_string_warning"
 };
 
 static const std::set<std::string> pgsql_variables_numeric = {
-	/*"auto_increment_increment",
-	"auto_increment_offset",
-	"group_concat_max_len",
-	"innodb_lock_wait_timeout",
-	"join_buffer_size",
-	"lock_wait_timeout",
-	"long_query_time",
-	"max_execution_time",
-	"max_heap_table_size",
-	"max_join_size",
-	"max_sort_length",
-	"max_statement_time",
-	"optimizer_prune_level",
-	"optimizer_search_depth",
-	"optimizer_use_condition_selectivity",
-	"query_cache_type",
-	"sort_buffer_size",
-	"sql_select_limit",
-	"timestamp",
-	"tmp_table_size",
-	"wsrep_sync_wait"*/
 };
+
 static const std::set<std::string> pgsql_variables_strings = {
 	"datestyle",
+	"intervalstyle",
 	"timezone",
-	"time zone"
-	/*"default_storage_engine",
-	"default_tmp_storage_engine",
-	"group_replication_consistency",
-	"lc_messages",
-	"lc_time_names",
-	"log_slow_filter",
-	"optimizer_switch",
-	"wsrep_osu_method",*/
+	"time zone",
+	"bytea_output",
+	"client_min_messages"
 };
 
 #include "proxysql_find_charset.h"
@@ -948,7 +912,7 @@ void PgSQL_Session::generate_proxysql_internal_session_json(json& j) {
 	}
 }
 
-bool PgSQL_Session::handler_special_queries(PtrSize_t* pkt) {
+bool PgSQL_Session::handler_special_queries(PtrSize_t* pkt, bool* lock_hostgroup) {
 	bool deprecate_eof_active = client_myds->myconn->options.client_flag & CLIENT_DEPRECATE_EOF;
 
 	// Unsupported Features:
@@ -1040,7 +1004,9 @@ bool PgSQL_Session::handler_special_queries(PtrSize_t* pkt) {
 
 		return true;
 	}
-	if (locked_on_hostgroup >= 0 && (strncasecmp((char*)"SET ", (char*)pkt->ptr + 5, 4) == 0)) {
+	if (locked_on_hostgroup >= 0 && 
+		(strncasecmp((char*)"SET ", (char*)pkt->ptr + 5, 4) == 0 || 
+		 strncasecmp((char*)"RESET ", (char*)pkt->ptr + 5, 6) == 0)) {
 		// this is a circuit breaker, we will send everything to the backend
 		//
 		// also note that in the current implementation we stop tracking variables:
@@ -1048,7 +1014,73 @@ bool PgSQL_Session::handler_special_queries(PtrSize_t* pkt) {
 		// disabled while a session is already locked
 		return false;
 	}
-	
+	/*
+	if (pkt->size > (5 + 6) && strncasecmp((char*)"RESET ", (char*)pkt->ptr + 5, 6) == 0) {
+		if (locked_on_hostgroup >= 0)
+			return false;
+
+		std::vector<char> param_name;
+		const char* ptr = (char*)pkt->ptr;
+
+		for (size_t idx = (5 + 6); idx < pkt->size; idx++) {
+			if (ptr[idx] == '\0' || ptr[idx] == ';')
+				break;
+
+			if (ptr[idx] == ' ')
+				continue;
+
+			param_name.push_back(ptr[idx]);
+		}
+
+		param_name.push_back('\0');
+
+		int idx = PGSQL_NAME_LAST_HIGH_WM;
+		for (int i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
+
+			if (idx == PGSQL_NAME_LAST_LOW_WM) continue;
+
+			if (variable_name_exists(pgsql_tracked_variables[i], param_name.data()) == true) {
+				idx = i;
+				break;
+			}
+		}
+
+		std::vector<std::pair<std::string, std::string>> param_status = {};
+
+		if (idx != PGSQL_NAME_LAST_HIGH_WM) {
+			const char* name = pgsql_tracked_variables[idx].set_variable_name;
+			const char* value = (idx < PGSQL_NAME_LAST_LOW_WM) ? pgsql_thread___default_variables[idx] : pgsql_tracked_variables[idx].default_value;
+			proxy_debug(PROXY_DEBUG_MYSQL_COM, 8, "Changing connection %s to %s\n", name, value);
+			uint32_t var_hash_int = SpookyHash::Hash32(value, strlen(value), 10);
+			if (pgsql_variables.client_get_hash(this, pgsql_tracked_variables[idx].idx) != var_hash_int) {
+				if (!pgsql_variables.client_set_value(this, pgsql_tracked_variables[idx].idx, value)) {
+					return false;
+				}
+				if (IS_PGTRACKED_VAR_OPTION_SET_PARAM_STATUS(pgsql_tracked_variables[idx])) {
+					param_status.push_back(std::make_pair(name, value));
+				}
+			}
+		} else {
+			unable_to_parse_set_statement(lock_hostgroup);
+			return false;
+		}
+
+		client_myds->DSS = STATE_QUERY_SENT_NET;
+		unsigned int nTrx = NumActiveTransactions();
+		const char trx_state = (nTrx ? 'T' : 'I');
+		client_myds->myprot.generate_ok_packet(true, true, NULL, 0, (const char*)pkt->ptr + 5, trx_state, NULL, param_status);
+
+		if (mirror == false) {
+			RequestEnd(NULL);
+		} else {
+			client_myds->DSS = STATE_SLEEP;
+			status = WAITING_CLIENT_DATA;
+		}
+		l_free(pkt->size, pkt->ptr);
+		return true;
+	}
+	*/
+
 	// if query digest is disabled, warnings in ProxySQL are also deactivated, 
 	// resulting in an empty response being sent to the client.
 	if ((pkt->size == 18) && (strncasecmp((char*)"SHOW WARNINGS", (char*)pkt->ptr + 5, 13) == 0) &&
@@ -1700,7 +1732,7 @@ bool PgSQL_Session::handler_again___status_SETTING_GENERIC_VARIABLE(int* _rc, co
 							break;
 						}
 					}
-					if (idx != PGSQL_NAME_LAST_LOW_WM) {
+					if (idx != PGSQL_NAME_LAST_HIGH_WM) {
 						myconn->var_absent[idx] = true;
 
 						myds->myconn->async_free_result();
@@ -2677,7 +2709,7 @@ __get_pkts_from_client:
 									// shortly after, the packets it used to contain the query will be deallocated
 									CurrentQuery.begin((unsigned char*)pkt.ptr, pkt.size, true);
 								}
-								rc_break = handler_special_queries(&pkt);
+								rc_break = handler_special_queries(&pkt,&lock_hostgroup);
 								if (rc_break == true) {
 									if (mirror == false) {
 										// track also special queries
@@ -2909,7 +2941,7 @@ __get_pkts_from_client:
 							// shortly after, the packets it used to contain the query will be deallocated
 							CurrentQuery.begin((unsigned char*)pkt.ptr, pkt.size, true);
 						}
-						rc_break = handler_special_queries(&pkt);
+						rc_break = handler_special_queries(&pkt, &lock_hostgroup);
 						if (rc_break == true) {
 							if (mirror == false) {
 								// track also special queries
@@ -3722,7 +3754,7 @@ handler_again:
 						}
 						if (locked_on_hostgroup == -1 || locked_on_hostgroup_and_all_variables_set == false) {
 
-							// Optimize network traffic when we can use 'SET NAMES'
+							// verify charset
 							if (verify_set_names(this)) {
 								goto handler_again;
 							}
@@ -3731,17 +3763,7 @@ handler_again:
 								auto client_hash = client_myds->myconn->var_hash[i];
 #ifdef DEBUG
 								if (GloVars.global.gdbg) {
-									switch (i) {
-									case SQL_CHARACTER_SET:
-									case SQL_SET_NAMES:
-									case SQL_CHARACTER_SET_RESULTS:
-									case SQL_CHARACTER_SET_CONNECTION:
-									case SQL_CHARACTER_SET_CLIENT:
-									case SQL_COLLATION_CONNECTION:
-										proxy_debug(PROXY_DEBUG_MYSQL_CONNECTION, 7, "Session %p , variable %s has value %s\n", this, pgsql_tracked_variables[i].set_variable_name, client_myds->myconn->variables[i].value);
-									default:
-										break;
-									}
+									proxy_debug(PROXY_DEBUG_MYSQL_CONNECTION, 7, "Session %p , variable %s has value %s\n", this, pgsql_tracked_variables[i].set_variable_name, client_myds->myconn->variables[i].value);
 								}
 #endif // DEBUG
 								if (client_hash) {
@@ -3760,11 +3782,7 @@ handler_again:
 								auto client_hash = c_con->var_hash[i];
 								auto server_hash = myconn->var_hash[i];
 								if (client_hash != server_hash) {
-									if (
-										!myconn->var_absent[i]
-										&&
-										pgsql_variables.verify_variable(this, i)
-										) {
+									if (!myconn->var_absent[i] && pgsql_variables.verify_variable(this, i)) {
 										goto handler_again;
 									}
 								}
@@ -4672,7 +4690,7 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 			This algorithm will be become obsolete once we implement session
 			tracking for MySQL 5.7+
 	*/
-	bool exit_after_SetParse = true;
+	//bool exit_after_SetParse = true;
 	unsigned char command_type = *((unsigned char*)pkt->ptr + sizeof(mysql_hdr));
 	if (qpo->new_query) {
 		handler_WCD_SS_MCQ_qpo_QueryRewrite(pkt);
@@ -4782,7 +4800,7 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 	// handle here #509, #815 and #816
 	if (CurrentQuery.QueryParserArgs.digest_text) {
 		char* dig = CurrentQuery.QueryParserArgs.digest_text;
-		unsigned int nTrx = NumActiveTransactions();
+		//unsigned int nTrx = NumActiveTransactions();
 		if ((locked_on_hostgroup == -1) && (strncasecmp(dig, (char*)"SET ", 4) == 0)) {
 			// this code is executed only if locked_on_hostgroup is not set yet
 			// if locked_on_hostgroup is set, we do not try to parse the SET statement
@@ -4820,14 +4838,12 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 				proxy_debug(PROXY_DEBUG_MYSQL_QUERY_PROCESSOR, 5, "Parsing SET command = %s\n", nq.c_str());
 				SetParser<PgSQL_Session> parser(nq);
 				std::map<std::string, std::vector<std::string>> set = {};
-				//if (pgsql_thread___set_parser_algorithm == 1) { // legacy behavior
-				//	set = parser.parse1();
-				//} else if (pgsql_thread___set_parser_algorithm == 2) { // we use a single SetParser per thread
-					thread->thr_SetParser->set_query(nq); // replace the query
-					set = thread->thr_SetParser->parse1v2(); // use algorithm v2
-				//} else {
-				//	assert(0);
-				//}
+				std::vector<std::pair<std::string, std::string>> param_status = {};
+				bool send_param_status = false;
+
+				thread->thr_SetParser->set_query(nq); // replace the query
+				set = thread->thr_SetParser->parse1v2(); // use algorithm v2
+
 				// Flag to be set if any variable within the 'SET' statement fails to be tracked,
 				// due to being unknown or because it's an user defined variable.
 				bool failed_to_parse_var = set.empty();
@@ -4871,12 +4887,18 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 							}
 						}
 						if (idx != PGSQL_NAME_LAST_HIGH_WM) {
+
+							if ((value1.size() == sizeof("DEFAULT") - 1) && strncasecmp(value1.c_str(), (char*)"DEFAULT",sizeof("DEFAULT")-1) == 0) {
+								const char* value1 = (idx < PGSQL_NAME_LAST_LOW_WM) ? pgsql_thread___default_variables[idx] : pgsql_tracked_variables[idx].default_value;
+							}
+
 							proxy_debug(PROXY_DEBUG_MYSQL_COM, 8, "Changing connection %s to %s\n", var.c_str(), value1.c_str());
 							uint32_t var_hash_int = SpookyHash::Hash32(value1.c_str(), value1.length(), 10);
 							if (pgsql_variables.client_get_hash(this, pgsql_tracked_variables[idx].idx) != var_hash_int) {
 								if (!pgsql_variables.client_set_value(this, pgsql_tracked_variables[idx].idx, value1.c_str())) {
 									return false;
 								}
+								send_param_status = IS_PGTRACKED_VAR_OPTION_SET_PARAM_STATUS(pgsql_tracked_variables[idx]);
 							}
 						}
 					} else if (pgsql_variables_boolean.find(var) != pgsql_variables_boolean.end()) {
@@ -4890,7 +4912,7 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 							}
 						}
 						if (idx != PGSQL_NAME_LAST_HIGH_WM) {
-							if (pgsql_variables.parse_variable_boolean(this, idx, *values, lock_hostgroup) == false) {
+							if (pgsql_variables.parse_variable_boolean(this, idx, *values, lock_hostgroup, &send_param_status) == false) {
 								return false;
 							}
 						}
@@ -4905,7 +4927,7 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 							}
 						}
 						if (idx != PGSQL_NAME_LAST_HIGH_WM) {
-							if (pgsql_variables.parse_variable_number(this, idx, *values, lock_hostgroup) == false) {
+							if (pgsql_variables.parse_variable_number(this, idx, *values, lock_hostgroup, &send_param_status) == false) {
 								return false;
 							}
 						}
@@ -5024,7 +5046,7 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 							proxy_debug(PROXY_DEBUG_MYSQL_COM, 8, "Changing connection charset to %d\n", c->nr);
 							//-- client_myds->myconn->set_charset(c->nr, NAMES);
 						}
-					}*/
+					}
 					else if (var == "tx_isolation") {
 						std::string value1 = *values;
 						proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "Processing SET tx_isolation value %s\n", value1.c_str());
@@ -5067,7 +5089,7 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 								return false;
 							proxy_debug(PROXY_DEBUG_MYSQL_COM, 8, "Changing connection TX ACCESS MODE to READ %s\n", value1.c_str());
 						}
-					}
+					}*/
 					else if (std::find(pgsql_variables.ignore_vars.begin(), pgsql_variables.ignore_vars.end(), var) != pgsql_variables.ignore_vars.end()) {
 						// this is a variable we parse but ignore
 						// see MySQL_Variables::MySQL_Variables() for a list of ignored variables
@@ -5083,6 +5105,9 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 						// supplied within the 'SET' statement being parsed.
 						failed_to_parse_var = true;
 					}
+
+					if (send_param_status)
+						param_status.push_back(std::make_pair(var, *values));
 				}
 
 				if (failed_to_parse_var) {
@@ -5098,7 +5123,7 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 				client_myds->DSS = STATE_QUERY_SENT_NET;
 				unsigned int nTrx = NumActiveTransactions();
 				const char trx_state = (nTrx ? 'T' : 'I');
-				client_myds->myprot.generate_ok_packet(true, true, NULL, 0, dig, trx_state);
+				client_myds->myprot.generate_ok_packet(true, true, NULL, 0, dig, trx_state, NULL, param_status);
 				RequestEnd(NULL);
 				l_free(pkt->size, pkt->ptr);
 				return true;
@@ -5171,11 +5196,17 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 				return true;
 
 			}*/ else if (match_regexes && match_regexes[3]->match(dig)) {
+				std::vector<std::pair<std::string, std::string>> param_status;
 				SetParser<PgSQL_Session> parser(nq);
 				std::string charset = parser.parse_character_set();
 				int charset_encoding = -1;
 				if (!charset.empty()) {
-					proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "Processing SET CHARACTER SET %s\n", charset.c_str());
+
+					if ((charset.size() == sizeof("DEFAULT") - 1) && strncasecmp(charset.c_str(), (char*)"DEFAULT", sizeof("DEFAULT") - 1) == 0) {
+						charset = pgsql_thread___default_variables[PGSQL_CLIENT_ENCODING];
+					}
+
+					proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "Processing SET CLIENT_ENCODING %s\n", charset.c_str());
 					charset_encoding = PgSQL_Connection::char_to_encoding(charset.c_str());
 				} else {
 					unable_to_parse_set_statement(lock_hostgroup);
@@ -5184,36 +5215,144 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 				if (charset_encoding == -1) {
 					char* m = NULL;
 					char* errmsg = NULL;
-						proxy_error("Cannot find charset [%s]\n", charset.c_str());
-						m = (char*)"Unknown character set: '%s'";
-						errmsg = (char*)malloc(charset.length() + strlen(m));
-						sprintf(errmsg, m, charset.c_str());
+					proxy_error("Cannot find charset [%s]\n", charset.c_str());
+					m = (char*)"Unknown character set: '%s'";
+					errmsg = (char*)malloc(charset.length() + strlen(m));
+					sprintf(errmsg, m, charset.c_str());
 
-						client_myds->DSS = STATE_QUERY_SENT_NET;
-						client_myds->myprot.generate_error_packet(true, true, errmsg,
-							PGSQL_ERROR_CODES::ERRCODE_SYNTAX_ERROR_OR_ACCESS_RULE_VIOLATION, false, true);
-						client_myds->DSS = STATE_SLEEP;
-						status = WAITING_CLIENT_DATA;
-						free(errmsg);
-						return true;
+					client_myds->DSS = STATE_QUERY_SENT_NET;
+					client_myds->myprot.generate_error_packet(true, true, errmsg,
+						PGSQL_ERROR_CODES::ERRCODE_SYNTAX_ERROR_OR_ACCESS_RULE_VIOLATION, false, true);
+					client_myds->DSS = STATE_SLEEP;
+					status = WAITING_CLIENT_DATA;
+					free(errmsg);
+					return true;
 				} else {
 					proxy_debug(PROXY_DEBUG_MYSQL_COM, 8, "Changing connection charset to %s\n", charset.c_str());
-					if (!pgsql_variables.client_set_value(this, PGSQL_CLIENT_ENCODING, charset.c_str()))
-						return false;
+					uint32_t var_hash_int = SpookyHash::Hash32(charset.c_str(), charset.length(), 10);
+					if (pgsql_variables.client_get_hash(this, pgsql_tracked_variables[PGSQL_CLIENT_ENCODING].idx) != var_hash_int) {
+						if (!pgsql_variables.client_set_value(this, pgsql_tracked_variables[PGSQL_CLIENT_ENCODING].idx, charset.c_str())) {
+							return false;
+						}
+						if (IS_PGTRACKED_VAR_OPTION_SET_PARAM_STATUS(pgsql_tracked_variables[PGSQL_CLIENT_ENCODING]))
+							param_status.push_back(std::make_pair(pgsql_tracked_variables[PGSQL_CLIENT_ENCODING].set_variable_name, charset));
+					}
 				}
 				
 				client_myds->DSS = STATE_QUERY_SENT_NET;
 				unsigned int nTrx = NumActiveTransactions();
 				const char trx_state = (nTrx ? 'T' : 'I');
-				client_myds->myprot.generate_ok_packet(true, true, NULL, 0, dig, trx_state);
+				client_myds->myprot.generate_ok_packet(true, true, NULL, 0, dig, trx_state, NULL, param_status);
 				RequestEnd(NULL);
 				l_free(pkt->size, pkt->ptr);
 				return true;
-			}
-			else {
+			} else {
 				unable_to_parse_set_statement(lock_hostgroup);
 				return false;
 			}
+		} else if ((locked_on_hostgroup == -1) && (strncasecmp(dig, (char*)"RESET ", 6) == 0)) {
+#ifdef DEBUG
+			{
+				std::string nqn = string((char*)CurrentQuery.QueryPointer, CurrentQuery.QueryLength);
+				proxy_debug(PROXY_DEBUG_MYSQL_QUERY_PROCESSOR, 5, "Parsing RESET command = %s\n", nqn.c_str());
+			}
+#endif
+			if (index(dig, ';') && (index(dig, ';') != dig + strlen(dig) - 1)) {
+				string nqn;
+				if (pgsql_thread___parse_failure_logs_digest)
+					nqn = string(CurrentQuery.get_digest_text());
+				else
+					nqn = string((char*)CurrentQuery.QueryPointer, CurrentQuery.QueryLength);
+				proxy_warning(
+					"Unable to parse multi-statements command with RESET statement from client"
+					" %s:%d: setting lock hostgroup. Command: %s\n", client_myds->addr.addr,
+					client_myds->addr.port, nqn.c_str()
+				);
+				*lock_hostgroup = true;
+				return false;
+			}
+			int rc;
+			string nq = string((char*)CurrentQuery.QueryPointer, CurrentQuery.QueryLength);
+
+			RE2::GlobalReplace(&nq, (char*)"(?U)/\\*.*\\*/", (char*)"");
+			RE2::GlobalReplace(&nq, (char*)"(?i)RESET", (char*)"");
+			RE2::GlobalReplace(&nq, (char*)"[^\\w]*", (char*)"");
+
+			proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "Parsing RESET command %s\n", nq.c_str());
+			proxy_debug(PROXY_DEBUG_MYSQL_QUERY_PROCESSOR, 5, "Parsing RESET command = %s\n", nq.c_str());
+
+			std::vector<std::pair<std::string, std::string>> param_status = {};
+
+			if (strncasecmp(nq.c_str(), "ALL", 3) == 0) {
+
+				for (int i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
+
+					if (i == PGSQL_NAME_LAST_LOW_WM) continue;
+
+					const char* name = pgsql_tracked_variables[i].set_variable_name;
+					const char* value = (i < PGSQL_NAME_LAST_LOW_WM) ? pgsql_thread___default_variables[i] : pgsql_tracked_variables[i].default_value;
+					proxy_debug(PROXY_DEBUG_MYSQL_COM, 8, "Changing connection %s to %s\n", name, value);
+					uint32_t var_hash_int = SpookyHash::Hash32(value, strlen(value), 10);
+					if (pgsql_variables.client_get_hash(this, pgsql_tracked_variables[i].idx) != var_hash_int) {
+						if (!pgsql_variables.client_set_value(this, pgsql_tracked_variables[i].idx, value)) {
+							return false;
+						}
+						if (IS_PGTRACKED_VAR_OPTION_SET_PARAM_STATUS(pgsql_tracked_variables[i])) {
+							param_status.push_back(std::make_pair(name, value));
+						}
+					}
+				}
+
+			} else if (std::find(pgsql_variables.ignore_vars.begin(), pgsql_variables.ignore_vars.end(), nq) != pgsql_variables.ignore_vars.end()) {
+				// this is a variable we parse but ignore
+#ifdef DEBUG
+				proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "Processing RESET %s\n", nq.c_str());
+#endif // DEBUG
+			} else {
+
+				int idx = PGSQL_NAME_LAST_HIGH_WM;
+				for (int i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
+
+					if (i == PGSQL_NAME_LAST_LOW_WM) continue;
+
+					if (variable_name_exists(pgsql_tracked_variables[i], nq.c_str()) == true) {
+						idx = i;
+						break;
+					}
+				}			
+
+				if (idx != PGSQL_NAME_LAST_HIGH_WM) {
+					const char* name = pgsql_tracked_variables[idx].set_variable_name;
+					const char* value = (idx < PGSQL_NAME_LAST_LOW_WM) ? pgsql_thread___default_variables[idx] : pgsql_tracked_variables[idx].default_value;
+					uint32_t var_hash_int = SpookyHash::Hash32(value, strlen(value), 10);
+					if (pgsql_variables.client_get_hash(this, pgsql_tracked_variables[idx].idx) != var_hash_int) {
+						if (!pgsql_variables.client_set_value(this, pgsql_tracked_variables[idx].idx, value)) {
+							return false;
+						}
+						if (IS_PGTRACKED_VAR_OPTION_SET_PARAM_STATUS(pgsql_tracked_variables[idx])) {
+							proxy_debug(PROXY_DEBUG_MYSQL_COM, 8, "Changing connection %s to %s\n", name, value);
+							param_status.emplace_back(std::make_pair(name, value));
+						}
+					}
+				} else {
+					unable_to_parse_set_statement(lock_hostgroup);
+					return false;
+				}
+			}
+			client_myds->DSS = STATE_QUERY_SENT_NET;
+			unsigned int nTrx = NumActiveTransactions();
+			const char trx_state = (nTrx ? 'T' : 'I');
+			client_myds->myprot.generate_ok_packet(true, true, NULL, 0, dig, trx_state, NULL, param_status);
+
+			if (mirror == false) {
+				RequestEnd(NULL);
+			}
+			else {
+				client_myds->DSS = STATE_SLEEP;
+				status = WAITING_CLIENT_DATA;
+			}
+			l_free(pkt->size, pkt->ptr);
+			return true;
 		}
 	}
 
@@ -5670,7 +5809,7 @@ void PgSQL_Session::handler___client_DSS_QUERY_SENT___server_DSS_NOT_INITIALIZED
 	}
 	if (mybe->server_myds->myconn->fd == -1) {
 		// we didn't get a valid connection, we need to create one
-		proxy_debug(PROXY_DEBUG_MYSQL_CONNECTION, 5, "Sess=%p -- MySQL Connection has no FD\n", this);
+		proxy_debug(PROXY_DEBUG_MYSQL_CONNECTION, 5, "Sess=%p -- PgSQL Connection has no FD\n", this);
 		PgSQL_Connection* myconn = mybe->server_myds->myconn;
 		myconn->userinfo->set(client_myds->myconn->userinfo);
 
@@ -5681,7 +5820,7 @@ void PgSQL_Session::handler___client_DSS_QUERY_SENT___server_DSS_NOT_INITIALIZED
 		mybe->server_myds->myconn->reusable = true;
 	}
 	else {
-		proxy_debug(PROXY_DEBUG_MYSQL_CONNECTION, 5, "Sess=%p -- MySQL Connection found = %p\n", this, mybe->server_myds->myconn);
+		proxy_debug(PROXY_DEBUG_MYSQL_CONNECTION, 5, "Sess=%p -- PgSQL Connection found = %p\n", this, mybe->server_myds->myconn);
 		mybe->server_myds->assign_fd_from_mysql_conn();
 		mybe->server_myds->myds_type = MYDS_BACKEND;
 		mybe->server_myds->DSS = STATE_READY;

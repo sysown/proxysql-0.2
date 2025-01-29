@@ -249,10 +249,14 @@ enum mysql_variable_name {
 */
 enum pgsql_variable_name {
 	PGSQL_CLIENT_ENCODING,
-	PGSQL_NAME_LAST_LOW_WM,
 	PGSQL_DATESTYLE,
+	PGSQL_INTERVALSTYLE,
 	PGSQL_STANDARD_CONFORMING_STRINGS,
 	PGSQL_TIMEZONE,
+	PGSQL_NAME_LAST_LOW_WM,
+	PGSQL_BYTEA_OUTPUT,
+	PGSQL_CLIENT_MIN_MESSAGES,
+	PGSQL_ESCAPE_STRING_WARNING,
 	PGSQL_NAME_LAST_HIGH_WM
 };
 
@@ -312,7 +316,8 @@ enum pgsql_tracked_variables_options {
 	PGTRACKED_VAR_OPT_SET_TRANSACTION	= 0x02, // if related to SET TRANSACTION statement . if false , it will be execute "SET varname = varvalue" . If true, "SET varname varvalue"
 	PGTRACKED_VAR_OPT_NUMBER			= 0x04, // if true, the variable is a number. Special cases should be checked
 	PGTRACKED_VAR_OPT_BOOL				= 0x08, // if true, the variable is a boolean. Special cases should be checked
-	PGTRACKED_VAR_OPT_GLOBAL_VARIABLE	= 0x10  // is it a global variable?
+	PGTRACKED_VAR_OPT_GLOBAL_VARIABLE	= 0x10,  // is it a global variable?
+	PGTRACKED_VAR_OPT_PARAM_STATUS		= 0x20  // send parameter status if set
 };
 
 struct pgsql_variable_st {
@@ -335,7 +340,7 @@ struct pgsql_variable_st {
 #define IS_PGTRACKED_VAR_OPTION_SET_NUMBER(opt)			 IS_PGTRACKED_VAR_OPTION_SET(opt.options, PGTRACKED_VAR_OPT_NUMBER)
 #define IS_PGTRACKED_VAR_OPTION_SET_BOOL(opt)			 IS_PGTRACKED_VAR_OPTION_SET(opt.options, PGTRACKED_VAR_OPT_BOOL)
 #define IS_PGTRACKED_VAR_OPTION_SET_GLOBAL_VARIABLE(opt) IS_PGTRACKED_VAR_OPTION_SET(opt.options, PGTRACKED_VAR_OPT_GLOBAL_VARIABLE)
-
+#define IS_PGTRACKED_VAR_OPTION_SET_PARAM_STATUS(opt)	 IS_PGTRACKED_VAR_OPTION_SET(opt.options, PGTRACKED_VAR_OPT_PARAM_STATUS)
 
 inline bool variable_name_exists(const pgsql_variable_st& var, const char* variable_name) {
 	
@@ -1754,11 +1759,15 @@ mysql_variable_st mysql_tracked_variables[] {
 };
 
 pgsql_variable_st pgsql_tracked_variables[] {
-	{ PGSQL_CLIENT_ENCODING,    SETTING_CHARSET,	   "client_encoding", "client_encoding", "UTF8", (PGTRACKED_VAR_OPT_SET_TRANSACTION | PGTRACKED_VAR_OPT_QUOTE | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE), { "names", nullptr } },
-	{ PGSQL_NAME_LAST_LOW_WM,   session_status___NONE, "placeholder", "placeholder", "0" , 0, nullptr } , // this is just a placeholder to separate the previous index from the next block
-	{ PGSQL_DATESTYLE,			SETTING_VARIABLE,	   "datestyle", "datestyle", "ISO" , (PGTRACKED_VAR_OPT_QUOTE), nullptr },
-	{ PGSQL_STANDARD_CONFORMING_STRINGS, SETTING_VARIABLE, "standard_conforming_strings", "standard_conforming_strings", "on", (PGTRACKED_VAR_OPT_BOOL), nullptr },
-	{ PGSQL_TIMEZONE,			SETTING_VARIABLE,	   "timezone", "timezone", "DEFAULT" , (PGTRACKED_VAR_OPT_QUOTE), { "TIME ZONE", nullptr } }
+	{ PGSQL_CLIENT_ENCODING,       SETTING_CHARSET,	    "client_encoding", "client_encoding", "UTF8", (PGTRACKED_VAR_OPT_SET_TRANSACTION | PGTRACKED_VAR_OPT_QUOTE | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE | PGTRACKED_VAR_OPT_PARAM_STATUS), { "names", nullptr } },
+	{ PGSQL_DATESTYLE,			   SETTING_VARIABLE,	"datestyle", "datestyle", "ISO" , (PGTRACKED_VAR_OPT_QUOTE | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE | PGTRACKED_VAR_OPT_PARAM_STATUS), nullptr },
+	{ PGSQL_INTERVALSTYLE,		   SETTING_VARIABLE,	"intervalstyle", "intervalstyle", "postgres" , (PGTRACKED_VAR_OPT_QUOTE | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE | PGTRACKED_VAR_OPT_PARAM_STATUS), nullptr },
+	{ PGSQL_STANDARD_CONFORMING_STRINGS, SETTING_VARIABLE, "standard_conforming_strings", "standard_conforming_strings", "on", (PGTRACKED_VAR_OPT_BOOL | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE | PGTRACKED_VAR_OPT_PARAM_STATUS), nullptr },
+	{ PGSQL_TIMEZONE,			   SETTING_VARIABLE,	"timezone", "timezone", "GMT" , (PGTRACKED_VAR_OPT_QUOTE | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE | PGTRACKED_VAR_OPT_PARAM_STATUS), { "TIME ZONE", nullptr } },
+	{ PGSQL_NAME_LAST_LOW_WM,      session_status___NONE, "placeholder", "placeholder", "0" , 0, nullptr },  // this is just a placeholder to separate the previous index from the next block
+	{ PGSQL_BYTEA_OUTPUT,		   SETTING_VARIABLE,	"bytea_output", "bytea_output", "hex", (PGTRACKED_VAR_OPT_QUOTE), nullptr },
+	{ PGSQL_CLIENT_MIN_MESSAGES,   SETTING_VARIABLE,	"client_min_messages", "client_min_messages", "NOTICE", (PGTRACKED_VAR_OPT_QUOTE), nullptr },
+	{ PGSQL_ESCAPE_STRING_WARNING, SETTING_VARIABLE,    "escape_string_warning", "escape_string_warning", "on", (PGTRACKED_VAR_OPT_BOOL), nullptr }
 };
 
 #else

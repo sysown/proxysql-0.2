@@ -123,7 +123,7 @@ extern "C" {
 #else
 #define DEB ""
 #endif /* DEBUG */
-#define MYSQL_THREAD_VERSION "0.2.0902" DEB
+#define PGSQL_THREAD_VERSION "0.3.0125" DEB
 
 
 #define DEFAULT_NUM_THREADS	4
@@ -2252,7 +2252,7 @@ char** PgSQL_Threads_Handler::get_variables_list() {
 	return ret;
 }
 
-// Returns true if the given name is the name of an existing mysql variable
+// Returns true if the given name is the name of an existing pgsql variable
 // scan both pgsql_thread_variables_names AND pgsql_tracked_variables
 bool PgSQL_Threads_Handler::has_variable(const char* name) {
 	if (strlen(name) > 8) {
@@ -2280,7 +2280,7 @@ bool PgSQL_Threads_Handler::has_variable(const char* name) {
 }
 
 void PgSQL_Threads_Handler::print_version() {
-	fprintf(stderr, "Standard MySQL Threads Handler rev. %s -- %s -- %s\n", MYSQL_THREAD_VERSION, __FILE__, __TIMESTAMP__);
+	fprintf(stderr, "Standard PgSQL Threads Handler rev. %s -- %s -- %s\n", PGSQL_THREAD_VERSION, __FILE__, __TIMESTAMP__);
 }
 
 void PgSQL_Threads_Handler::init(unsigned int num, size_t stack) {
@@ -2766,9 +2766,9 @@ PgSQL_Thread::~PgSQL_Thread() {
 	if (pgsql_thread___server_encoding) { free(pgsql_thread___server_encoding); pgsql_thread___server_encoding = NULL; }
 
 	for (int i = 0; i < PGSQL_NAME_LAST_LOW_WM; i++) {
-		if (mysql_thread___default_variables[i]) {
-			free(mysql_thread___default_variables[i]);
-			mysql_thread___default_variables[i] = NULL;
+		if (pgsql_thread___default_variables[i]) {
+			free(pgsql_thread___default_variables[i]);
+			pgsql_thread___default_variables[i] = NULL;
 		}
 	}
 
@@ -4056,7 +4056,7 @@ PgSQL_Thread::PgSQL_Thread() {
 	variables.query_cache_stores_empty_result = true;
 
 	for (int i = 0; i < PGSQL_NAME_LAST_LOW_WM; i++) {
-		mysql_thread___default_variables[i] = NULL;
+		pgsql_thread___default_variables[i] = NULL;
 	}
 	shutdown = 0;
 	thr_SetParser = NULL;

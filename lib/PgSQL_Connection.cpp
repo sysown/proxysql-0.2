@@ -493,7 +493,7 @@ unsigned int PgSQL_Connection_Placeholder::reorder_dynamic_variables_idx() {
 unsigned int PgSQL_Connection_Placeholder::number_of_matching_session_variables(const PgSQL_Connection *client_conn, unsigned int& not_matching) {
 	unsigned int ret=0;
 	for (auto i = 0; i < PGSQL_NAME_LAST_LOW_WM; i++) {
-		if (client_conn->var_hash[i] && i != SQL_CHARACTER_ACTION) { // client has a variable set
+		if (client_conn->var_hash[i]) { // client has a variable set
 			if (var_hash[i] == client_conn->var_hash[i]) { // server conection has the variable set to the same value
 				ret++;
 			} else {
@@ -1702,13 +1702,20 @@ void PgSQL_Connection::connect_start() {
 		if (escaped_str != charset)
 			free(escaped_str);
 
-		std::vector<int> client_options;
-		client_options.reserve(PGSQL_NAME_LAST_HIGH_WM - PGSQL_NAME_LAST_LOW_WM - 1);
-		for (int idx = PGSQL_NAME_LAST_LOW_WM + 1; idx < PGSQL_NAME_LAST_HIGH_WM; idx++) {
-			if (pgsql_variables.client_get_hash(myds->sess, idx) == 0)
-				continue;
+		std::vector<unsigned int> client_options;
+		client_options.reserve(PGSQL_NAME_LAST_LOW_WM + dynamic_variables_idx.size());
+
+		// excluding PGSQL_CLIENT_ENCODING
+		for (unsigned int idx = 1; idx < PGSQL_NAME_LAST_LOW_WM; idx++) {
+			if (pgsql_variables.client_get_hash(myds->sess, idx) == 0) continue;
 			client_options.push_back(idx);
 		}
+
+		for (std::vector<unsigned int>::const_iterator it_c = dynamic_variables_idx.begin(); it_c != dynamic_variables_idx.end(); it_c++) {
+			assert(pgsql_variables.client_get_hash(myds->sess, *it_c));
+			client_options.push_back(*it_c);
+		}
+
 		if (client_options.empty() == false ||
 			myds->sess->untracked_option_parameters.empty() == false) {
 
@@ -1725,7 +1732,7 @@ void PgSQL_Connection::connect_start() {
 				pgsql_variables.server_set_hash_and_value(myds->sess, idx, value, hash);
 			}
 
-			reorder_dynamic_variables_idx();
+			myds->sess->mybe->server_myds->myconn->reorder_dynamic_variables_idx();
 
 			// if there are untracked parameters, the session should lock on the host group
 			if (myds->sess->untracked_option_parameters.empty() == false) {
@@ -2516,7 +2523,7 @@ bool PgSQL_Connection::requires_RESETTING_CONNECTION(const PgSQL_Connection* cli
 				// this connection has a variable set that the
 				// client connection doesn't have.
 				// Since connection cannot be unset , this connection
-				// needs to be reset with CHANGE_USER
+				// needs to be reset 
 				return true;
 			}
 		}

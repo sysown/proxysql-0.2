@@ -147,7 +147,7 @@ private:
 	void handler___client_DSS_QUERY_SENT___server_DSS_NOT_INITIALIZED__get_connection();
 
 	//void return_proxysql_internal(PtrSize_t*);
-	bool handler_special_queries(PtrSize_t*);
+	bool handler_special_queries(PtrSize_t*, bool* lock_hostgroup);
 	//bool handler_special_queries_STATUS(PtrSize_t*);
 	/**
 	 * @brief Handles 'COMMIT|ROLLBACK' commands.

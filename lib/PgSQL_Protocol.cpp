@@ -1070,13 +1070,27 @@ EXECUTION_STATE PgSQL_Protocol::process_handshake_response_packet(unsigned char*
 
 		// get datestyle from connection parameters
 		const char* datestyle = (*myds)->myconn->conn_params.get_value(PG_DATESTYLE);
-		if (datestyle) 
-			pgsql_variables.client_set_value(sess, PGSQL_DATESTYLE, datestyle);
-		
+		if (datestyle == NULL)
+			datestyle = pgsql_thread___default_variables[PGSQL_DATESTYLE];
+
+		pgsql_variables.client_set_value(sess, PGSQL_DATESTYLE, datestyle);
+
 		// get timezone from connection parameters
 		const char* timezone = (*myds)->myconn->conn_params.get_value(PG_TIMEZONE);
-		if (timezone)
-			pgsql_variables.client_set_value(sess, PGSQL_TIMEZONE, timezone);
+		if (timezone == NULL)
+			timezone = pgsql_thread___default_variables[PGSQL_TIMEZONE];
+
+		pgsql_variables.client_set_value(sess, PGSQL_TIMEZONE, timezone);
+
+		// get intervalstyle from connection parameters
+		const char* intervalstyle = pgsql_thread___default_variables[PGSQL_INTERVALSTYLE];
+		if (intervalstyle)
+			pgsql_variables.client_set_value(sess, PGSQL_INTERVALSTYLE, intervalstyle);
+
+		// get standard_conforming_strings from connection parameters
+		const char* standard_conforming_strings = pgsql_thread___default_variables[PGSQL_STANDARD_CONFORMING_STRINGS];
+		if (standard_conforming_strings)
+			pgsql_variables.client_set_value(sess, PGSQL_STANDARD_CONFORMING_STRINGS, standard_conforming_strings);
 
 		const char* options = (*myds)->myconn->conn_params.get_value(PG_OPTIONS);
 
@@ -1084,7 +1098,9 @@ EXECUTION_STATE PgSQL_Protocol::process_handshake_response_packet(unsigned char*
 
 		for (auto& option : options_list) {
 			int idx = PGSQL_NAME_LAST_HIGH_WM;
-			for (int i = PGSQL_NAME_LAST_LOW_WM + 1; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
+			for (int i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
+				if (i == PGSQL_NAME_LAST_LOW_WM)
+					continue;
 				if (variable_name_exists(pgsql_tracked_variables[i], option.first.c_str()) == true) {
 					idx = i;
 					break;
@@ -1144,6 +1160,7 @@ void PgSQL_Protocol::welcome_client() {
 	if (application_name)
 		pgpkt.write_ParameterStatus("application_name", application_name);
 
+	/*
 	const char* client_encoding = pgsql_variables.client_get_value((*myds)->sess, PGSQL_CLIENT_ENCODING); //(*myds)->myconn->conn_params.get_value(PG_CLIENT_ENCODING);
 	if (client_encoding)
 		pgpkt.write_ParameterStatus("client_encoding", client_encoding);
@@ -1153,6 +1170,16 @@ void PgSQL_Protocol::welcome_client() {
 	const char* datestyle = pgsql_variables.client_get_value((*myds)->sess, PGSQL_DATESTYLE);
 	if (datestyle)
 		pgpkt.write_ParameterStatus("datestyle", datestyle);
+	*/
+	for (unsigned int idx = 0; idx < PGSQL_NAME_LAST_LOW_WM; idx++) {
+
+		if (pgsql_variables.client_get_hash((*myds)->sess, idx) == 0)
+			continue;
+
+		const char* val = pgsql_variables.client_get_value(sess, idx);
+		if (val)
+			pgpkt.write_ParameterStatus(pgsql_tracked_variables[idx].internal_variable_name, val);
+	}
 
 	if (pgsql_thread___server_version)
 		pgpkt.write_ParameterStatus("server_version", pgsql_thread___server_version);
