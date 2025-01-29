@@ -390,9 +390,8 @@ bool verify_set_names(PgSQL_Session* session) {
 				// LCOV_EXCL_STOP
 		}
 		session->set_status(SETTING_CHARSET);
-		uint32_t hash = pgsql_variables.client_get_hash(session, PGSQL_CLIENT_ENCODING);
-		const char* value = pgsql_variables.client_get_value(session, PGSQL_CLIENT_ENCODING);
-		pgsql_variables.server_set_hash_and_value(session, PGSQL_CLIENT_ENCODING, value, hash);
+		const char* client_charset_value = pgsql_variables.client_get_value(session, PGSQL_CLIENT_ENCODING);
+		pgsql_variables.server_set_hash_and_value(session, PGSQL_CLIENT_ENCODING, client_charset_value, client_charset_hash);
 		return true;
 	}
 	return false;
