@@ -26,15 +26,15 @@ pgsql_update_var PgSQL_Variables::updaters[PGSQL_NAME_LAST_HIGH_WM];
 PgSQL_Variables::PgSQL_Variables() {
 	// add here all the variables we want proxysql to recognize, but ignore
 	ignore_vars.push_back("application_name");
-	ignore_vars.push_back("interactive_timeout");
-	ignore_vars.push_back("wait_timeout");
-	ignore_vars.push_back("net_read_timeout");
-	ignore_vars.push_back("net_write_timeout");
-	ignore_vars.push_back("net_buffer_length");
-	ignore_vars.push_back("read_buffer_size");
-	ignore_vars.push_back("read_rnd_buffer_size");
+	//ignore_vars.push_back("interactive_timeout");
+	//ignore_vars.push_back("wait_timeout");
+	//ignore_vars.push_back("net_read_timeout");
+	//ignore_vars.push_back("net_write_timeout");
+	//ignore_vars.push_back("net_buffer_length");
+	//ignore_vars.push_back("read_buffer_size");
+	//ignore_vars.push_back("read_rnd_buffer_size");
 	// NOTE: This variable has been temporarily ignored. Check issues #3442 and #3441.
-	ignore_vars.push_back("session_track_schema");
+	//ignore_vars.push_back("session_track_schema");
 	variables_regexp = "";
 	for (auto i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
 		// we initialized all the internal_variable_name if set to NULL
