@@ -435,8 +435,9 @@ inline bool verify_server_variable(PgSQL_Session* session, int idx, uint32_t cli
 	return false;
 }
 
-bool PgSQL_Variables::parse_variable_boolean(PgSQL_Session *sess, int idx, string& value1, bool * lock_hostgroup) {
+bool PgSQL_Variables::parse_variable_boolean(PgSQL_Session *sess, int idx, const std::string& value1, bool* lock_hostgroup, bool* send_param_status) {
 	proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "Processing SET %s value %s\n", pgsql_tracked_variables[idx].set_variable_name, value1.c_str());
+	*send_param_status = false;
 	int __tmp_value = -1;
 	if (
 		(strcasecmp(value1.c_str(),(char *)"0")==0) ||
@@ -454,17 +455,17 @@ bool PgSQL_Variables::parse_variable_boolean(PgSQL_Session *sess, int idx, strin
 		}
 	}
 
+	
 	if (__tmp_value >= 0) {
-		proxy_debug(PROXY_DEBUG_MYSQL_COM, 7, "Processing SET %s value %s\n", pgsql_tracked_variables[idx].set_variable_name, value1.c_str());
-		uint32_t var_value_int=SpookyHash::Hash32(value1.c_str(),value1.length(),10);
+		const char* val = __tmp_value ? "ON" : "OFF";
+		proxy_debug(PROXY_DEBUG_MYSQL_COM, 7, "Processing SET %s value %s\n", pgsql_tracked_variables[idx].set_variable_name, val);
+		uint32_t var_value_int=SpookyHash::Hash32(val, strlen(val), 10);
 		if (pgsql_variables.client_get_hash(sess, idx) != var_value_int) {
-			if (__tmp_value == 0) {
-				if (!pgsql_variables.client_set_value(sess, idx, "OFF"))
-					return false;
-			} else {
-				if (!pgsql_variables.client_set_value(sess, idx, "ON"))
-					return false;
-			}
+			*send_param_status = IS_PGTRACKED_VAR_OPTION_SET_PARAM_STATUS(pgsql_tracked_variables[idx]);
+
+			if (!pgsql_variables.client_set_value(sess, idx, val))
+				return false;
+
 			proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "Changing connection %s to %s\n", pgsql_tracked_variables[idx].set_variable_name, value1.c_str());
 		}
 	} else {
@@ -476,7 +477,7 @@ bool PgSQL_Variables::parse_variable_boolean(PgSQL_Session *sess, int idx, strin
 
 
 
-bool PgSQL_Variables::parse_variable_number(PgSQL_Session *sess, int idx, string& value1, bool * lock_hostgroup) {
+bool PgSQL_Variables::parse_variable_number(PgSQL_Session *sess, int idx, string& value1, bool* lock_hostgroup, bool* send_param_status) {
 	int vl = strlen(value1.c_str());
 	const char *v = value1.c_str();
 	bool only_digit_chars = true;

@@ -45,8 +45,8 @@ public:
 
 	bool verify_variable(PgSQL_Session* session, int idx) const;
 	bool update_variable(PgSQL_Session* session, session_status status, int &_rc);
-	bool parse_variable_boolean(PgSQL_Session*sess, int idx, std::string &value1, bool* lock_hostgroup);
-	bool parse_variable_number(PgSQL_Session*sess, int idx, std::string &value1, bool* lock_hostgroup);
+	bool parse_variable_boolean(PgSQL_Session*sess, int idx, const std::string &value1, bool *lock_hostgroup, bool *send_param_status);
+	bool parse_variable_number(PgSQL_Session*sess, int idx, std::string &value1, bool *lock_hostgroup, bool *send_param_status);
 };
 
 #endif // PGSQL_VARIABLES_H
