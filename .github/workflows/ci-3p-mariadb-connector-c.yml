@@ -63,19 +63,20 @@ jobs:
           test_mariadb-connector-c
 #          proxysql
 
-    - name: Wait for cache
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        echo "Wating for cache '${BLDCACHE}' ..."
-        sleep $(( $RANDOM / 1024 ))
-        PROBE="$(gh cache list --limit 300 --repo ${{ github.repository }} | grep -i ${BLDCACHE} || echo '')"
-        while [[ -z ${PROBE} ]]; do
-          echo "Wating for cache '${BLDCACHE}' ..."
-          sleep 30
-          PROBE="$(gh cache list --limit 300 --repo ${{ github.repository }} | grep -i ${BLDCACHE} || echo '')"
-        done
-        echo "Cache available '${BLDCACHE}'"
+#    - name: Wait for cache
+#      if: ${{ env.BRANCH != 'none' }}
+#      env:
+#        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#      run: |
+#        echo "Wating for cache '${BLDCACHE}' ..."
+#        sleep $(( $RANDOM / 1024 ))
+#        PROBE="$(gh cache list --limit 300 --repo ${{ github.repository }} | grep -i ${BLDCACHE} || echo '')"
+#        while [[ -z ${PROBE} ]]; do
+#          echo "Wating for cache '${BLDCACHE}' ..."
+#          sleep 30
+#          PROBE="$(gh cache list --limit 300 --repo ${{ github.repository }} | grep -i ${BLDCACHE} || echo '')"
+#        done
+#        echo "Cache available '${BLDCACHE}'"
 
     - name: Cache restore bin
       uses: actions/cache/restore@v4
