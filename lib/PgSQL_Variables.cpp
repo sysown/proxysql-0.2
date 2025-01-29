@@ -118,8 +118,10 @@ void PgSQL_Variables::client_reset_value(PgSQL_Session* session, int idx) {
 			free(client_conn->variables[idx].value);
 			client_conn->variables[idx].value = NULL;
 		}
-		// we now regererate dynamic_variables_idx
-		client_conn->reorder_dynamic_variables_idx();
+		if (idx > PGSQL_NAME_LAST_LOW_WM) {
+			// we now regererate dynamic_variables_idx
+			client_conn->reorder_dynamic_variables_idx();
+		}
 	}
 }
 void PgSQL_Variables::server_set_hash_and_value(PgSQL_Session* session, int idx, const char* value, uint32_t hash) {
@@ -146,8 +148,11 @@ bool PgSQL_Variables::client_set_value(PgSQL_Session* session, int idx, const st
 		free(session->client_myds->myconn->variables[idx].value);
 	}
 	session->client_myds->myconn->variables[idx].value = strdup(value.c_str());
-	// we now regererate dynamic_variables_idx
-	session->client_myds->myconn->reorder_dynamic_variables_idx();
+
+	if (idx > PGSQL_NAME_LAST_LOW_WM) {
+		// we now regererate dynamic_variables_idx
+		session->client_myds->myconn->reorder_dynamic_variables_idx();
+	}
 	return true;
 }
 
@@ -177,8 +182,11 @@ void PgSQL_Variables::server_set_value(PgSQL_Session* session, int idx, const ch
 		free(session->mybe->server_myds->myconn->variables[idx].value);
 	}
 	session->mybe->server_myds->myconn->variables[idx].value = strdup(value);
-	// we now regererate dynamic_variables_idx
-	session->mybe->server_myds->myconn->reorder_dynamic_variables_idx();
+
+	if (idx > PGSQL_NAME_LAST_LOW_WM) {
+		// we now regererate dynamic_variables_idx
+		session->mybe->server_myds->myconn->reorder_dynamic_variables_idx();
+	}
 }
 
 void PgSQL_Variables::server_reset_value(PgSQL_Session* session, int idx) {
@@ -195,8 +203,10 @@ void PgSQL_Variables::server_reset_value(PgSQL_Session* session, int idx) {
 			free(backend_conn->variables[idx].value);
 			backend_conn->variables[idx].value = NULL;
 		}
-		// we now regererate dynamic_variables_idx
-		backend_conn->reorder_dynamic_variables_idx();
+		if (idx > PGSQL_NAME_LAST_LOW_WM) {
+			// we now regererate dynamic_variables_idx
+			backend_conn->reorder_dynamic_variables_idx();
+		}
 	}
 }
 
