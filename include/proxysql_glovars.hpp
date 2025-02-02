@@ -64,6 +64,7 @@ class ProxySQL_GlobalVariables {
 	bool __cmd_proxysql_initial;
 	bool __cmd_proxysql_reload;
 	bool cluster_sync_interfaces; // If true, also mysql-interfaces and admin-mysql_ifaces are synced. false by default
+	bool set_thread_name = true;
 	char *__cmd_proxysql_admin_socket;
 	char *config_file;
 	char *datadir;
