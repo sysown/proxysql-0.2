@@ -3346,7 +3346,7 @@ __run_skip_1:
 			refresh_variables();
 		}
 
-		run_SetAllSession_ToProcess0<MySQL_Session>();
+		run_SetAllSession_ToProcess0();
 
 #ifdef IDLE_THREADS
 		// here we handle epoll_wait()
@@ -3944,7 +3944,7 @@ void MySQL_Thread::process_all_sessions() {
 	}
 #endif // IDLE_THREADS
 	if (sess_sort && mysql_sessions->len > 3) {
-		ProcessAllSessions_SortingSessions<MySQL_Session>();
+		ProcessAllSessions_SortingSessions();
 	}
 	for (n=0; n<mysql_sessions->len; n++) {
 		MySQL_Session *sess=(MySQL_Session *)mysql_sessions->index(n);

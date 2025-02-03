@@ -3152,7 +3152,7 @@ void PgSQL_Thread::run() {
 			refresh_variables();
 		}
 
-		run_SetAllSession_ToProcess0<PgSQL_Session>();
+		run_SetAllSession_ToProcess0();
 
 #ifdef IDLE_THREADS
 		// here we handle epoll_wait()
@@ -3648,7 +3648,7 @@ void PgSQL_Thread::process_all_sessions() {
 	}
 #endif // IDLE_THREADS
 	if (sess_sort && mysql_sessions->len > 3) {
-		ProcessAllSessions_SortingSessions<PgSQL_Session>();
+		ProcessAllSessions_SortingSessions();
 	}
 	for (n = 0; n < mysql_sessions->len; n++) {
 		PgSQL_Session* sess = (PgSQL_Session*)mysql_sessions->index(n);

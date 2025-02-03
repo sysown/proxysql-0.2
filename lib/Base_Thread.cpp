@@ -9,20 +9,16 @@
 
 
 // Explicitly instantiate the required template class and member functions
-//template MySQL_Session* Base_Thread<MySQL_Thread>::create_new_session_and_client_data_stream<MySQL_Session*>(int);
-//template PgSQL_Session* Base_Thread<PgSQL_Thread>::create_new_session_and_client_data_stream<PgSQL_Session*>(int);
 template MySQL_Session* Base_Thread<MySQL_Thread>::create_new_session_and_client_data_stream(int);
 template PgSQL_Session* Base_Thread<PgSQL_Thread>::create_new_session_and_client_data_stream(int);
-template void Base_Thread<MySQL_Thread>::ProcessAllSessions_SortingSessions<MySQL_Session>();
-template void Base_Thread<PgSQL_Thread>::ProcessAllSessions_SortingSessions<PgSQL_Session>();
+template void Base_Thread<MySQL_Thread>::ProcessAllSessions_SortingSessions();
+template void Base_Thread<PgSQL_Thread>::ProcessAllSessions_SortingSessions();
 template void Base_Thread<MySQL_Thread>::ProcessAllMyDS_AfterPoll();
 template void Base_Thread<PgSQL_Thread>::ProcessAllMyDS_AfterPoll();
 template void Base_Thread<MySQL_Thread>::ProcessAllMyDS_BeforePoll();
 template void Base_Thread<PgSQL_Thread>::ProcessAllMyDS_BeforePoll();
-//template void Base_Thread<MySQL_Thread>::register_session(MySQL_Session*, bool);
-//template void Base_Thread<PgSQL_Thread>::register_session(PgSQL_Session*, bool);
-template void Base_Thread<MySQL_Thread>::run_SetAllSession_ToProcess0<MySQL_Session>();
-template void Base_Thread<PgSQL_Thread>::run_SetAllSession_ToProcess0<PgSQL_Session>();
+template void Base_Thread<MySQL_Thread>::run_SetAllSession_ToProcess0();
+template void Base_Thread<PgSQL_Thread>::run_SetAllSession_ToProcess0();
 template Base_Thread<MySQL_Thread>::Base_Thread();
 template Base_Thread<PgSQL_Thread>::Base_Thread();
 template Base_Thread<MySQL_Thread>::~Base_Thread();
@@ -67,18 +63,19 @@ typename Base_Thread<T>::TypeSession * Base_Thread<T>::create_new_session_and_cl
 	TypeSession * sess = NULL;
 	bool use_tcp_keepalive = false;
 	int tcp_keepalive_time = 0;
+	sess = new TypeSession();
 	if constexpr (std::is_same_v<T, PgSQL_Thread>) {
-		sess = new PgSQL_Session();
 		use_tcp_keepalive = pgsql_thread___use_tcp_keepalive;
 		tcp_keepalive_time = pgsql_thread___tcp_keepalive_time;
 	} else if constexpr (std::is_same_v<T, MySQL_Thread>) {
-		sess = new MySQL_Session();
 		use_tcp_keepalive = mysql_thread___use_tcp_keepalive;
 		tcp_keepalive_time = mysql_thread___tcp_keepalive_time;
 	} else {
 		assert(0);
 	}
 	register_session(sess);
+	sess->client_myds = new TypeDataStream();
+/*
 	if constexpr (std::is_same_v<T, PgSQL_Thread>) {
 		sess->client_myds = new PgSQL_Data_Stream();
 	} else if constexpr (std::is_same_v<T, MySQL_Thread>) {
@@ -86,6 +83,7 @@ typename Base_Thread<T>::TypeSession * Base_Thread<T>::create_new_session_and_cl
 	} else {
 		assert(0);
 	}
+*/
 	sess->client_myds->fd = _fd;
 
 	// set not blocking for client connections too!
@@ -234,14 +232,13 @@ void Base_Thread<T>::check_for_invalid_fd(unsigned int n) {
  * and are accessible within the MySQL Thread.
  */
 template<typename T>
-template<typename S>
 void Base_Thread<T>::ProcessAllSessions_SortingSessions() {
 	unsigned int a=0;
 	for (unsigned int n=0; n<mysql_sessions->len; n++) {
-		S *sess=(S *)mysql_sessions->index(n);
+		TypeSession *sess=(TypeSession *)mysql_sessions->index(n);
 		if (sess->mybe && sess->mybe->server_myds) {
 			if (sess->mybe->server_myds->max_connect_time) {
-				S *sess2=(S *)mysql_sessions->index(a);
+				TypeSession *sess2=(TypeSession *)mysql_sessions->index(a);
 				if (sess2->mybe && sess2->mybe->server_myds && sess2->mybe->server_myds->max_connect_time && sess2->mybe->server_myds->max_connect_time <= sess->mybe->server_myds->max_connect_time) {
 					// do nothing
 				} else {
@@ -327,8 +324,7 @@ void Base_Thread<T>::read_one_byte_from_pipe(unsigned int n) {
 }
 
 template<typename T>
-template<typename DS>
-void Base_Thread<T>::tune_timeout_for_myds_needs_pause(DS * myds) {
+void Base_Thread<T>::tune_timeout_for_myds_needs_pause(TypeDataStream * myds) {
 	T* thr = static_cast<T*>(this);
 	if (myds->wait_until > curtime) {
 		if (thr->mypolls.poll_timeout==0 || (myds->wait_until - curtime < thr->mypolls.poll_timeout) ) {
@@ -339,8 +335,7 @@ void Base_Thread<T>::tune_timeout_for_myds_needs_pause(DS * myds) {
 }
 
 template<typename T>
-template<typename DS>
-void Base_Thread<T>::tune_timeout_for_session_needs_pause(DS * myds) {
+void Base_Thread<T>::tune_timeout_for_session_needs_pause(TypeDataStream * myds) {
 	T* thr = static_cast<T*>(this);
 	if (thr->mypolls.poll_timeout==0 || (myds->sess->pause_until - curtime < thr->mypolls.poll_timeout) ) {
 		thr->mypolls.poll_timeout= myds->sess->pause_until - curtime;
@@ -349,8 +344,7 @@ void Base_Thread<T>::tune_timeout_for_session_needs_pause(DS * myds) {
 }
 
 template<typename T>
-template<typename DS>
-void Base_Thread<T>::configure_pollout(DS * myds, unsigned int n) {
+void Base_Thread<T>::configure_pollout(TypeDataStream * myds, unsigned int n) {
 	T* thr = static_cast<T*>(this);
 	if (myds->myds_type==MYDS_FRONTEND && myds->DSS==STATE_SLEEP && myds->sess && myds->sess->status==WAITING_CLIENT_DATA) {
 		myds->set_pollout();
@@ -387,8 +381,7 @@ void Base_Thread<T>::configure_pollout(DS * myds, unsigned int n) {
 }
 
 template<typename T>
-template<typename DS>
-bool Base_Thread<T>::set_backend_to_be_skipped_if_frontend_is_slow(DS * myds, unsigned int n) {
+bool Base_Thread<T>::set_backend_to_be_skipped_if_frontend_is_slow(TypeDataStream * myds, unsigned int n) {
 	T* thr = static_cast<T*>(this);
 	if (myds->sess && myds->sess->client_myds && myds->sess->mirror==false) {
 		// we pause receiving from backend at mysql_thread___threshold_resultset_size * 8
@@ -429,8 +422,7 @@ bool Base_Thread<T>::set_backend_to_be_skipped_if_frontend_is_slow(DS * myds, un
  * @return True if the session is moved to the idle session array, false otherwise.
  */
 template<typename T>
-template<typename DS>
-bool Base_Thread<T>::move_session_to_idle_mysql_sessions(DS * myds, unsigned int n) {
+bool Base_Thread<T>::move_session_to_idle_mysql_sessions(TypeDataStream * myds, unsigned int n) {
 	T* thr = static_cast<T*>(this);
 	unsigned long long _tmp_idle = thr->mypolls.last_recv[n] > thr->mypolls.last_sent[n] ? thr->mypolls.last_recv[n] : thr->mypolls.last_sent[n] ;
 
@@ -468,12 +460,11 @@ bool Base_Thread<T>::move_session_to_idle_mysql_sessions(DS * myds, unsigned int
 #endif // IDLE_THREADS
 
 template<typename T>
-template<typename S>
-unsigned int Base_Thread<T>::find_session_idx_in_mysql_sessions(S * sess) {
+unsigned int Base_Thread<T>::find_session_idx_in_mysql_sessions(TypeSession * sess) {
 	T* thr = static_cast<T*>(this);
 	unsigned int i=0;
 	for (i=0;i<mysql_sessions->len;i++) {
-		S *mysess=(S *)thr->mysql_sessions->index(i);
+		TypeSession *mysess=(TypeSession *)thr->mysql_sessions->index(i);
 		if (mysess==sess) {
 			return i;
 		}
@@ -539,7 +530,6 @@ void Base_Thread<T>::ProcessAllMyDS_BeforePoll() {
 }
 
 template<typename T>
-template<typename S>
 void Base_Thread<T>::run_SetAllSession_ToProcess0() {
 	//T* thr = static_cast<T*>(this);
 	unsigned int n;
@@ -549,7 +539,7 @@ void Base_Thread<T>::run_SetAllSession_ToProcess0() {
 	if (epoll_thread==false) {
 #endif // IDLE_THREADS
 		for (n=0; n<mysql_sessions->len; n++) {
-			S *_sess=(S *)mysql_sessions->index(n);
+			TypeSession *_sess=(TypeSession *)mysql_sessions->index(n);
 			_sess->to_process=0;
 		}
 #ifdef IDLE_THREADS

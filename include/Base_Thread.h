@@ -44,6 +44,7 @@ class Base_Thread {
 	bool maintenance_loop;
 	public:
 	using TypeSession = typename std::conditional<std::is_same_v<T,MySQL_Thread>,MySQL_Session,PgSQL_Session>::type;
+	using TypeDataStream = typename std::conditional<std::is_same_v<T,MySQL_Thread>,MySQL_Data_Stream,PgSQL_Data_Stream>::type;
 	unsigned long long curtime;
 	unsigned long long last_move_to_idle_thread_time;
 	bool epoll_thread;
@@ -54,38 +55,21 @@ class Base_Thread {
 	~Base_Thread();
 	TypeSession * create_new_session_and_client_data_stream(int _fd);
 	void register_session(TypeSession *, bool up_start = true);
-	//template<typename T>
 	void check_timing_out_session(unsigned int n);
-	//template<typename T>
 	void check_for_invalid_fd(unsigned int n);
-	template<typename S>
 	void ProcessAllSessions_SortingSessions();
-	//template<typename T>
 	void ProcessAllMyDS_AfterPoll();
-	//template<typename T>
 	void read_one_byte_from_pipe(unsigned int n);
-	//template<typename T, typename DS>
-	template<typename DS>
-	void tune_timeout_for_myds_needs_pause(DS * myds);
-	//template<typename T, typename DS>
-	template<typename DS>
-	void tune_timeout_for_session_needs_pause(DS * myds);
-	//template<typename T, typename DS>
-	template<typename DS>
-	void configure_pollout(DS * myds, unsigned int n);
-	//template<typename T, typename DS>
-	template<typename DS>
-	bool set_backend_to_be_skipped_if_frontend_is_slow(DS * myds, unsigned int n);
+	void tune_timeout_for_myds_needs_pause(TypeDataStream * myds);
+	void tune_timeout_for_session_needs_pause(TypeDataStream * myds);
+	void configure_pollout(TypeDataStream * myds, unsigned int n);
+	bool set_backend_to_be_skipped_if_frontend_is_slow(TypeDataStream * myds, unsigned int n);
 #ifdef IDLE_THREADS
-	//template<typename T, typename DS> bool move_session_to_idle_mysql_sessions(DS * myds, unsigned int n);
-	template<typename DS> bool move_session_to_idle_mysql_sessions(DS * myds, unsigned int n);
+	bool move_session_to_idle_mysql_sessions(TypeDataStream * myds, unsigned int n);
 #endif // IDLE_THREADS
-	//template<typename T, typename S> unsigned int find_session_idx_in_mysql_sessions(S * sess);
-	//template<typename T> void ProcessAllMyDS_BeforePoll();
-	//template<typename T, typename S> void run_SetAllSession_ToProcess0();
-	template<typename S> unsigned int find_session_idx_in_mysql_sessions(S * sess);
+	unsigned int find_session_idx_in_mysql_sessions(TypeSession * sess);
 	void ProcessAllMyDS_BeforePoll();
-	template<typename S> void run_SetAllSession_ToProcess0();
+	void run_SetAllSession_ToProcess0();
 
 
 #if ENABLE_TIMER
