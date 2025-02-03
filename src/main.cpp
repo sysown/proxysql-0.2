@@ -735,6 +735,16 @@ void ProxySQL_Main_process_global_variables(int argc, const char **argv) {
 				proxy_error("The config file is configured with an invalid cluster_sync_interfaces\n");
 			}
 		}
+		if (root.exists("set_thread_name")==true) {
+			bool value_bool;
+			bool rc;
+			rc=root.lookupValue("set_thread_name", value_bool);
+			if (rc==true) {
+				GloVars.set_thread_name=value_bool;
+			} else {
+				proxy_error("The config file is configured with an invalid set_thread_name\n");
+			}
+		}
 		if (root.exists("pidfile")==true) {
 			string pidfile_path;
 			bool rc;

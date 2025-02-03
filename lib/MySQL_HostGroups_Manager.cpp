@@ -133,7 +133,7 @@ T j_get_srv_default_int_val(
 //static void * HGCU_thread_run() {
 static void * HGCU_thread_run() {
 	PtrArray *conn_array=new PtrArray();
-	set_thread_name("MyHGCU");
+	set_thread_name("MyHGCU", GloVars.set_thread_name);
 	while(1) {
 		MySQL_Connection *myconn= NULL;
 		myconn = (MySQL_Connection *)MyHGM->queue.remove();

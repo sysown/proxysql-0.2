@@ -47,7 +47,7 @@ extern MySQL_Authentication* GloMyAuth;
 void * ProxySQL_Cluster_Monitor_thread(void *args) {
 	pthread_attr_t thread_attr;
 	size_t tmp_stack_size=0;
-	set_thread_name("ClusterMonitor");
+	set_thread_name("ClusterMonitor", GloVars.set_thread_name);
 	if (!pthread_attr_init(&thread_attr)) {
 		if (!pthread_attr_getstacksize(&thread_attr , &tmp_stack_size )) {
 			__sync_fetch_and_add(&GloVars.statuses.stack_memory_cluster_threads,tmp_stack_size);

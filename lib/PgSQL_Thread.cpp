@@ -2318,6 +2318,13 @@ proxysql_pgsql_thread_t* PgSQL_Threads_Handler::create_thread(unsigned int tn, v
 			assert(0);
 			// LCOV_EXCL_STOP
 		}
+#if defined(__linux__) || defined(__FreeBSD__)
+		if (GloVars.set_thread_name == true) {
+			char thr_name[16];
+			snprintf(thr_name, sizeof(thr_name), "PgSQLWorker%d", tn);
+			pthread_setname_np(pgsql_threads[tn].thread_id, thr_name);
+		}
+#endif // defined(__linux__) || defined(__FreeBSD__)
 #ifdef IDLE_THREADS
 	}
 	else {
@@ -2328,6 +2335,13 @@ proxysql_pgsql_thread_t* PgSQL_Threads_Handler::create_thread(unsigned int tn, v
 				assert(0);
 				// LCOV_EXCL_STOP
 			}
+#if defined(__linux__) || defined(__FreeBSD__)
+			if (GloVars.set_thread_name == true) {
+				char thr_name[16];
+				snprintf(thr_name, sizeof(thr_name), "PgSQLIdle%d", tn);
+				pthread_setname_np(pgsql_threads_idles[tn].thread_id, thr_name);
+			}
+#endif // defined(__linux__) || defined(__FreeBSD__)
 		}
 #endif // IDLE_THREADS
 	}
