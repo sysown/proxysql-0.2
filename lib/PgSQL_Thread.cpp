@@ -4129,7 +4129,7 @@ void PgSQL_Thread::listener_handle_new_connection(PgSQL_Data_Stream * myds, unsi
 
 		// create a new client connection
 		mypolls.fds[n].revents = 0;
-		PgSQL_Session* sess = create_new_session_and_client_data_stream<PgSQL_Session*>(c);
+		PgSQL_Session* sess = create_new_session_and_client_data_stream(c);
 		__sync_add_and_fetch(&PgHGM->status.client_connections_created, 1);
 		if (__sync_add_and_fetch(&PgHGM->status.client_connections, 1) > pgsql_thread___max_connections) {
 			sess->max_connections_reached = true;

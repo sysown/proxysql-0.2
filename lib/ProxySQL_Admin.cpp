@@ -1959,7 +1959,7 @@ void *child_mysql(void *arg) {
 	mysql_thr->curtime=monotonic_time();
 	GloMyQPro->init_thread();
 	mysql_thr->refresh_variables();
-	MySQL_Session *sess=mysql_thr->create_new_session_and_client_data_stream<MySQL_Session*>(client);
+	MySQL_Session *sess=mysql_thr->create_new_session_and_client_data_stream(client);
 	sess->thread=mysql_thr;
 	sess->session_type = PROXYSQL_SESSION_ADMIN;
 	sess->handler_function=admin_session_handler<MySQL_Session>;
@@ -2079,7 +2079,7 @@ void* child_postgres(void* arg) {
 	pgsql_thr->curtime = monotonic_time();
 	GloPgQPro->init_thread();
 	pgsql_thr->refresh_variables();
-	PgSQL_Session* sess = pgsql_thr->create_new_session_and_client_data_stream<PgSQL_Session*>(client);
+	PgSQL_Session* sess = pgsql_thr->create_new_session_and_client_data_stream(client);
 	sess->thread = pgsql_thr;
 	sess->session_type = PROXYSQL_SESSION_ADMIN;
 	sess->handler_function=admin_session_handler<PgSQL_Session>;

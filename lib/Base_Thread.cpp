@@ -9,16 +9,18 @@
 
 
 // Explicitly instantiate the required template class and member functions
-template MySQL_Session* Base_Thread<MySQL_Thread>::create_new_session_and_client_data_stream<MySQL_Session*>(int);
-template PgSQL_Session* Base_Thread<PgSQL_Thread>::create_new_session_and_client_data_stream<PgSQL_Session*>(int);
+//template MySQL_Session* Base_Thread<MySQL_Thread>::create_new_session_and_client_data_stream<MySQL_Session*>(int);
+//template PgSQL_Session* Base_Thread<PgSQL_Thread>::create_new_session_and_client_data_stream<PgSQL_Session*>(int);
+template MySQL_Session* Base_Thread<MySQL_Thread>::create_new_session_and_client_data_stream(int);
+template PgSQL_Session* Base_Thread<PgSQL_Thread>::create_new_session_and_client_data_stream(int);
 template void Base_Thread<MySQL_Thread>::ProcessAllSessions_SortingSessions<MySQL_Session>();
 template void Base_Thread<PgSQL_Thread>::ProcessAllSessions_SortingSessions<PgSQL_Session>();
 template void Base_Thread<MySQL_Thread>::ProcessAllMyDS_AfterPoll();
 template void Base_Thread<PgSQL_Thread>::ProcessAllMyDS_AfterPoll();
 template void Base_Thread<MySQL_Thread>::ProcessAllMyDS_BeforePoll();
 template void Base_Thread<PgSQL_Thread>::ProcessAllMyDS_BeforePoll();
-template void Base_Thread<MySQL_Thread>::register_session(MySQL_Session*, bool);
-template void Base_Thread<PgSQL_Thread>::register_session(PgSQL_Session*, bool);
+//template void Base_Thread<MySQL_Thread>::register_session(MySQL_Session*, bool);
+//template void Base_Thread<PgSQL_Thread>::register_session(PgSQL_Session*, bool);
 template void Base_Thread<MySQL_Thread>::run_SetAllSession_ToProcess0<MySQL_Session>();
 template void Base_Thread<PgSQL_Thread>::run_SetAllSession_ToProcess0<PgSQL_Session>();
 template Base_Thread<MySQL_Thread>::Base_Thread();
@@ -35,8 +37,7 @@ Base_Thread<T>::~Base_Thread() {
 };
 
 template<typename T>
-template<typename S>
-void Base_Thread<T>::register_session(S _sess, bool up_start) {
+void Base_Thread<T>::register_session(TypeSession * _sess, bool up_start) {
 	if (mysql_sessions==NULL) {
 		mysql_sessions = new PtrArray();
 	}
@@ -61,10 +62,9 @@ void Base_Thread<T>::register_session(S _sess, bool up_start) {
 
 
 template<typename T>
-template<typename S>
-S Base_Thread<T>::create_new_session_and_client_data_stream(int _fd) {
+typename Base_Thread<T>::TypeSession * Base_Thread<T>::create_new_session_and_client_data_stream(int _fd) {
 	int arg_on = 1;
-	S sess = NULL;
+	TypeSession * sess = NULL;
 	bool use_tcp_keepalive = false;
 	int tcp_keepalive_time = 0;
 	if constexpr (std::is_same_v<T, PgSQL_Thread>) {

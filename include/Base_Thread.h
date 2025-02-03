@@ -1,6 +1,6 @@
 #ifndef CLASS_BASE_THREAD_H
 #define CLASS_BASE_THREAD_H
-
+#include <type_traits>
 #include "proxysql.h"
 
 typedef struct _thr_id_username_t {
@@ -38,9 +38,12 @@ class PgSQL_Thread;
 
 template<typename T>
 class Base_Thread {
+	static_assert(std::is_same_v<T,MySQL_Thread> || std::is_same_v<T,PgSQL_Thread>,
+		"Invalid Thread type");
 	private:
 	bool maintenance_loop;
 	public:
+	using TypeSession = typename std::conditional<std::is_same_v<T,MySQL_Thread>,MySQL_Session,PgSQL_Session>::type;
 	unsigned long long curtime;
 	unsigned long long last_move_to_idle_thread_time;
 	bool epoll_thread;
@@ -49,10 +52,8 @@ class Base_Thread {
 	Session_Regex **match_regexes;
 	Base_Thread();
 	~Base_Thread();
-	template<typename S>
-	S create_new_session_and_client_data_stream(int _fd);
-	template<typename S>
-	void register_session(S, bool up_start = true);
+	TypeSession * create_new_session_and_client_data_stream(int _fd);
+	void register_session(TypeSession *, bool up_start = true);
 	//template<typename T>
 	void check_timing_out_session(unsigned int n);
 	//template<typename T>
