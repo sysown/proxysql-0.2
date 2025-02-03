@@ -2293,11 +2293,6 @@ int print_jemalloc_conf() {
 #endif
 
 int main(int argc, const char * argv[]) {
-	// Output current jemalloc conf; no action taken when disabled
-	{
-		int rc = print_jemalloc_conf();
-		if (rc) { exit(EXIT_FAILURE); }
-	}
 
 	if (check_openssl_version() == false) {
 		exit(EXIT_FAILURE);
@@ -2311,7 +2306,6 @@ int main(int argc, const char * argv[]) {
 		ppi.run_tests();
 	}
 #endif // DEBUG
-
 
 	{
 		MYSQL *my = mysql_init(NULL);
@@ -2338,6 +2332,12 @@ int main(int argc, const char * argv[]) {
 #ifdef DEBUG
 		std::cerr << "Main init global variables completed in ";
 #endif
+	}
+
+	// Output current jemalloc conf; no action taken when disabled
+	{
+		int rc = print_jemalloc_conf();
+		if (rc) { exit(EXIT_FAILURE); }
 	}
 
 	struct rlimit nlimit;
