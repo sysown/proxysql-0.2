@@ -232,7 +232,7 @@ class MySQL_Session: public Base_Session<MySQL_Session, MySQL_Data_Stream, MySQL
 	void GPFC_DetectedMultiPacket_SetDDS();
 	int GPFC_WaitingClientData_FastForwardSession(PtrSize_t&);
 	void GPFC_PreparedStatements(PtrSize_t&, unsigned char);
-	int GPFC_Replication_SwitchToFastForward(PtrSize_t&, unsigned char);
+	void GPFC_Replication_SwitchToFastForward(PtrSize_t&, unsigned char);
 	bool GPFC_QueryUSE(PtrSize_t&, int&);
 
 	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_RESET(PtrSize_t&);

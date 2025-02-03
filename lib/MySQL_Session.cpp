@@ -1089,7 +1089,6 @@ void MySQL_Session::generate_proxysql_internal_session_json(json &j) {
 	j["default_schema"] = ( default_schema ? default_schema : "" );
 	j["user_attributes"] = ( user_attributes ? user_attributes : "" );
 	j["transaction_persistent"] = transaction_persistent;
-	j["fast_forward"] = session_fast_forward;
 	if (client_myds != NULL) { // only if client_myds is defined
 		client_myds->get_client_myds_info_json(j);
 	}
@@ -2785,7 +2784,9 @@ bool MySQL_Session::handler_again___status_CHANGING_SCHEMA(int *_rc) {
 	return false;
 }
 
+
 bool MySQL_Session::handler_again___status_CONNECTING_SERVER(int *_rc) {
+	//fprintf(stderr,"CONNECTING_SERVER\n");
 	unsigned long long curtime=monotonic_time();
 	thread->atomic_curtime=curtime;
 	if (mirror) {
@@ -2894,68 +2895,7 @@ bool MySQL_Session::handler_again___status_CONNECTING_SERVER(int *_rc) {
 				st=previous_status.top();
 				previous_status.pop();
 				myds->wait_until=0;
-
-				if (
-					(mysql_thread___connpool_match_client_deprecate_eof || session_fast_forward)
-					&& !client_myds->myconn->match_tracked_options(mybe->server_myds->myconn)
-				) {
-					if (myds->connect_retries_on_failure > 0) {
-						proxy_info(
-							"Failed to obtain suitable connection for fast-forward; server lacks the required capabilities"
-								"   hostgroup=%d client_flags=%u server_capabilities=%lu\n",
-							current_hostgroup,
-							client_myds->myconn->options.client_flag,
-							mybe->server_myds->myconn->mysql->server_capabilities
-						);
-
-						const MySrvC* parent { myconn->parent };
-						MyHGM->p_update_mysql_error_counter(
-							p_mysql_error_type::proxysql, parent->myhgc->hid, parent->address, parent->port,
-							ER_PROXYSQL_FAST_FORWARD_CONN_CREATE
-						);
-						myds->connect_retries_on_failure--;
-						myds->destroy_MySQL_Connection_From_Pool(false);
-
-						// We are still in 'FAST_FORWARD' and we require a new connection, since we are
-						// moving to 'CONNECTING_SERVER' the previous status shouldn't be consumed.
-						previous_status.push(st);
-
-						// NOTE-connect_retries_delay: In case of failure to connect, if
-						// 'mysql_thread___connect_retries_delay' is set, we impose a delay in the session
-						// processing via 'pause_until'. Complementary NOTE above.
-						if (mysql_thread___connect_retries_delay) {
-							pause_until = thread->curtime + mysql_thread___connect_retries_delay*1000;
-							set_status(CONNECTING_SERVER);
-
-							return false;
-						}
-
-						NEXT_IMMEDIATE_NEW(CONNECTING_SERVER);
-					} else {
-						char buf[256] = { 0 };
-						cstr_format(buf,
-							"Fast-forward connection attempt failed; server lacks the required capabilities"
-								"   hostgroup=%d client_flags=%u server_capabilities=%lu\n",
-							current_hostgroup,
-							client_myds->myconn->options.client_flag,
-							mybe->server_myds->myconn->mysql->server_capabilities
-						);
-
-						client_myds->myprot.generate_pkt_ERR(true, NULL, NULL, 1, 1815, (char *)"HY000", buf, true);
-
-						while (previous_status.size()) {
-							st=previous_status.top();
-							previous_status.pop();
-						}
-
-						myds->destroy_MySQL_Connection_From_Pool(true);
-						myds->max_connect_time=0;
-
-						NEXT_IMMEDIATE_NEW(WAITING_CLIENT_DATA);
-					}
-				}
-
-				if (session_fast_forward==true) {
+				if (session_fast_forward) {
 					// we have a successful connection and session_fast_forward enabled
 					// set DSS=STATE_SLEEP or it will believe it have to use MARIADB client library
 					myds->DSS=STATE_SLEEP;
@@ -3858,7 +3798,7 @@ void MySQL_Session::GPFC_PreparedStatements(PtrSize_t& pkt, unsigned char c) {
 	}
 }
 
-int MySQL_Session::GPFC_Replication_SwitchToFastForward(PtrSize_t& pkt, unsigned char c) {
+void MySQL_Session::GPFC_Replication_SwitchToFastForward(PtrSize_t& pkt, unsigned char c) {
 	// In this switch we handle commands that download binlog events from MySQL
 	// servers. For these commands a lot of the features provided by ProxySQL
 	// aren't useful, like multiplexing, query parsing, etc. For this reason,
@@ -3904,7 +3844,6 @@ int MySQL_Session::GPFC_Replication_SwitchToFastForward(PtrSize_t& pkt, unsigned
 	// We reinitialize the 'wait_until' since this session shouldn't wait for processing as
 	// we are now transitioning to 'FAST_FORWARD'.
 	mybe->server_myds->wait_until = 0;
-
 	if (mybe->server_myds->DSS==STATE_NOT_INITIALIZED) {
 		// NOTE: This section is entirely borrowed from 'STATE_SLEEP' for 'session_fast_forward'.
 		// Check comments there for extra information.
@@ -3923,32 +3862,6 @@ int MySQL_Session::GPFC_Replication_SwitchToFastForward(PtrSize_t& pkt, unsigned
 		previous_status.push(FAST_FORWARD); // next status will be FAST_FORWARD
 		set_status(CONNECTING_SERVER); // now we need a connection
 	} else {
-		bool match_tracked {
-			// If DSS **IS** initialized, we **MUST** have a connection
-			mybe->server_myds->DSS != STATE_NOT_INITIALIZED
-			// Due to the first condition it's safe check the conn tracked options. Matching capabilities are
-			// mandatory for fast-forward transitions, otherwise session should be terminated.
-			&& client_myds->myconn->match_tracked_options(mybe->server_myds->myconn)
-		};
-
-		// If a connection has been already acquired, but it doesn't match the required capabilities, the
-		// mismatch should be reported, and session should be killed. Flagging the session as 'killed' is
-		// important, since this is already a 'fast_forward' session, and handling will be different as for
-		// regular sessions.
-		if (!match_tracked) {
-			proxy_info(
-				"Failed to switch to fast-forward; session connection lacks the required capabilities"
-				"   hostgroup=%d client_flags=%u server_capabilities=%lu\n",
-				current_hostgroup,
-				client_myds->myconn->options.client_flag,
-				mybe->server_myds->myconn->mysql->server_capabilities
-			);
-			mybe->server_myds->destroy_MySQL_Connection_From_Pool(false);
-			mybe->server_myds->fd=0;
-			this->killed = true;
-			return -1;
-		}
-
 		// In case of having a connection, we need to make user to reset the state machine
 		// for current server 'MySQL_Data_Stream', setting it outside of any state handled
 		// by 'mariadb' library. Otherwise 'MySQL_Thread' will threat this
@@ -3983,8 +3896,6 @@ int MySQL_Session::GPFC_Replication_SwitchToFastForward(PtrSize_t& pkt, unsigned
 		}
 		set_status(FAST_FORWARD); // we can set status to FAST_FORWARD
 	}	
-
-	return 0;
 }
 
 bool MySQL_Session::GPFC_QueryUSE(PtrSize_t& pkt, int& handler_ret) {
@@ -4290,7 +4201,7 @@ __get_pkts_from_client:
 							case _MYSQL_COM_BINLOG_DUMP:
 							case _MYSQL_COM_BINLOG_DUMP_GTID:
 							case _MYSQL_COM_REGISTER_SLAVE:
-								handler_ret = GPFC_Replication_SwitchToFastForward(pkt, c);
+								GPFC_Replication_SwitchToFastForward(pkt, c);
 								break;
 							case _MYSQL_COM_QUIT:
 								proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "Got COM_QUIT packet\n");
@@ -5257,6 +5168,8 @@ handler_again:
 				int rc=0;
 				if (handler_again___status_CONNECTING_SERVER(&rc))
 					goto handler_again;	// we changed status
+				//if (rc==1) //handler_again___status_CONNECTING_SERVER returns 1
+				//	goto __exit_DSS__STATE_NOT_INITIALIZED;
 			}
 			break;
 		case session_status___NONE:
