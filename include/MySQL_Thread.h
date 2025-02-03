@@ -89,7 +89,7 @@ enum MySQL_Thread_status_variable {
 	MY_st_var_END
 };
 
-class __attribute__((aligned(64))) MySQL_Thread : public Base_Thread
+class __attribute__((aligned(64))) MySQL_Thread : public Base_Thread<MySQL_Thread>
 {
 	friend class PgSQL_Thread;
 	private:

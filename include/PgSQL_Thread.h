@@ -137,7 +137,7 @@ struct CopyCmdMatcher {
 	}
 };
 
-class __attribute__((aligned(64))) PgSQL_Thread : public Base_Thread
+class __attribute__((aligned(64))) PgSQL_Thread : public Base_Thread<PgSQL_Thread>
 {
 private:
 	unsigned int servers_table_version_previous;

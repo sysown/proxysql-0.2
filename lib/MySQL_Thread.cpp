@@ -3243,7 +3243,7 @@ __run_skip_1:
 
 			handle_mirror_queue_mysql_sessions();
 
-			ProcessAllMyDS_BeforePoll<MySQL_Thread>();
+			ProcessAllMyDS_BeforePoll();
 
 #ifdef IDLE_THREADS
 			run_MoveSessionsBetweenThreads();
@@ -3346,7 +3346,7 @@ __run_skip_1:
 			refresh_variables();
 		}
 
-		run_SetAllSession_ToProcess0<MySQL_Thread,MySQL_Session>();
+		run_SetAllSession_ToProcess0<MySQL_Session>();
 
 #ifdef IDLE_THREADS
 		// here we handle epoll_wait()
@@ -3361,7 +3361,7 @@ __run_skip_1:
 			}
 		} else {
 #endif // IDLE_THREADS
-			ProcessAllMyDS_AfterPoll<MySQL_Thread>();
+			ProcessAllMyDS_AfterPoll();
 			// iterate through all sessions and process the session logic
 			process_all_sessions();
 			return_local_connections();
@@ -3553,7 +3553,7 @@ void MySQL_Thread::worker_thread_gets_sessions_from_idle_thread() {
 		//unsigned int maxsess=GloMTH->resume_mysql_sessions->len;
 		while (myexchange.resume_mysql_sessions->len) {
 			MySQL_Session *mysess=(MySQL_Session *)myexchange.resume_mysql_sessions->remove_index_fast(0);
-			register_session(this, mysess, false);
+			register_session(mysess, false);
 			MySQL_Data_Stream *myds=mysess->client_myds;
 			mypolls.add(POLLIN, myds->fd, myds, monotonic_time());
 		}
@@ -4384,7 +4384,7 @@ void MySQL_Thread::listener_handle_new_connection(MySQL_Data_Stream *myds, unsig
 
 		// create a new client connection
 		mypolls.fds[n].revents=0;
-		MySQL_Session *sess=create_new_session_and_client_data_stream<MySQL_Thread, MySQL_Session*>(c);
+		MySQL_Session *sess=create_new_session_and_client_data_stream<MySQL_Session*>(c);
 		__sync_add_and_fetch(&MyHGM->status.client_connections_created,1);
 		if (__sync_add_and_fetch(&MyHGM->status.client_connections,1) > mysql_thread___max_connections) {
 			sess->max_connections_reached=true;
@@ -5760,7 +5760,7 @@ void MySQL_Thread::idle_thread_gets_sessions_from_worker_thread() {
 	pthread_mutex_lock(&myexchange.mutex_idles);
 	while (myexchange.idle_mysql_sessions->len) {
 		MySQL_Session *mysess=(MySQL_Session *)myexchange.idle_mysql_sessions->remove_index_fast(0);
-		register_session(this, mysess, false);
+		register_session(mysess, false);
 		MySQL_Data_Stream *myds=mysess->client_myds;
 		mypolls.add(POLLIN, myds->fd, myds, monotonic_time());
 		// add in epoll()
@@ -5787,7 +5787,7 @@ void MySQL_Thread::handle_mirror_queue_mysql_sessions() {
 			int idx;
 			idx=fastrand()%(mirror_queue_mysql_sessions->len);
 			MySQL_Session *newsess=(MySQL_Session *)mirror_queue_mysql_sessions->remove_index_fast(idx);
-			register_session(this, newsess);
+			register_session(newsess);
 			newsess->handler(); // execute immediately
 			if (newsess->status==WAITING_CLIENT_DATA) { // the mirror session has completed
 				unregister_session(mysql_sessions->len-1);

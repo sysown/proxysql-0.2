@@ -3007,7 +3007,7 @@ void PgSQL_Thread::run() {
 
 		handle_mirror_queue_mysql_sessions();
 
-		ProcessAllMyDS_BeforePoll<PgSQL_Thread>();
+		ProcessAllMyDS_BeforePoll();
 
 #ifdef IDLE_THREADS
 		if (GloVars.global.idle_threads) {
@@ -3152,7 +3152,7 @@ void PgSQL_Thread::run() {
 			refresh_variables();
 		}
 
-		run_SetAllSession_ToProcess0<PgSQL_Thread,PgSQL_Session>();
+		run_SetAllSession_ToProcess0<PgSQL_Session>();
 
 #ifdef IDLE_THREADS
 		// here we handle epoll_wait()
@@ -3187,7 +3187,7 @@ void PgSQL_Thread::run() {
 		}
 #endif // IDLE_THREADS
 
-		ProcessAllMyDS_AfterPoll<PgSQL_Thread>();
+		ProcessAllMyDS_AfterPoll();
 
 #ifdef IDLE_THREADS
 		__run_skip_2 :
@@ -3345,7 +3345,7 @@ void PgSQL_Thread::worker_thread_gets_sessions_from_idle_thread() {
 		//unsigned int maxsess=GloPTH->resume_mysql_sessions->len;
 		while (myexchange.resume_mysql_sessions->len) {
 			PgSQL_Session* mysess = (PgSQL_Session*)myexchange.resume_mysql_sessions->remove_index_fast(0);
-			register_session(this, mysess, false);
+			register_session(mysess, false);
 			PgSQL_Data_Stream* myds = mysess->client_myds;
 			mypolls.add(POLLIN, myds->fd, myds, monotonic_time());
 		}
@@ -4129,7 +4129,7 @@ void PgSQL_Thread::listener_handle_new_connection(PgSQL_Data_Stream * myds, unsi
 
 		// create a new client connection
 		mypolls.fds[n].revents = 0;
-		PgSQL_Session* sess = create_new_session_and_client_data_stream<PgSQL_Thread,PgSQL_Session*>(c);
+		PgSQL_Session* sess = create_new_session_and_client_data_stream<PgSQL_Session*>(c);
 		__sync_add_and_fetch(&PgHGM->status.client_connections_created, 1);
 		if (__sync_add_and_fetch(&PgHGM->status.client_connections, 1) > pgsql_thread___max_connections) {
 			sess->max_connections_reached = true;
@@ -5414,7 +5414,7 @@ void PgSQL_Thread::idle_thread_gets_sessions_from_worker_thread() {
 	pthread_mutex_lock(&myexchange.mutex_idles);
 	while (myexchange.idle_mysql_sessions->len) {
 		PgSQL_Session* mysess = (PgSQL_Session*)myexchange.idle_mysql_sessions->remove_index_fast(0);
-		register_session(this, mysess, false);
+		register_session(mysess, false);
 		PgSQL_Data_Stream* myds = mysess->client_myds;
 		mypolls.add(POLLIN, myds->fd, myds, monotonic_time());
 		// add in epoll()
@@ -5442,7 +5442,7 @@ void PgSQL_Thread::handle_mirror_queue_mysql_sessions() {
 			int idx;
 			idx = fastrand() % (mirror_queue_mysql_sessions->len);
 			PgSQL_Session* newsess = (PgSQL_Session*)mirror_queue_mysql_sessions->remove_index_fast(idx);
-			register_session(this, newsess);
+			register_session(newsess);
 			newsess->handler(); // execute immediately
 			if (newsess->status == WAITING_CLIENT_DATA) { // the mirror session has completed
 				unregister_session(mysql_sessions->len - 1);
