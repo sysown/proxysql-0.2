@@ -962,8 +962,7 @@ __run_query:
 		if ((*proxy_sqlite3_get_autocommit)(db)==0) {
 			in_trans = true;
 		}
-		bool deprecate_eof = sess->client_myds->myconn->options.client_flag & CLIENT_DEPRECATE_EOF;
-		sess->SQLite3_to_MySQL(resultset, error, affected_rows, &sess->client_myds->myprot, in_trans, deprecate_eof);
+		sess->SQLite3_to_MySQL(resultset, error, affected_rows, &sess->client_myds->myprot, in_trans);
 		delete resultset;
 #ifdef TEST_READONLY
 		if (strncasecmp("SELECT",query_no_space,6)) {
@@ -1055,7 +1054,7 @@ static void *child_mysql(void *arg) {
 	fds[0].revents=0;
 	fds[0].events=POLLIN|POLLOUT;
 	free(arg);
-	sess->client_myds->myprot.generate_pkt_initial_handshake(true,NULL,NULL, &sess->thread_session_id, true);
+	sess->client_myds->myprot.generate_pkt_initial_handshake(true,NULL,NULL, &sess->thread_session_id, false);
 
 	while (__sync_fetch_and_add(&glovars.shutdown,0)==0) {
 		if (myds->available_data_out()) {
