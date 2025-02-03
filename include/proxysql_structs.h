@@ -650,6 +650,7 @@ enum PROXYSQL_MYSQL_ERR {
 	ER_PROXYSQL_SRV_NULL_REPLICATION_LAG              = 9019,
 	ER_PROXYSQL_CONNECT_TIMEOUT                       = 9020,
 	ER_PROXYSQL_READONLY_TIMEOUT                      = 9021,
+	ER_PROXYSQL_FAST_FORWARD_CONN_CREATE              = 9022,
 };
 
 enum proxysql_session_type {
@@ -1155,6 +1156,7 @@ __thread int mysql_thread___connection_max_age_ms;
 __thread int mysql_thread___connect_timeout_client;
 __thread int mysql_thread___connect_timeout_server;
 __thread int mysql_thread___connect_timeout_server_max;
+__thread int mysql_thread___connpool_match_client_deprecate_eof;
 __thread int mysql_thread___query_processor_iterations;
 __thread int mysql_thread___query_processor_regex;
 __thread int mysql_thread___set_query_lock_on_hostgroup;
@@ -1452,6 +1454,7 @@ extern __thread int mysql_thread___connection_max_age_ms;
 extern __thread int mysql_thread___connect_timeout_client;
 extern __thread int mysql_thread___connect_timeout_server;
 extern __thread int mysql_thread___connect_timeout_server_max;
+extern __thread int mysql_thread___connpool_match_client_deprecate_eof;
 extern __thread int mysql_thread___query_processor_iterations;
 extern __thread int mysql_thread___query_processor_regex;
 extern __thread int mysql_thread___set_query_lock_on_hostgroup;

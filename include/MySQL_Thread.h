@@ -440,6 +440,7 @@ class MySQL_Threads_Handler
 		int connect_timeout_client;
 		int connect_timeout_server;
 		int connect_timeout_server_max;
+		bool connpool_match_client_deprecate_eof;
 		int free_connections_pct;
 		int show_processlist_extended;
 #ifdef IDLE_THREADS
