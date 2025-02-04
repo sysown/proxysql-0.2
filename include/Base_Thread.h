@@ -49,7 +49,7 @@ class Base_Thread {
 	unsigned long long last_move_to_idle_thread_time;
 	bool epoll_thread;
 	int shutdown;
-	PtrArray *mysql_sessions;
+	std::vector<TypeSession *> mysql_sessions;
 	Session_Regex **match_regexes;
 	Base_Thread();
 	~Base_Thread();

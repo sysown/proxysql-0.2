@@ -34,10 +34,12 @@ Base_Thread<T>::~Base_Thread() {
 
 template<typename T>
 void Base_Thread<T>::register_session(TypeSession * _sess, bool up_start) {
+/*
 	if (mysql_sessions==NULL) {
 		mysql_sessions = new PtrArray();
 	}
-	mysql_sessions->add(_sess);
+*/
+	mysql_sessions.push_back(_sess);
 
 	_sess->thread = static_cast<T*>(this);
 //	if (T a = dynamic_cast<T>(thr)) {
@@ -234,17 +236,15 @@ void Base_Thread<T>::check_for_invalid_fd(unsigned int n) {
 template<typename T>
 void Base_Thread<T>::ProcessAllSessions_SortingSessions() {
 	unsigned int a=0;
-	for (unsigned int n=0; n<mysql_sessions->len; n++) {
-		TypeSession *sess=(TypeSession *)mysql_sessions->index(n);
+	for (unsigned int n=0 ; n < mysql_sessions.size() ; n++) {
+		TypeSession *sess = mysql_sessions[n];
 		if (sess->mybe && sess->mybe->server_myds) {
 			if (sess->mybe->server_myds->max_connect_time) {
-				TypeSession *sess2=(TypeSession *)mysql_sessions->index(a);
+				TypeSession *sess2 = mysql_sessions[a];
 				if (sess2->mybe && sess2->mybe->server_myds && sess2->mybe->server_myds->max_connect_time && sess2->mybe->server_myds->max_connect_time <= sess->mybe->server_myds->max_connect_time) {
 					// do nothing
 				} else {
-					void *p=mysql_sessions->pdata[a];
-					mysql_sessions->pdata[a]=mysql_sessions->pdata[n];
-					mysql_sessions->pdata[n]=p;
+					std::swap(mysql_sessions[a], mysql_sessions[n]);
 					a++;
 				}
 			}
@@ -463,8 +463,8 @@ template<typename T>
 unsigned int Base_Thread<T>::find_session_idx_in_mysql_sessions(TypeSession * sess) {
 	T* thr = static_cast<T*>(this);
 	unsigned int i=0;
-	for (i=0;i<mysql_sessions->len;i++) {
-		TypeSession *mysess=(TypeSession *)thr->mysql_sessions->index(i);
+	for (i=0 ; i<mysql_sessions.size() ; i++) {
+		TypeSession *mysess = thr->mysql_sessions[i];
 		if (mysess==sess) {
 			return i;
 		}
@@ -538,8 +538,8 @@ void Base_Thread<T>::run_SetAllSession_ToProcess0() {
 	// Thus idle_maintenance_thread and epoll_thread are equivalent.
 	if (epoll_thread==false) {
 #endif // IDLE_THREADS
-		for (n=0; n<mysql_sessions->len; n++) {
-			TypeSession *_sess=(TypeSession *)mysql_sessions->index(n);
+		for (n=0 ; n < mysql_sessions.size() ; n++) {
+			TypeSession *_sess = mysql_sessions[n];
 			_sess->to_process=0;
 		}
 #ifdef IDLE_THREADS

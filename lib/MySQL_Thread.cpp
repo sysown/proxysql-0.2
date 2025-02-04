@@ -2788,9 +2788,11 @@ MySQL_Threads_Handler::~MySQL_Threads_Handler() {
 
 MySQL_Thread::~MySQL_Thread() {
 
-	if (mysql_sessions) {
-		while(mysql_sessions->len) {
-			MySQL_Session *sess=(MySQL_Session *)mysql_sessions->remove_index_fast(0);
+//	if (mysql_sessions) {
+		//while(mysql_sessions.length()) {
+			for (auto it = mysql_sessions.begin(); it != mysql_sessions.end(); it++) {
+			//MySQL_Session *sess=(MySQL_Session *)mysql_sessions->remove_index_fast(0);
+				MySQL_Session *sess = *it;
 				if (sess->session_type == PROXYSQL_SESSION_ADMIN || sess->session_type == PROXYSQL_SESSION_STATS) {
 					char _buf[1024];
 					sprintf(_buf,"%s:%d:%s()", __FILE__, __LINE__, __func__);
@@ -2798,10 +2800,11 @@ MySQL_Thread::~MySQL_Thread() {
 				}
 				delete sess;
 			}
-		delete mysql_sessions;
-		mysql_sessions=NULL;
+		mysql_sessions.clear();
+		//delete mysql_sessions;
+		//mysql_sessions=NULL;
 		GloMyQPro->end_thread(); // only for real threads
-	}
+//	}
 
 	if (mirror_queue_mysql_sessions) {
 		while(mirror_queue_mysql_sessions->len) {
@@ -2931,11 +2934,11 @@ MySQL_Thread::~MySQL_Thread() {
 
 bool MySQL_Thread::init() {
 	int i;
-	mysql_sessions = new PtrArray();
+	mysql_sessions = {};
 	mirror_queue_mysql_sessions = new PtrArray();
 	mirror_queue_mysql_sessions_cache = new PtrArray();
 	cached_connections = new PtrArray();
-	assert(mysql_sessions);
+	//assert(mysql_sessions);
 
 #ifdef IDLE_THREADS
 	if (GloVars.global.idle_threads) {
@@ -3007,9 +3010,11 @@ void MySQL_Thread::poll_listener_del(int sock) {
 }
 
 void MySQL_Thread::unregister_session(int idx) {
-	if (mysql_sessions==NULL) return;
-	proxy_debug(PROXY_DEBUG_NET,1,"Thread=%p, Session=%p -- Unregistered session\n", this, mysql_sessions->index(idx));
-	mysql_sessions->remove_index_fast(idx);
+	//if (mysql_sessions==NULL) return;
+	proxy_debug(PROXY_DEBUG_NET,1,"Thread=%p, Session=%p -- Unregistered session\n", this, mysql_sessions[idx]);
+	//mysql_sessions->remove_index_fast(idx);
+	std::swap(mysql_sessions[idx], mysql_sessions[mysql_sessions.size() - 1]);
+	mysql_sessions.pop_back();
 }
 
 
@@ -3049,7 +3054,7 @@ void MySQL_Thread::run___get_multiple_idle_connections(int& num_idles) {
 		register_session_connection_handler(sess,true);
 		int rc=sess->handler();
 		if (rc==-1) {
-			unsigned int sess_idx=mysql_sessions->len-1;
+			unsigned int sess_idx = mysql_sessions.size() - 1;
 			unregister_session(sess_idx);
 			delete sess;
 		}
@@ -3125,7 +3130,7 @@ void MySQL_Thread::run_Handle_epoll_wait(int rc) {
 			}
 		}
 	}
-	if (mysql_sessions->len && maintenance_loop) {
+	if (mysql_sessions.size() > 0 && maintenance_loop) {
 		if (curtime == last_maintenance_time) {
 			idle_thread_to_kill_idle_sessions();
 		}
@@ -3267,6 +3272,7 @@ __run_skip_1:
 #endif // IDLE_THREADS
 		//this is the only portion of code not protected by a global mutex
 		proxy_debug(PROXY_DEBUG_NET,5,"Calling poll with timeout %d\n", ttw );
+		status_variables.non_idle_client_connections = mysql_sessions.size();
 		// poll is called with a timeout of mypolls.poll_timeout if set , or mysql_thread___poll_timeout
 		rc=poll(mypolls.fds,mypolls.len, ttw);
 		proxy_debug(PROXY_DEBUG_NET,5,"%s\n", "Returning poll");
@@ -3390,7 +3396,7 @@ __run_skip_1:
  */
 void MySQL_Thread::idle_thread_to_kill_idle_sessions() {
 #define	SESS_TO_SCAN	128
-	if (mysess_idx + SESS_TO_SCAN > mysql_sessions->len) {
+	if (mysess_idx + SESS_TO_SCAN > mysql_sessions.size()) {
 		mysess_idx=0;
 	}
 	unsigned int i;
@@ -3398,9 +3404,9 @@ void MySQL_Thread::idle_thread_to_kill_idle_sessions() {
 	if (curtime > (unsigned long long)mysql_thread___wait_timeout*1000) {
 		min_idle = curtime - (unsigned long long)mysql_thread___wait_timeout*1000;
 	}
-	for (i=0;i<SESS_TO_SCAN && mysess_idx < mysql_sessions->len; i++) {
+	for (i=0;i<SESS_TO_SCAN && mysess_idx < mysql_sessions.size(); i++) {
 		uint32_t sess_pos=mysess_idx;
-		MySQL_Session *mysess=(MySQL_Session *)mysql_sessions->index(sess_pos);
+		MySQL_Session *mysess = mysql_sessions[sess_pos];
 		if (mysess->idle_since < min_idle || mysess->killed==true) {
 			mysess->killed=true;
 			MySQL_Data_Stream *tmp_myds=mysess->client_myds;
@@ -3411,9 +3417,9 @@ void MySQL_Thread::idle_thread_to_kill_idle_sessions() {
 			mysess->thread=NULL;
 			// we first delete the association in sessmap
 			sessmap.erase(mysess->thread_session_id);
-			if (mysql_sessions->len > 1) {
+			if (mysql_sessions.size() > 1) {
 			// take the last element and adjust the map
-				MySQL_Session *mysess_last=(MySQL_Session *)mysql_sessions->index(mysql_sessions->len-1);
+				MySQL_Session *mysess_last = mysql_sessions[mysql_sessions.size() - 1];
 				if (mysess->thread_session_id != mysess_last->thread_session_id)
 					sessmap[mysess_last->thread_session_id]=sess_pos;
 			}
@@ -3430,7 +3436,7 @@ void MySQL_Thread::idle_thread_prepares_session_to_send_to_worker_thread(int i) 
 	if (events[i].events) {
 		uint32_t sess_thr_id=events[i].data.u32;
 		uint32_t sess_pos=sessmap[sess_thr_id];
-		MySQL_Session *mysess=(MySQL_Session *)mysql_sessions->index(sess_pos);
+		MySQL_Session *mysess = mysql_sessions[sess_pos];
 		MySQL_Data_Stream *tmp_myds=mysess->client_myds;
 		int dsidx=tmp_myds->poll_fds_idx;
 		//fprintf(stderr,"Removing session %p, DS %p idx %d\n",mysess,tmp_myds,dsidx);
@@ -3439,9 +3445,9 @@ void MySQL_Thread::idle_thread_prepares_session_to_send_to_worker_thread(int i) 
 		mysess->thread=NULL;
 		// we first delete the association in sessmap
 		sessmap.erase(mysess->thread_session_id);
-		if (mysql_sessions->len > 1) {
+		if (mysql_sessions.size() > 1) {
 			// take the last element and adjust the map
-			MySQL_Session *mysess_last=(MySQL_Session *)mysql_sessions->index(mysql_sessions->len-1);
+			MySQL_Session *mysess_last = mysql_sessions[mysql_sessions.size() - 1];
 			if (mysess->thread_session_id != mysess_last->thread_session_id)
 				sessmap[mysess_last->thread_session_id]=sess_pos;
 		}
@@ -3571,8 +3577,8 @@ bool MySQL_Thread::process_data_on_data_stream(MySQL_Data_Stream *myds, unsigned
 							mypolls.remove_index_fast(n);
 							myds->mypolls=NULL;
 							unsigned int i;
-							for (i=0;i<mysql_sessions->len;i++) {
-								MySQL_Session *mysess=(MySQL_Session *)mysql_sessions->index(i);
+							for (i=0;i<mysql_sessions.size() ;i++) {
+								MySQL_Session *mysess = mysql_sessions[i];
 								if (mysess==myds->sess) {
 									mysess->thread=NULL;
 									unregister_session(i);
@@ -3943,11 +3949,11 @@ void MySQL_Thread::process_all_sessions() {
 		sess_sort=false;
 	}
 #endif // IDLE_THREADS
-	if (sess_sort && mysql_sessions->len > 3) {
+	if (sess_sort && mysql_sessions.size() > 3) {
 		ProcessAllSessions_SortingSessions();
 	}
-	for (n=0; n<mysql_sessions->len; n++) {
-		MySQL_Session *sess=(MySQL_Session *)mysql_sessions->index(n);
+	for (n=0; n<mysql_sessions.size() ; n++) {
+		MySQL_Session *sess = mysql_sessions[n];
 #ifdef DEBUG
 		if(sess==sess_stopat) {
 			sess_stopat=sess;
@@ -4245,7 +4251,7 @@ MySQL_Thread::MySQL_Thread() {
 	pthread_mutex_init(&thread_mutex,NULL);
 	my_idle_conns=NULL;
 	cached_connections=NULL;
-	mysql_sessions=NULL;
+	mysql_sessions = {};
 	mirror_queue_mysql_sessions=NULL;
 	mirror_queue_mysql_sessions_cache=NULL;
 #ifdef IDLE_THREADS
@@ -4322,10 +4328,11 @@ void MySQL_Thread::register_session_connection_handler(MySQL_Session *_sess, boo
 	_sess->thread=this;
 	_sess->connections_handler=true;
 	assert(_new);
-	mysql_sessions->add(_sess);
+	mysql_sessions.push_back(_sess);
 }
 
 
+#if 0
 /**
  * @brief Unregisters a session from the connection handler.
  * 
@@ -4341,6 +4348,7 @@ void MySQL_Thread::unregister_session_connection_handler(int idx, bool _new) {
 	assert(_new);
 	mysql_sessions->remove_index_fast(idx);
 }
+#endif // 0
 
 void MySQL_Thread::listener_handle_new_connection(MySQL_Data_Stream *myds, unsigned int n) {
 	int c;
@@ -4888,8 +4896,8 @@ SQLite3_result * MySQL_Threads_Handler::SQL3_Processlist() {
 		if (thr==NULL) break; // quick exit, at least one thread is not ready
 		pthread_mutex_lock(&thr->thread_mutex);
 		unsigned int j;
-		for (j=0; j<thr->mysql_sessions->len; j++) {
-			MySQL_Session *sess=(MySQL_Session *)thr->mysql_sessions->pdata[j];
+		for (j=0; j<thr->mysql_sessions.size(); j++) {
+			MySQL_Session *sess = thr->mysql_sessions[j];
 			if (sess->client_myds) {
 				char buf[1024];
 				char **pta=(char **)malloc(sizeof(char *)*colnum);
@@ -5223,8 +5231,8 @@ bool MySQL_Threads_Handler::kill_session(uint32_t _thread_session_id) {
 	for (i=0;i<num_threads;i++) {
 		MySQL_Thread *thr=(MySQL_Thread *)mysql_threads[i].worker;
 		unsigned int j;
-		for (j=0; j<thr->mysql_sessions->len; j++) {
-			MySQL_Session *sess=(MySQL_Session *)thr->mysql_sessions->pdata[j];
+		for (j=0; j<thr->mysql_sessions.size(); j++) {
+			MySQL_Session *sess = thr->mysql_sessions[j];
 			if (sess->thread_session_id==_thread_session_id) {
 				sess->killed=true;
 				ret=true;
@@ -5237,8 +5245,8 @@ bool MySQL_Threads_Handler::kill_session(uint32_t _thread_session_id) {
 	for (i=0;i<num_threads;i++) {
 		MySQL_Thread *thr=(MySQL_Thread *)mysql_threads_idles[i].worker;
 		unsigned int j;
-		for (j=0; j<thr->mysql_sessions->len; j++) {
-			MySQL_Session *sess=(MySQL_Session *)thr->mysql_sessions->pdata[j];
+		for (j=0; j<thr->mysql_sessions.size(); j++) {
+			MySQL_Session *sess = thr->mysql_sessions[j];
 			if (sess->thread_session_id==_thread_session_id) {
 				sess->killed=true;
 				ret=true;
@@ -5364,8 +5372,9 @@ unsigned int MySQL_Threads_Handler::get_non_idle_client_connections() {
 	for (i=0;i<num_threads;i++) {
 		if (mysql_threads) {
 			MySQL_Thread *thr=(MySQL_Thread *)mysql_threads[i].worker;
-			if (thr)
-				q+=__sync_fetch_and_add(&thr->mysql_sessions->len,0);
+			if (thr) {
+				q += thr->status_variables.non_idle_client_connections;
+			}
 		}
 	}
 	this->status_variables.p_gauge_array[p_th_gauge::client_connections_non_idle]->Set(q);
@@ -5503,23 +5512,23 @@ void MySQL_Thread::Get_Memory_Stats() {
 	status_variables.stvar[st_var_mysql_backend_buffers_bytes]=0;
 	status_variables.stvar[st_var_mysql_frontend_buffers_bytes]=0;
 	status_variables.stvar[st_var_mysql_session_internal_bytes]=sizeof(MySQL_Thread);
-	if (mysql_sessions) {
-		status_variables.stvar[st_var_mysql_session_internal_bytes]+=(mysql_sessions->size)*sizeof(MySQL_Session *);
+	//if (mysql_sessions) {
+		status_variables.stvar[st_var_mysql_session_internal_bytes]+=(mysql_sessions.capacity())*sizeof(MySQL_Session *);
 		if (epoll_thread==false) {
-			for (i=0; i<mysql_sessions->len; i++) {
-				MySQL_Session *sess=(MySQL_Session *)mysql_sessions->index(i);
+			for (i=0; i<mysql_sessions.size(); i++) {
+				MySQL_Session *sess = mysql_sessions[i];
 				sess->Memory_Stats();
 			}
 		} else {
-			status_variables.stvar[st_var_mysql_frontend_buffers_bytes]+=(mysql_sessions->len * QUEUE_T_DEFAULT_SIZE * 2);
-			status_variables.stvar[st_var_mysql_session_internal_bytes]+=(mysql_sessions->len * sizeof(MySQL_Connection));
+			status_variables.stvar[st_var_mysql_frontend_buffers_bytes]+=(mysql_sessions.size() * QUEUE_T_DEFAULT_SIZE * 2);
+			status_variables.stvar[st_var_mysql_session_internal_bytes]+=(mysql_sessions.size() * sizeof(MySQL_Connection));
 #if !defined(__FreeBSD__) && !defined(__APPLE__)
-			status_variables.stvar[st_var_mysql_session_internal_bytes]+=((sizeof(int) + sizeof(int) + sizeof(std::_Rb_tree_node_base)) * mysql_sessions->len );
+			status_variables.stvar[st_var_mysql_session_internal_bytes]+=((sizeof(int) + sizeof(int) + sizeof(std::_Rb_tree_node_base)) * mysql_sessions.size() );
 #else
-			status_variables.stvar[st_var_mysql_session_internal_bytes]+=((sizeof(int) + sizeof(int) + 32) * mysql_sessions->len );
+			status_variables.stvar[st_var_mysql_session_internal_bytes]+=((sizeof(int) + sizeof(int) + 32) * mysql_sessions.size() );
 #endif
 		}
-  }
+	//}
 }
 
 
@@ -5706,44 +5715,55 @@ void MySQL_Thread::Scan_Sessions_to_Kill_All() {
  * @note This function assumes that the kill queue (kq) contains connection and query IDs to be scanned.
  */
 void MySQL_Thread::Scan_Sessions_to_Kill(PtrArray *mysess) {
-			for (unsigned int n=0; n<mysess->len && ( kq.conn_ids.size() + kq.query_ids.size() ) ; n++) {
-				MySQL_Session *_sess=(MySQL_Session *)mysess->index(n);
-				bool cont=true;
-				for (std::vector<thr_id_usr *>::iterator it=kq.conn_ids.begin(); cont && it!=kq.conn_ids.end(); ++it) {
-					thr_id_usr *t = *it;
-					if (t->id == _sess->thread_session_id) {
-						if (_sess->client_myds) {
-						       if (strcmp(t->username,_sess->client_myds->myconn->userinfo->username)==0) {
-								_sess->killed=true;
-							}
-						}
-						cont=false;
-						free(t->username);
-						free(t);
-						kq.conn_ids.erase(it);
-					}
+	for (unsigned int n=0; n<mysess->len && ( kq.conn_ids.size() + kq.query_ids.size() ) ; n++) {
+		MySQL_Session *_sess=(MySQL_Session *)mysess->index(n);
+		Scan_Sessions_to_Kill_innerLoop(_sess);
+	}
+}
+
+void MySQL_Thread::Scan_Sessions_to_Kill(const std::vector<MySQL_Session *>& sessions) {
+	for (std::vector<MySQL_Session *>::const_iterator it = sessions.begin(); it != sessions.end(); it++) {
+		MySQL_Session *_sess = *it;
+		Scan_Sessions_to_Kill_innerLoop(_sess);
+	}
+}
+
+void MySQL_Thread::Scan_Sessions_to_Kill_innerLoop(MySQL_Session *_sess) {
+	bool cont=true;
+	for (std::vector<thr_id_usr *>::iterator it=kq.conn_ids.begin(); cont && it!=kq.conn_ids.end(); ++it) {
+		thr_id_usr *t = *it;
+		if (t->id == _sess->thread_session_id) {
+			if (_sess->client_myds) {
+			       if (strcmp(t->username,_sess->client_myds->myconn->userinfo->username)==0) {
+					_sess->killed=true;
 				}
-				for (std::vector<thr_id_usr *>::iterator it=kq.query_ids.begin(); cont && it!=kq.query_ids.end(); ++it) {
-					thr_id_usr *t = *it;
-					if (t->id == _sess->thread_session_id) {
-						proxy_info("Killing query %d\n", t->id);
-						if (_sess->client_myds) {
-						       if (strcmp(t->username,_sess->client_myds->myconn->userinfo->username)==0) {
-								if (_sess->mybe) {
-									if (_sess->mybe->server_myds) {
-										_sess->mybe->server_myds->wait_until=curtime;
-										_sess->mybe->server_myds->kill_type=1;
-									}
-								}
-							}
+			}
+			cont=false;
+			free(t->username);
+			free(t);
+			kq.conn_ids.erase(it);
+		}
+	}
+	for (std::vector<thr_id_usr *>::iterator it=kq.query_ids.begin(); cont && it!=kq.query_ids.end(); ++it) {
+		thr_id_usr *t = *it;
+		if (t->id == _sess->thread_session_id) {
+			proxy_info("Killing query %d\n", t->id);
+			if (_sess->client_myds) {
+			       if (strcmp(t->username,_sess->client_myds->myconn->userinfo->username)==0) {
+					if (_sess->mybe) {
+						if (_sess->mybe->server_myds) {
+							_sess->mybe->server_myds->wait_until=curtime;
+							_sess->mybe->server_myds->kill_type=1;
 						}
-						cont=false;
-						free(t->username);
-						free(t);
-						kq.query_ids.erase(it);
 					}
 				}
 			}
+			cont=false;
+			free(t->username);
+			free(t);
+			kq.query_ids.erase(it);
+		}
+	}
 }
 
 #ifdef IDLE_THREADS
@@ -5770,7 +5790,7 @@ void MySQL_Thread::idle_thread_gets_sessions_from_worker_thread() {
 		event.events = EPOLLIN;
 		epoll_ctl (efd, EPOLL_CTL_ADD, myds->fd, &event);
 		// we map thread_id -> position in mysql_session (end of the list)
-		sessmap[mysess->thread_session_id]=mysql_sessions->len-1;
+		sessmap[mysess->thread_session_id] = mysql_sessions.size() - 1;
 		//fprintf(stderr,"Adding session %p idx, DS %p idx %d\n",mysess,myds,myds->poll_fds_idx);
 	}
 	pthread_mutex_unlock(&myexchange.mutex_idles);
@@ -5790,7 +5810,7 @@ void MySQL_Thread::handle_mirror_queue_mysql_sessions() {
 			register_session(newsess);
 			newsess->handler(); // execute immediately
 			if (newsess->status==WAITING_CLIENT_DATA) { // the mirror session has completed
-				unregister_session(mysql_sessions->len-1);
+				unregister_session(mysql_sessions.size()-1);
 				unsigned int l = (unsigned int)mysql_thread___mirror_max_concurrency;
 				if (mirror_queue_mysql_sessions->len*0.3 > l) l=mirror_queue_mysql_sessions->len*0.3;
 				if (mirror_queue_mysql_sessions_cache->len <= l) {

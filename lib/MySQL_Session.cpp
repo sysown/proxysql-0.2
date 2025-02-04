@@ -1490,7 +1490,7 @@ void MySQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 				newsess->handler(); // execute immediately
 				//newsess->to_process=0;
 				if (newsess->status==WAITING_CLIENT_DATA) { // the mirror session has completed
-					thread->unregister_session(thread->mysql_sessions->len-1);
+					thread->unregister_session(thread->mysql_sessions.size() - 1);
 					unsigned int l = (unsigned int)mysql_thread___mirror_max_concurrency;
 					if (thread->mirror_queue_mysql_sessions->len*0.3 > l) l=thread->mirror_queue_mysql_sessions->len*0.3;
 					if (thread->mirror_queue_mysql_sessions_cache->len <= l) {
@@ -7566,7 +7566,7 @@ void MySQL_Session::create_new_session_and_reset_connection(MySQL_Data_Stream *_
 	}
 	int rc = new_sess->handler();
 	if (rc==-1) {
-		unsigned int sess_idx = thread->mysql_sessions->len-1;
+		unsigned int sess_idx = thread->mysql_sessions.size() - 1;
 		thread->unregister_session(sess_idx);
 		delete new_sess;
 	}
