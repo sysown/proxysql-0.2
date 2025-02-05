@@ -213,6 +213,8 @@ tests: tests-cpp \
 	reg_test_3504-change_user_libmysql_helper \
 	mysql_reconnect_libmariadb-t \
 	mysql_reconnect_libmysql-t \
+	test_match_eof_conn_cap_libmysql-t \
+	test_match_eof_conn_cap_libmariadb-t \
 	setparser_test2 setparser_test2-t \
 	setparser_test3 setparser_test3-t \
 	set_testing-240.csv \
