@@ -15,7 +15,7 @@
 
 #include "prometheus_helpers.h"
 
-#include "set_parser.h"
+#include "PgSQL_Set_Stmt_Parser.h"
 
 enum class AUTHENTICATION_METHOD {
 	NO_PASSWORD,
@@ -244,7 +244,7 @@ public:
 	pthread_mutex_t thread_mutex;
 
 	// if set_parser_algorithm == 2 , a single thr_SetParser is used
-	SetParser<PgSQL_Session>* thr_SetParser;
+	PgSQL_Set_Stmt_Parser *thr_SetParser;
 
 	/**
 	 * @brief Default constructor for the PgSQL_Thread class.
