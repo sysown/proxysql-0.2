@@ -3860,6 +3860,15 @@ void MySQL_Session::GPFC_PreparedStatements(PtrSize_t& pkt, unsigned char c) {
 }
 
 int MySQL_Session::GPFC_Replication_SwitchToFastForward(PtrSize_t& pkt, unsigned char c) {
+	if (session_type != PROXYSQL_SESSION_MYSQL) { // only MySQL module supports replication!!
+		l_free(pkt.size,pkt.ptr);
+		client_myds->setDSS_STATE_QUERY_SENT_NET();
+		client_myds->myprot.generate_pkt_ERR(true,NULL,NULL,1,1045,(char *)"28000",(char *)"Command not supported");
+		client_myds->DSS=STATE_SLEEP;
+		status=WAITING_CLIENT_DATA;
+		return 0;
+	}
+
 	// In this switch we handle commands that download binlog events from MySQL
 	// servers. For these commands a lot of the features provided by ProxySQL
 	// aren't useful, like multiplexing, query parsing, etc. For this reason,
