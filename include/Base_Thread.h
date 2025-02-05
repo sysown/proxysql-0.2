@@ -41,20 +41,54 @@ class Base_Thread {
 	static_assert(std::is_same_v<T,MySQL_Thread> || std::is_same_v<T,PgSQL_Thread>,
 		"Invalid Thread type");
 	private:
-	bool maintenance_loop;
-	public:
 	using TypeSession = typename std::conditional<std::is_same_v<T,MySQL_Thread>,MySQL_Session,PgSQL_Session>::type;
 	using TypeDataStream = typename std::conditional<std::is_same_v<T,MySQL_Thread>,MySQL_Data_Stream,PgSQL_Data_Stream>::type;
+	bool maintenance_loop;
+	protected:
+	std::vector<TypeSession *> mysql_sessions;
+	public:
+	std::mutex mysql_sessions_mutex;  // Protect access to mysql_sessions , if needed
 	unsigned long long curtime;
 	unsigned long long last_move_to_idle_thread_time;
 	bool epoll_thread;
 	int shutdown;
-	std::vector<TypeSession *> mysql_sessions;
 	Session_Regex **match_regexes;
 	Base_Thread();
 	~Base_Thread();
 	TypeSession * create_new_session_and_client_data_stream(int _fd);
 	void register_session(TypeSession *, bool up_start = true);
+	/**
+	 * @brief Unregisters a session from the thread's session array.
+	 *
+	 * @param idx The index of the session to unregister.
+	 * @param lock Whatever the lock should be taken or not
+	 *
+	 * @details This function removes a session from the `mysql_sessions` array at the specified index.
+	 * It does not delete the session object itself; it is assumed that the caller will handle
+	 * the deletion.
+	 *
+	 * @note This function is called by various parts of the code when a session is no longer
+	 * active and needs to be removed from the thread's session list.
+	 *
+	 */
+	void unregister_session(int, bool);
+
+	/**
+	 * @brief Unregisters a session from the thread's session array.
+	 *
+	 * @param sess The address of the Session
+	 * @param lock Whatever the lock should be taken or not
+	 *
+	 * @details This function removes a session from the `mysql_sessions` array.
+	 * It does not delete the session object itself; it is assumed that the caller will handle
+	 * the deletion.
+	 *
+	 * @note This function is called by various parts of the code when a session is no longer
+	 * active and needs to be removed from the thread's session list.
+	 *
+	 */
+	void unregister_session(TypeSession *, bool);
+
 	void check_timing_out_session(unsigned int n);
 	void check_for_invalid_fd(unsigned int n);
 	void ProcessAllSessions_SortingSessions();
@@ -70,7 +104,7 @@ class Base_Thread {
 	unsigned int find_session_idx_in_mysql_sessions(TypeSession * sess);
 	void ProcessAllMyDS_BeforePoll();
 	void run_SetAllSession_ToProcess0();
-
+	const std::vector<TypeSession *>& get_mysql_sessions_ref() const { return mysql_sessions; };
 
 #if ENABLE_TIMER
 	// for now this is not accessible via Admin/Prometheus , thus useful only with gdb

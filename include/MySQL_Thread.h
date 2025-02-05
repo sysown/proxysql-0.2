@@ -207,7 +207,7 @@ class __attribute__((aligned(64))) MySQL_Thread : public Base_Thread<MySQL_Threa
   void poll_listener_add(int sock);
   void poll_listener_del(int sock);
   //void register_session(MySQL_Session *, bool up_start=true);
-  void unregister_session(int);
+  //void unregister_session(int);
   struct pollfd * get_pollfd(unsigned int i);
   bool process_data_on_data_stream(MySQL_Data_Stream *myds, unsigned int n);
 	//void ProcessAllSessions_SortingSessions();

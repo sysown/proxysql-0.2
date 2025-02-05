@@ -3009,15 +3009,6 @@ void MySQL_Thread::poll_listener_del(int sock) {
 	}
 }
 
-void MySQL_Thread::unregister_session(int idx) {
-	//if (mysql_sessions==NULL) return;
-	proxy_debug(PROXY_DEBUG_NET,1,"Thread=%p, Session=%p -- Unregistered session\n", this, mysql_sessions[idx]);
-	//mysql_sessions->remove_index_fast(idx);
-	std::swap(mysql_sessions[idx], mysql_sessions[mysql_sessions.size() - 1]);
-	mysql_sessions.pop_back();
-}
-
-
 // this function was inline in MySQL_Thread::run()
 /**
  * @brief Retrieves multiple idle connections and processes them.
@@ -3054,8 +3045,7 @@ void MySQL_Thread::run___get_multiple_idle_connections(int& num_idles) {
 		register_session_connection_handler(sess,true);
 		int rc=sess->handler();
 		if (rc==-1) {
-			unsigned int sess_idx = mysql_sessions.size() - 1;
-			unregister_session(sess_idx);
+			unregister_session(sess, false);
 			delete sess;
 		}
 	}
@@ -3255,6 +3245,7 @@ __run_skip_1:
 		}
 #endif // IDLE_THREADS
 
+		mysql_sessions_mutex.unlock();
 		pthread_mutex_unlock(&thread_mutex);
 		run_BootstrapListener();
 
@@ -3287,6 +3278,7 @@ __run_skip_1:
 		}
 
 		pthread_mutex_lock(&thread_mutex);
+		mysql_sessions_mutex.lock();
 		if (shutdown == 1) { return; }
 		mypolls.poll_timeout=0; // always reset this to 0 . If a session needs a specific timeout, it will set this one
 
@@ -3423,7 +3415,7 @@ void MySQL_Thread::idle_thread_to_kill_idle_sessions() {
 				if (mysess->thread_session_id != mysess_last->thread_session_id)
 					sessmap[mysess_last->thread_session_id]=sess_pos;
 			}
-			unregister_session(sess_pos);
+			unregister_session(sess_pos, false); // mysql_sessions_mutex is locked
 			resume_mysql_sessions->add(mysess);
 			epoll_ctl(efd, EPOLL_CTL_DEL, tmp_myds->fd, NULL);
 		}
@@ -3451,7 +3443,7 @@ void MySQL_Thread::idle_thread_prepares_session_to_send_to_worker_thread(int i) 
 			if (mysess->thread_session_id != mysess_last->thread_session_id)
 				sessmap[mysess_last->thread_session_id]=sess_pos;
 		}
-		unregister_session(sess_pos);
+		unregister_session(sess_pos, false);
 		resume_mysql_sessions->add(mysess);
 		epoll_ctl(efd, EPOLL_CTL_DEL, tmp_myds->fd, NULL);
 	}
@@ -3581,7 +3573,7 @@ bool MySQL_Thread::process_data_on_data_stream(MySQL_Data_Stream *myds, unsigned
 								MySQL_Session *mysess = mysql_sessions[i];
 								if (mysess==myds->sess) {
 									mysess->thread=NULL;
-									unregister_session(i);
+									unregister_session(i, false);
 									//exit_cond=true;
 									resume_mysql_sessions->add(myds->sess);
 									return false;
@@ -3729,7 +3721,7 @@ bool MySQL_Thread::process_data_on_data_stream(MySQL_Data_Stream *myds, unsigned
 
 // this function was inline in MySQL_Thread::process_all_sessions()
 void MySQL_Thread::ProcessAllSessions_CompletedMirrorSession(unsigned int& n, MySQL_Session *sess) {
-	unregister_session(n);
+	unregister_session(n, false);
 	n--;
 	unsigned int l = (unsigned int)mysql_thread___mirror_max_concurrency;
 	if (mirror_queue_mysql_sessions->len*0.3 > l) l=mirror_queue_mysql_sessions->len*0.3;
@@ -3904,7 +3896,7 @@ void MySQL_Thread::ProcessAllSessions_Healthy0(MySQL_Session *sess, unsigned int
 	}
 	sprintf(_buf,"%s:%d:%s()", __FILE__, __LINE__, __func__);
 	GloMyLogger->log_audit_entry(PROXYSQL_MYSQL_AUTH_CLOSE, sess, NULL, _buf);
-	unregister_session(n);
+	unregister_session(n, false);
 	n--;
 	delete sess;
 }
@@ -3949,6 +3941,7 @@ void MySQL_Thread::process_all_sessions() {
 		sess_sort=false;
 	}
 #endif // IDLE_THREADS
+	//std::lock_guard<std::mutex> lock(mysql_sessions_mutex); // lock mysql_sessions_mutex , for now disabled
 	if (sess_sort && mysql_sessions.size() > 3) {
 		ProcessAllSessions_SortingSessions();
 	}
@@ -4011,7 +4004,7 @@ void MySQL_Thread::process_all_sessions() {
 							proxy_warning("Closing killed client connection %s:%d\n",sess->client_myds->addr.addr,sess->client_myds->addr.port);
 						sprintf(_buf,"%s:%d:%s()", __FILE__, __LINE__, __func__);
 						GloMyLogger->log_audit_entry(PROXYSQL_MYSQL_AUTH_CLOSE, sess, NULL, _buf);
-						unregister_session(n);
+						unregister_session(n, false);
 						n--;
 						delete sess;
 					}
@@ -4025,7 +4018,7 @@ void MySQL_Thread::process_all_sessions() {
 						proxy_warning("Closing killed client connection %s:%d\n",sess->client_myds->addr.addr,sess->client_myds->addr.port);
 					sprintf(_buf,"%s:%d:%s()", __FILE__, __LINE__, __func__);
 					GloMyLogger->log_audit_entry(PROXYSQL_MYSQL_AUTH_CLOSE, sess, NULL, _buf);
-					unregister_session(n);
+					unregister_session(n, false);
 					n--;
 					delete sess;
 				}
@@ -4330,25 +4323,6 @@ void MySQL_Thread::register_session_connection_handler(MySQL_Session *_sess, boo
 	assert(_new);
 	mysql_sessions.push_back(_sess);
 }
-
-
-#if 0
-/**
- * @brief Unregisters a session from the connection handler.
- * 
- * This method unregisters a session from the connection handler of the MySQL thread. It removes the session
- * from the MySQL sessions list based on the provided index.
- * 
- * @param idx Index of the session in the MySQL sessions list to unregister.
- * @param _new Boolean flag indicating whether the session is new.
- * 
- * @note This method assumes that the MySQL sessions list (mysql_sessions) has been properly initialized and is accessible.
- */
-void MySQL_Thread::unregister_session_connection_handler(int idx, bool _new) {
-	assert(_new);
-	mysql_sessions->remove_index_fast(idx);
-}
-#endif // 0
 
 void MySQL_Thread::listener_handle_new_connection(MySQL_Data_Stream *myds, unsigned int n) {
 	int c;
@@ -4896,8 +4870,9 @@ SQLite3_result * MySQL_Threads_Handler::SQL3_Processlist() {
 		if (thr==NULL) break; // quick exit, at least one thread is not ready
 		pthread_mutex_lock(&thr->thread_mutex);
 		unsigned int j;
-		for (j=0; j<thr->mysql_sessions.size(); j++) {
-			MySQL_Session *sess = thr->mysql_sessions[j];
+		const std::vector<MySQL_Session*>& mysql_sessions_ref = thr->get_mysql_sessions_ref();
+		for (j=0; j < mysql_sessions_ref.size(); j++) {
+			MySQL_Session *sess = mysql_sessions_ref[j];
 			if (sess->client_myds) {
 				char buf[1024];
 				char **pta=(char **)malloc(sizeof(char *)*colnum);
@@ -5231,8 +5206,10 @@ bool MySQL_Threads_Handler::kill_session(uint32_t _thread_session_id) {
 	for (i=0;i<num_threads;i++) {
 		MySQL_Thread *thr=(MySQL_Thread *)mysql_threads[i].worker;
 		unsigned int j;
-		for (j=0; j<thr->mysql_sessions.size(); j++) {
-			MySQL_Session *sess = thr->mysql_sessions[j];
+		std::lock_guard<std::mutex> lock(thr->mysql_sessions_mutex);
+		const std::vector<MySQL_Session*>& mysql_sessions_ref = thr->get_mysql_sessions_ref();
+		for (j=0; j < mysql_sessions_ref.size(); j++) {
+			MySQL_Session *sess = mysql_sessions_ref[j];
 			if (sess->thread_session_id==_thread_session_id) {
 				sess->killed=true;
 				ret=true;
@@ -5245,8 +5222,10 @@ bool MySQL_Threads_Handler::kill_session(uint32_t _thread_session_id) {
 	for (i=0;i<num_threads;i++) {
 		MySQL_Thread *thr=(MySQL_Thread *)mysql_threads_idles[i].worker;
 		unsigned int j;
-		for (j=0; j<thr->mysql_sessions.size(); j++) {
-			MySQL_Session *sess = thr->mysql_sessions[j];
+		std::lock_guard<std::mutex> lock(thr->mysql_sessions_mutex);
+		const std::vector<MySQL_Session*>& mysql_sessions_ref = thr->get_mysql_sessions_ref();
+		for (j=0; j < mysql_sessions_ref.size(); j++) {
+			MySQL_Session *sess = mysql_sessions_ref[j];
 			if (sess->thread_session_id==_thread_session_id) {
 				sess->killed=true;
 				ret=true;
@@ -5810,7 +5789,7 @@ void MySQL_Thread::handle_mirror_queue_mysql_sessions() {
 			register_session(newsess);
 			newsess->handler(); // execute immediately
 			if (newsess->status==WAITING_CLIENT_DATA) { // the mirror session has completed
-				unregister_session(mysql_sessions.size()-1);
+				unregister_session(newsess, false);
 				unsigned int l = (unsigned int)mysql_thread___mirror_max_concurrency;
 				if (mirror_queue_mysql_sessions->len*0.3 > l) l=mirror_queue_mysql_sessions->len*0.3;
 				if (mirror_queue_mysql_sessions_cache->len <= l) {

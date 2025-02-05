@@ -2902,13 +2902,6 @@ void PgSQL_Thread::poll_listener_del(int sock) {
 	}
 }
 
-void PgSQL_Thread::unregister_session(int idx) {
-	proxy_debug(PROXY_DEBUG_NET, 1, "Thread=%p, Session=%p -- Unregistered session\n", this, mysql_sessions[idx]);
-	std::swap(mysql_sessions[idx], mysql_sessions[mysql_sessions.size() - 1]);
-	mysql_sessions.pop_back();
-}
-
-
 // this function was inline in PgSQL_Thread::run()
 void PgSQL_Thread::run___get_multiple_idle_connections(int& num_idles) {
 	int i;
@@ -2933,8 +2926,7 @@ void PgSQL_Thread::run___get_multiple_idle_connections(int& num_idles) {
 		register_session_connection_handler(sess, true);
 		int rc = sess->handler();
 		if (rc == -1) {
-			unsigned int sess_idx = mysql_sessions.size() - 1;
-			unregister_session(sess_idx);
+			unregister_session(sess, false);
 			delete sess;
 		}
 	}
@@ -3246,7 +3238,7 @@ void PgSQL_Thread::idle_thread_to_kill_idle_sessions() {
 				if (mysess->thread_session_id != mysess_last->thread_session_id)
 					sessmap[mysess_last->thread_session_id] = sess_pos;
 			}
-			unregister_session(sess_pos);
+			unregister_session(sess_pos, false);
 			resume_mysql_sessions->add(mysess);
 			epoll_ctl(efd, EPOLL_CTL_DEL, tmp_myds->fd, NULL);
 		}
@@ -3274,7 +3266,7 @@ void PgSQL_Thread::idle_thread_prepares_session_to_send_to_worker_thread(int i) 
 			if (mysess->thread_session_id != mysess_last->thread_session_id)
 				sessmap[mysess_last->thread_session_id] = sess_pos;
 		}
-		unregister_session(sess_pos);
+		unregister_session(sess_pos, false);
 		resume_mysql_sessions->add(mysess);
 		epoll_ctl(efd, EPOLL_CTL_DEL, tmp_myds->fd, NULL);
 	}
@@ -3368,7 +3360,7 @@ bool PgSQL_Thread::process_data_on_data_stream(PgSQL_Data_Stream * myds, unsigne
 					PgSQL_Session* mysess = mysql_sessions[i];
 					if (mysess == myds->sess) {
 						mysess->thread = NULL;
-						unregister_session(i);
+						unregister_session(i, false);
 						//exit_cond=true;
 						resume_mysql_sessions->add(myds->sess);
 						return false;
@@ -3524,7 +3516,7 @@ bool PgSQL_Thread::process_data_on_data_stream(PgSQL_Data_Stream * myds, unsigne
 
 // this function was inline in PgSQL_Thread::process_all_sessions()
 void PgSQL_Thread::ProcessAllSessions_CompletedMirrorSession(unsigned int& n, PgSQL_Session * sess) {
-	unregister_session(n);
+	unregister_session(n, false);
 	n--;
 	unsigned int l = (unsigned int)pgsql_thread___mirror_max_concurrency;
 	if (mirror_queue_mysql_sessions->len * 0.3 > l) l = mirror_queue_mysql_sessions->len * 0.3;
@@ -3718,7 +3710,7 @@ void PgSQL_Thread::process_all_sessions() {
 			}
 			sprintf(_buf, "%s:%d:%s()", __FILE__, __LINE__, __func__);
 			GloPgSQL_Logger->log_audit_entry(PROXYSQL_MYSQL_AUTH_CLOSE, sess, NULL, _buf);
-			unregister_session(n);
+			unregister_session(n, false);
 			n--;
 			delete sess;
 		}
@@ -3733,7 +3725,7 @@ void PgSQL_Thread::process_all_sessions() {
 							proxy_warning("Closing killed client connection %s:%d\n", sess->client_myds->addr.addr, sess->client_myds->addr.port);
 						sprintf(_buf, "%s:%d:%s()", __FILE__, __LINE__, __func__);
 						GloPgSQL_Logger->log_audit_entry(PROXYSQL_MYSQL_AUTH_CLOSE, sess, NULL, _buf);
-						unregister_session(n);
+						unregister_session(n, false);
 						n--;
 						delete sess;
 					}
@@ -3748,7 +3740,7 @@ void PgSQL_Thread::process_all_sessions() {
 						proxy_warning("Closing killed client connection %s:%d\n", sess->client_myds->addr.addr, sess->client_myds->addr.port);
 					sprintf(_buf, "%s:%d:%s()", __FILE__, __LINE__, __func__);
 					GloPgSQL_Logger->log_audit_entry(PROXYSQL_MYSQL_AUTH_CLOSE, sess, NULL, _buf);
-					unregister_session(n);
+					unregister_session(n, false);
 					n--;
 					delete sess;
 				}
@@ -4082,13 +4074,6 @@ void PgSQL_Thread::register_session_connection_handler(PgSQL_Session * _sess, bo
 	assert(_new);
 	mysql_sessions.push_back(_sess);
 }
-
-#if 0
-void PgSQL_Thread::unregister_session_connection_handler(int idx, bool _new) {
-	assert(_new);
-	mysql_sessions->remove_index_fast(idx);
-}
-#endif // 0
 
 void PgSQL_Thread::listener_handle_new_connection(PgSQL_Data_Stream * myds, unsigned int n) {
 	int c;
@@ -4609,8 +4594,9 @@ SQLite3_result* PgSQL_Threads_Handler::SQL3_Processlist() {
 		if (thr == NULL) break; // quick exit, at least one thread is not ready
 		pthread_mutex_lock(&thr->thread_mutex);
 		unsigned int j;
-		for (j = 0; j < thr->mysql_sessions.size() ; j++) {
-			PgSQL_Session* sess = thr->mysql_sessions[j];
+		const std::vector<PgSQL_Session*>& mysql_sessions_ref = thr->get_mysql_sessions_ref();
+		for (j=0; j < mysql_sessions_ref.size(); j++) {
+			PgSQL_Session *sess = mysql_sessions_ref[j];
 			if (sess->client_myds) {
 				char buf[1024];
 				char** pta = (char**)malloc(sizeof(char*) * colnum);
@@ -4950,8 +4936,9 @@ bool PgSQL_Threads_Handler::kill_session(uint32_t _thread_session_id) {
 	for (i = 0; i < num_threads; i++) {
 		PgSQL_Thread* thr = (PgSQL_Thread*)pgsql_threads[i].worker;
 		unsigned int j;
-		for (j = 0; j < thr->mysql_sessions.size() ; j++) {
-			PgSQL_Session* sess = thr->mysql_sessions[j];
+		const std::vector<PgSQL_Session*>& mysql_sessions_ref = thr->get_mysql_sessions_ref();
+		for (j=0; j < mysql_sessions_ref.size(); j++) {
+			PgSQL_Session *sess = mysql_sessions_ref[j];
 			if (sess->thread_session_id == _thread_session_id) {
 				sess->killed = true;
 				ret = true;
@@ -4964,8 +4951,9 @@ bool PgSQL_Threads_Handler::kill_session(uint32_t _thread_session_id) {
 		for (i = 0; i < num_threads; i++) {
 			PgSQL_Thread* thr = (PgSQL_Thread*)pgsql_threads_idles[i].worker;
 			unsigned int j;
-			for (j = 0; j < thr->mysql_sessions.size() ; j++) {
-				PgSQL_Session* sess = thr->mysql_sessions[j];
+			const std::vector<PgSQL_Session*>& mysql_sessions_ref = thr->get_mysql_sessions_ref();
+			for (j=0; j < mysql_sessions_ref.size(); j++) {
+				PgSQL_Session *sess = mysql_sessions_ref[j];
 				if (sess->thread_session_id == _thread_session_id) {
 					sess->killed = true;
 					ret = true;
@@ -5461,7 +5449,7 @@ void PgSQL_Thread::handle_mirror_queue_mysql_sessions() {
 			register_session(newsess);
 			newsess->handler(); // execute immediately
 			if (newsess->status == WAITING_CLIENT_DATA) { // the mirror session has completed
-				unregister_session(mysql_sessions.size() - 1);
+				unregister_session(newsess, false);
 				unsigned int l = (unsigned int)pgsql_thread___mirror_max_concurrency;
 				if (mirror_queue_mysql_sessions->len * 0.3 > l) l = mirror_queue_mysql_sessions->len * 0.3;
 				if (mirror_queue_mysql_sessions_cache->len <= l) {

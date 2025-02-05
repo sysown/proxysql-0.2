@@ -393,7 +393,7 @@ public:
 	 * active and needs to be removed from the thread's session list.
 	 *
 	 */
-	void unregister_session(int);
+	//void unregister_session(int);
 
 	/**
 	 * @brief Returns a pointer to the `pollfd` structure for a specific data stream.

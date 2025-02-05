@@ -19,6 +19,12 @@ template void Base_Thread<MySQL_Thread>::ProcessAllMyDS_BeforePoll();
 template void Base_Thread<PgSQL_Thread>::ProcessAllMyDS_BeforePoll();
 template void Base_Thread<MySQL_Thread>::run_SetAllSession_ToProcess0();
 template void Base_Thread<PgSQL_Thread>::run_SetAllSession_ToProcess0();
+template void Base_Thread<MySQL_Thread>::register_session(MySQL_Session *, bool);
+template void Base_Thread<PgSQL_Thread>::register_session(PgSQL_Session *, bool);
+template void Base_Thread<MySQL_Thread>::unregister_session(int, bool);
+template void Base_Thread<PgSQL_Thread>::unregister_session(int, bool);
+template void Base_Thread<MySQL_Thread>::unregister_session(MySQL_Session *, bool);
+template void Base_Thread<PgSQL_Thread>::unregister_session(PgSQL_Session *, bool);
 template Base_Thread<MySQL_Thread>::Base_Thread();
 template Base_Thread<PgSQL_Thread>::Base_Thread();
 template Base_Thread<MySQL_Thread>::~Base_Thread();
@@ -56,6 +62,35 @@ void Base_Thread<T>::register_session(TypeSession * _sess, bool up_start) {
 	if (up_start)
 		_sess->start_time=curtime;
 	proxy_debug(PROXY_DEBUG_NET,1,"Thread=%p, Session=%p -- Registered new session\n", _sess->thread, _sess);
+}
+
+template<typename T>
+void Base_Thread<T>::unregister_session(int idx, bool get_lock) {
+	ConditionalLock lock(mysql_sessions_mutex, get_lock); // RAII lock
+	if ( idx < (int)mysql_sessions.size() ) {
+		proxy_debug(PROXY_DEBUG_NET,1,"Thread=%p, Session=%p -- Unregistered session\n", this, mysql_sessions[idx]);
+		std::swap(mysql_sessions[idx], mysql_sessions[mysql_sessions.size() - 1]);
+		mysql_sessions.pop_back();
+	} else {
+		proxy_error("idx %d out of range. Size %d\n" , idx, mysql_sessions.size());
+		assert(0);
+	}
+}
+
+template<typename T>
+void Base_Thread<T>::unregister_session(TypeSession* _sess, bool get_lock) {
+	ConditionalLock lock(mysql_sessions_mutex, get_lock); // RAII lock
+
+	for (size_t i = 0; i < mysql_sessions.size(); ++i) {
+		if (mysql_sessions[i] == _sess) {
+			proxy_debug(PROXY_DEBUG_NET,1,"Thread=%p, Session=%p -- Unregistered session\n", this, _sess);
+			unregister_session(i, false);
+			return; // Exit after removing the first match
+		}
+	}
+	// if we reach here it means we couldn't find the session
+	proxy_error("Session %p not found\n", _sess);
+	assert(0);
 }
 
 
@@ -448,7 +483,7 @@ bool Base_Thread<T>::move_session_to_idle_mysql_sessions(TypeDataStream * myds, 
 				myds->mypolls=NULL;
 				unsigned int i = find_session_idx_in_mysql_sessions(myds->sess);
 				myds->sess->thread=NULL;
-				thr->unregister_session(i);
+				thr->unregister_session(i, false);
 				myds->sess->idle_since = idle_since;
 				thr->idle_mysql_sessions->add(myds->sess);
 				return true;
