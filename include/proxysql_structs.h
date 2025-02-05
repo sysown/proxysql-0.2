@@ -650,6 +650,7 @@ enum PROXYSQL_MYSQL_ERR {
 	ER_PROXYSQL_SRV_NULL_REPLICATION_LAG              = 9019,
 	ER_PROXYSQL_CONNECT_TIMEOUT                       = 9020,
 	ER_PROXYSQL_READONLY_TIMEOUT                      = 9021,
+	ER_PROXYSQL_FAST_FORWARD_CONN_CREATE              = 9022,
 };
 
 enum proxysql_session_type {
