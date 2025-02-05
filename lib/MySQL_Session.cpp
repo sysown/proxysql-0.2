@@ -3943,9 +3943,7 @@ int MySQL_Session::GPFC_Replication_SwitchToFastForward(PtrSize_t& pkt, unsigned
 		};
 
 		// If a connection has been already acquired, but it doesn't match the required capabilities, the
-		// mismatch should be reported, and session should be killed. Flagging the session as 'killed' is
-		// important, since this is already a 'fast_forward' session, and handling will be different as for
-		// regular sessions.
+		// mismatch should be reported, and session should be killed.
 		if (!match_tracked) {
 			proxy_info(
 				"Failed to switch to fast-forward; session connection lacks the required capabilities"
