@@ -657,6 +657,7 @@ MySQL_Session::MySQL_Session() {
 
 	current_hostgroup=-1;
 	default_hostgroup=-1;
+	previous_hostgroup=-1;
 	locked_on_hostgroup=-1;
 	locked_on_hostgroup_and_all_variables_set=false;
 	next_query_flagIN=-1;
