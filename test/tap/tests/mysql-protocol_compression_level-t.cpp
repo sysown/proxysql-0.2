@@ -46,17 +46,17 @@ MYSQL* initilize_mysql_connection(char* host, char* username, char* password, in
 		return nullptr;
 
 	fprintf(stderr, "MySQL connection details: %s %s %d\n", username, password, port);
-	if (!mysql_real_connect(mysql, host, username, password, NULL, port, NULL, 0)) {
-	    fprintf(stderr, "Failed to connect to database: Error: %s\n",
-	              mysql_error(mysql));
-		return nullptr;
-	}
 	if (compression) {
 		if (mysql_options(mysql, MYSQL_OPT_COMPRESS, nullptr) != 0) {
 			fprintf(stderr, "Failed to set mysql compression option: Error: %s\n",
 					mysql_error(mysql));
 			return nullptr;
 		}
+	}
+	if (!mysql_real_connect(mysql, host, username, password, NULL, port, NULL, 0)) {
+	    fprintf(stderr, "Failed to connect to database: Error: %s\n",
+	              mysql_error(mysql));
+		return nullptr;
 	}
 	return mysql;
 }
@@ -66,8 +66,9 @@ int main(int argc, char** argv) {
 	CommandLine cl;
 	std::string query = "SELECT t1.id id1, t1.k k1, t1.c c1, t1.pad pad1, t2.id id2, t2.k k2, t2.c c2, t2.pad pad2 FROM test.sbtest1 t1 JOIN test.sbtest1 t2 LIMIT 90000000";
 	unsigned long time_proxy = 0;
-	unsigned long time_proxy_compressed = 0;
-	unsigned long diff = 0;
+	unsigned long time_proxy_compression_level_default = 0;
+	unsigned long time_proxy_compression_level_8 = 0;	
+	long diff = 0;
 	unsigned long time_mysql_compressed = 0;
 	unsigned long time_mysql_without_compressed = 0;
 	std::string compression_level = {""};
@@ -82,7 +83,7 @@ int main(int argc, char** argv) {
 	if(cl.getEnv())
 		return exit_status();
 
-	plan(8);
+	plan(9);
 
 	// ProxySQL connection without compression
 	proxysql = initilize_mysql_connection(cl.host, cl.username, cl.password, cl.port, false);
@@ -96,15 +97,15 @@ int main(int argc, char** argv) {
 		goto cleanup;
 	}
 
-	// MySQL connection with compression
-	mysql_compression = initilize_mysql_connection(cl.host, cl.username, cl.password, cl.mysql_port, true);
-	if (!mysql_compression) {
-		goto cleanup;
-	}
-
 	// MySQL connection without compression
 	mysql = initilize_mysql_connection(cl.host, cl.username, cl.password, cl.mysql_port, false);
 	if (!mysql) {
+		goto cleanup;
+	}
+
+	// MySQL connection with compression
+	mysql_compression = initilize_mysql_connection(cl.host, cl.username, cl.password, cl.mysql_port, true);
+	if (!mysql_compression) {
 		goto cleanup;
 	}
 
@@ -135,22 +136,16 @@ int main(int argc, char** argv) {
 		goto cleanup;
 	}
 
-	time_proxy_compressed = calculate_query_execution_time(proxysql_compression, query);
-	diag("Time taken for query with proxysql with compression: %ld", time_proxy_compressed);
-	if (time_proxy_compressed == -1) {
+	time_proxy_compression_level_default = calculate_query_execution_time(proxysql_compression, query);
+	diag("Time taken for query with proxysql with default compression (3): %ld", time_proxy_compression_level_default);
+	if (time_proxy_compression_level_default == -1) {
 		goto cleanup;
 	}
 
-	diff = abs(time_proxy - time_proxy_compressed);
+	diff = time_proxy_compression_level_default - time_proxy;
 	performance_diff = (float)(diff * 100) / time_proxy;
 
-	ok((performance_diff < 10), "proxysql with compression performed well compared to without compression. Performance difference: %f percentage", performance_diff);
-
-	time_mysql_compressed = calculate_query_execution_time(mysql_compression, query);
-	diag("Time taken for query with mysql with compression: %ld", time_mysql_compressed);
-	if (time_mysql_compressed == -1) {
-		goto cleanup;
-	}
+	ok((performance_diff > 0), "proxysql without compression performed well compared to default compression level (3). Performance difference: %f percentage", performance_diff);
 
 	time_mysql_without_compressed = calculate_query_execution_time(mysql, query);
 	diag("Time taken for query with mysql without compression: %ld", time_mysql_without_compressed);
@@ -158,10 +153,16 @@ int main(int argc, char** argv) {
 		goto cleanup;
 	}
 
-	diff = abs(time_mysql_without_compressed - time_mysql_compressed);
+	time_mysql_compressed = calculate_query_execution_time(mysql_compression, query);
+	diag("Time taken for query with mysql with compression: %ld", time_mysql_compressed);
+	if (time_mysql_compressed == -1) {
+		goto cleanup;
+	}
+
+	diff = time_mysql_compressed - time_mysql_without_compressed;
 	performance_diff = (float)(diff * 100) / time_mysql_without_compressed;
 
-	ok((performance_diff < 10), "MySQL with compression performed well compared to without compression. Performance difference: %f percentage", performance_diff);
+	ok((performance_diff > 0), "MySQL without compression performed well compared to mysql with compression. Performance difference: %f percentage", performance_diff);
 
 	ret = get_variable_value(proxysql_admin, "mysql-protocol_compression_level", compression_level, true);
 	if (ret == EXIT_SUCCESS) {
@@ -204,11 +205,16 @@ int main(int argc, char** argv) {
 		goto cleanup;
 	}
 
-	time_proxy_compressed = calculate_query_execution_time(proxysql_compression, query);
-	diag("Time taken for query with proxysql with compression level 8: %ld", time_proxy_compressed);
-	if (time_proxy_compressed == -1) {
+	time_proxy_compression_level_8 = calculate_query_execution_time(proxysql_compression, query);
+	diag("Time taken for query with proxysql with compression level 8: %ld", time_proxy_compression_level_8);
+	if (time_proxy_compression_level_8 == -1) {
 		goto cleanup;
 	}
+
+	diff = time_proxy_compression_level_8 - time_proxy_compression_level_default;
+	performance_diff = (float)(diff * 100) / time_proxy_compression_level_default;
+
+	ok((performance_diff > 0), "proxysql with default compression level (3) performed well compared to compression level (8). Performance difference: %f percentage", performance_diff);
 
 	set_admin_global_variable(proxysql_admin, "mysql-protocol_compression_level", "3");
 	if (mysql_query(proxysql_admin, "load mysql variables to runtime")) {
