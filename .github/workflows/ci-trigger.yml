@@ -13,18 +13,17 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        set -x
-
-        sleep 5
-        RUNID=$(gh -R ${{ github.repository }} run list | grep '${{ github.ref_name }} CI-builds ${{ github.sha }}' | grep -Po '(?<=workflow_run)\s+\d+')
-        while [[ -z ${RUNID} ]]; do
-          sleep 5
-          RUNID=$(gh -R ${{ github.repository }} run list | grep '${{ github.ref_name }} CI-builds ${{ github.sha }}' | grep -Po '(?<=workflow_run)\s+\d+')
-        done
+        #sleep 5
+        #RUNID=$(gh -R ${{ github.repository }} run list | grep '${{ github.ref_name }} CI-builds ${{ github.sha }}' | grep -Po '(?<=workflow_run)\s+\d+')
+        #while [[ -z ${RUNID} ]]; do
+        #  sleep 5
+        #  RUNID=$(gh -R ${{ github.repository }} run list | grep '${{ github.ref_name }} CI-builds ${{ github.sha }}' | grep -Po '(?<=workflow_run)\s+\d+')
+        #done
         
         echo "Trigger workflow_run[in_progress]: '${{ github.ref_name }} ${{ github.workflow }} ${{ github.sha }}'"
         sleep 5
-        gh -R ${{ github.repository }} run watch -i 30 ${RUNID} >/dev/null || true
+        # this will block until the run is finished
+        gh -R ${{ github.repository }} run watch -i 30 ${{ github.run_id }} >/dev/null || true
         sleep 5
 
     - name: Trigger workflow_run[completed]
