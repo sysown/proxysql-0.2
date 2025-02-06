@@ -61,8 +61,8 @@ void sync_log_buffer_to_disk(SQLite3DB *db) {
 	int rc;
 	db->execute("BEGIN TRANSACTION");
 	for (const auto& entry : log_buffer) {
-		rc=(*proxy_sqlite3_bind_int64)64(statement1, 1, entry.time); ASSERT_SQLITE_OK(rc, db);
-		rc=(*proxy_sqlite3_bind_int64)64(statement1, 2, entry.lapse);ASSERT_SQLITE_OK(rc, db);
+		rc=(*proxy_sqlite3_bind_int64)(statement1, 1, entry.time); ASSERT_SQLITE_OK(rc, db);
+		rc=(*proxy_sqlite3_bind_int64)(statement1, 2, entry.lapse);ASSERT_SQLITE_OK(rc, db);
 		rc=(*proxy_sqlite3_bind_int64)(statement1, 3, entry.thr); ASSERT_SQLITE_OK(rc, db);
 		rc=(*proxy_sqlite3_bind_text)(statement1, 4, entry.file.c_str(), -1, SQLITE_TRANSIENT); ASSERT_SQLITE_OK(rc, db);
 		rc=(*proxy_sqlite3_bind_int64)(statement1, 5, entry.line); ASSERT_SQLITE_OK(rc, db);
