@@ -120,29 +120,23 @@ jobs:
     - name: Check baseline
       if: ${{ !cancelled() }}
       id: check_baseline
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         cd proxysql_3p_testing/test_sqlalchemy
-        #BASELINE=$(gh variable -R ${{ github.repository }} list | grep -i BASELINE_3P_SQLALCHEMY_${INFRADB//./}_${CONNECTOR//./} | awk '{ print $2 }')
         
         GHUSER="$(id -u):$(id -g)"
         sudo chown -R ${GHUSER} ./logs
         cat ./logs/*_summary.log || true
         FAILS=$(cat ./logs/*_summary.log | grep -oP '(?<=^FAIL: )\d+')
+        
         STATUS='PASS'
-        RC=0
-        if [[ -z ${FAILS} ]]; then
-          STATUS='ERROR'
-          RC=1
-        elif [[ ${FAILS} -ne 0 ]]; then
-          STATUS='FAIL'
-          RC=1
-        fi
+        [[ -z ${FAILS} ]] && STATUS='ERROR'
+        [[ ${FAILS} -ne 0 ]] && STATUS='FAIL'
+        
         SUM="{'STATUS':'${STATUS}','INFRADB':'${INFRADB}','CONNECTOR':'${CONNECTOR}','FAILS':${FAILS:-x}}"
         echo "SUMMARY=${SUM}"
         echo "SUMMARY="${SUM//\'/\"} >> $GITHUB_ENV
-        exit $RC
+        
+        exit ${FAILS:-x}
     
     - name: Summary output
       if: ${{ !cancelled() }}

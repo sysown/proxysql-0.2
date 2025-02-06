@@ -126,36 +126,16 @@ jobs:
         exit $RC
         
     - name: Check baseline
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        set +e
-        
         cd proxysql_3p_testing/test_django-framework
-        BASELINE=$(gh variable -R ${{ github.repository }} list | grep -i BASELINE_3P_DJANGO_FRAMEWORK_${INFRADB//./}_${CONNECTOR//./} | awk '{ print $2 }')
+        
+        GHUSER="$(id -u):$(id -g)"
+        sudo chown -R ${GHUSER} ./logs
+        cat ./logs/*_summary.log || true
+        FAILS=$(cat ./logs/*_summary.log | grep -oP '(?<=^FAIL: )\d+')
+        
+        exit ${FAILS:-x}
 
-        FAILS=$(cat logs/*run-tests.log | grep -oP 'FAILED \(failures=\d+' | tr '=' ' ' | awk '{ print $3 }')
-        if [[ -z ${FAILS} ]]; then
-          FAILS=$(cat logs/*run-tests.log | grep -oP 'OK \(skipped=\d+')
-          if [[ -z ${FAILS} ]]; then
-            echo "Baseline '${BASELINE}' WARN: no results found"
-            exit 0
-          else
-            FAILS=0
-          fi
-        fi
-
-        if [[ ${FAILS} -gt ${BASELINE:-10000} ]]; then
-          echo "Baseline '${BASELINE:-10000}' FAIL: FAILS = ${FAILS}"
-          exit 1
-        else
-          echo "Baseline '${BASELINE:-10000}' PASS: FAILS = ${FAILS}"
-          MAIN=$(curl -s https://api.github.com/repos/${{ github.repository }} | jq --raw-output .default_branch)
-          if [[ ${MAIN} == ${{ github.ref_name }} ]]; then
-            gh variable -R ${{ github.repository }} set BASELINE_3P_DJANGO_FRAMEWORK_${INFRADB//./}_${CONNECTOR//./} -b "${FAILS}"
-          fi
-        fi
-    
     - name: Archive artifacts logs
       if: ${{ failure() && !cancelled() }}
       uses: actions/upload-artifact@v4

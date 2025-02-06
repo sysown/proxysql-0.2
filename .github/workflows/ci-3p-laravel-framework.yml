@@ -131,8 +131,6 @@ jobs:
         exit $RC
         
     - name: Check baseline
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         cd proxysql_3p_testing/test_laravel-framework
 
@@ -140,20 +138,9 @@ jobs:
         sudo chown -R ${GHUSER} ./logs
         cat ./logs/*_summary.log || true
         FAILS=$(cat ./logs/*_summary.log | grep -oP '(?<=^FAIL: )\d+')
-        STATUS='PASS'
-        RC=0
-        if [[ -z ${FAILS} ]]; then
-          STATUS='ERROR'
-          RC=1
-        elif [[ ${FAILS} -ne 0 ]]; then
-          STATUS='FAIL'
-          RC=1
-        fi
-        SUM="{'STATUS':'${STATUS}','INFRADB':'${INFRADB}','CONNECTOR':'${CONNECTOR}','FAILS':${FAILS:-x}}"
-        echo "SUMMARY=${SUM}"
-        echo "SUMMARY="${SUM//\'/\"} >> $GITHUB_ENV
-        exit $RC
-    
+        
+        exit ${FAILS:-x}
+
     - name: Archive artifacts logs
 #      if: ${{ failure() && !cancelled() }}
       uses: actions/upload-artifact@v4
