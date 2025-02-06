@@ -267,7 +267,7 @@ void proxy_debug_func(
 		}
 		if (write_to_disk == true) {
 			// Create a DebugLogEntry
-			LogEntry entry;
+			DebugLogEntry entry;
 			entry.time = curtime;
 			entry.lapse = curtime - pretime;
 			entry.thr = thr;
