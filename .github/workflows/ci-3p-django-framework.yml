@@ -127,6 +127,7 @@ jobs:
         
     - name: Check baseline
       run: |
+        set +e
         cd proxysql_3p_testing/test_django-framework
         
         GHUSER="$(id -u):$(id -g)"

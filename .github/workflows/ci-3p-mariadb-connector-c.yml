@@ -126,6 +126,7 @@ jobs:
         
     - name: Check baseline
       run: |
+        set +e
         cd proxysql_3p_testing/test_mariadb-connector-c
 
         GHUSER="$(id -u):$(id -g)"

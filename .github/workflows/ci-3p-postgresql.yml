@@ -126,6 +126,7 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
+        set +e
         cd proxysql_3p_testing/test_postgresql
 
         GHUSER="$(id -u):$(id -g)"

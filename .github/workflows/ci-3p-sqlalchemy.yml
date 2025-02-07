@@ -121,6 +121,7 @@ jobs:
       if: ${{ !cancelled() }}
       id: check_baseline
       run: |
+        set +e
         cd proxysql_3p_testing/test_sqlalchemy
         
         GHUSER="$(id -u):$(id -g)"
