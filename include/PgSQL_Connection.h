@@ -278,13 +278,6 @@ public:
 	void fill_client_internal_session(nlohmann::json &j, int idx);
 };
 
-enum pgsql_charset_action {
-	POSTGRESQL_CHARSET_ACTION_UNKNOWN,
-	POSTGRESQL_CHARSET_ACTION_NAMES,
-	POSTGRESQL_CHARSET_ACTION_CHARSET,
-	POSTGRESQL_CHARSET_ACTION_CONNECT_START
-};
-
 class PgSQL_Connection_userinfo {
 	private:
 	uint64_t compute_hash();
@@ -336,7 +329,7 @@ class PgSQL_Connection_Placeholder {
 	PgSQL_Conn_Param conn_params;
 
 	PgSQL_Variable variables[PGSQL_NAME_LAST_HIGH_WM];
-	uint32_t var_hash[PGSQL_NAME_LAST_HIGH_WM];
+	uint32_t var_hash[PGSQL_NAME_LAST_HIGH_WM] = {0};
 	// for now we store possibly missing variables in the lower range
 	// we may need to fix that, but this will cost performance
 	bool var_absent[PGSQL_NAME_LAST_HIGH_WM] = {false};
