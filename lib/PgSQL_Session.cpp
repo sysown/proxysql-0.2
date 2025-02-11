@@ -2849,7 +2849,7 @@ __get_pkts_from_client:
 								re2::StringPiece matched;
 								const char* query_to_match = (CurrentQuery.get_digest_text() ? CurrentQuery.get_digest_text() : (char*)CurrentQuery.QueryPointer);
 								if (copy_cmd_matcher->match(query_to_match, &matched)) {
-									switch_normal_to_fast_forward_mode(pkt, std::string(matched.data(), matched.size()), SESSION_FORWARD_TYPE_COPY_STDIN);
+									switch_normal_to_fast_forward_mode(pkt, std::string(matched.data(), matched.size()), SESSION_FORWARD_TYPE_COPY_FROM_STDIN_STDOUT);
 									break;
 								}
 								mybe = find_or_create_backend(current_hostgroup);
@@ -3638,7 +3638,7 @@ handler_again:
 		while (mybe->server_myds->PSarrayIN->len) {
 
 			// if session_fast_forward type is COPY STDIN, we need to check if it is ready packet
-			if (session_fast_forward == SESSION_FORWARD_TYPE_COPY_STDIN) {
+			if (session_fast_forward == SESSION_FORWARD_TYPE_COPY_FROM_STDIN_STDOUT) {
 				const PtrSize_t& data = mybe->server_myds->PSarrayIN->pdata[mybe->server_myds->PSarrayIN->len - 1];
 				if (is_copy_ready_packet == false && data.size == 6) {
 					//const unsigned char* ptr = (static_cast<unsigned char*>(data.ptr) /*+ (data.size - 6)*/);
