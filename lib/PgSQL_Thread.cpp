@@ -1808,6 +1808,18 @@ bool PgSQL_Threads_Handler::set_variable(char* name, const char* value) {	// thi
 			char buf[128];
 			sprintf(buf, "default_%s", pgsql_tracked_variables[i].internal_variable_name);
 			if (!strcmp(name, buf)) {
+
+				if (i == PGSQL_DATESTYLE) {
+					if (vallen) {
+						// Ensure a complete DateStyle value is provided by validating both format and order.
+						PgSQL_DateStyle_t datestyle = PgSQL_DateStyle_Util::parse_datestyle(value);
+						if (datestyle.format == DATESTYLE_FORMAT_NONE || datestyle.order == DATESTYLE_ORDER_NONE) {
+							proxy_error("Invalid DateStyle value. Please provide both format and order (e.g., 'ISO, DMY'). %s\n", value);
+							return false;
+						}
+					}
+				}
+
 				if (variables.default_variables[i]) free(variables.default_variables[i]);
 				variables.default_variables[i] = NULL;
 				if (vallen) {

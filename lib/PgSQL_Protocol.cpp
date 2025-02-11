@@ -808,7 +808,7 @@ EXECUTION_STATE PgSQL_Protocol::process_handshake_response_packet(unsigned char*
 		return EXECUTION_STATE::FAILED;
 	}
 
-	/// set charset but first verify
+	// set charset but first verify
 	const char* charset = (*myds)->myconn->conn_params.get_value(PG_CLIENT_ENCODING);
 
 	// if client does not provide client_encoding, PostgreSQL uses the default client encoding. 
@@ -1067,13 +1067,32 @@ EXECUTION_STATE PgSQL_Protocol::process_handshake_response_packet(unsigned char*
 		PgSQL_Connection* myconn = sess->client_myds->myconn;
 		assert(myconn);
 		myconn->set_charset(charset);
+		sess->set_default_session_variable(PGSQL_CLIENT_ENCODING, charset);
 
 		// get datestyle from connection parameters
-		const char* datestyle = (*myds)->myconn->conn_params.get_value(PG_DATESTYLE);
-		if (datestyle == NULL)
-			datestyle = pgsql_thread___default_variables[PGSQL_DATESTYLE];
+		const char* datestyle_tmp = (*myds)->myconn->conn_params.get_value(PG_DATESTYLE);
+		std::string datestyle = datestyle_tmp ? datestyle_tmp : "";
 
-		pgsql_variables.client_set_value(sess, PGSQL_DATESTYLE, datestyle);
+		if (datestyle.empty()) {
+			// No need to validate default DateStyle again; it is already verified in PgSQL_Threads_Handler::set_variable.
+			datestyle = pgsql_thread___default_variables[PGSQL_DATESTYLE];
+		} else {
+			PgSQL_DateStyle_t datestyle_parsed = PgSQL_DateStyle_Util::parse_datestyle(datestyle);
+
+			// If DateStyle provided in the connection parameters is incomplete, the missing parts will be taken from the default DateStyle.
+			if (datestyle_parsed.format == DATESTYLE_FORMAT_NONE || datestyle_parsed.order == DATESTYLE_ORDER_NONE) {
+				PgSQL_DateStyle_t datestyle_default = PgSQL_DateStyle_Util::parse_datestyle(pgsql_thread___default_variables[PGSQL_DATESTYLE]);
+				datestyle = PgSQL_DateStyle_Util::datestyle_to_string(datestyle_parsed, datestyle_default);
+			}
+		}
+
+		assert(datestyle.empty() == false);
+
+		if (pgsql_variables.client_set_value(sess, PGSQL_DATESTYLE, datestyle.c_str())) {
+			// change current datestyle
+			sess->current_datestyle = PgSQL_DateStyle_Util::parse_datestyle(datestyle);
+			sess->set_default_session_variable(PGSQL_DATESTYLE, datestyle.c_str());
+		}
 
 		// get timezone from connection parameters
 		const char* timezone = (*myds)->myconn->conn_params.get_value(PG_TIMEZONE);
@@ -1081,16 +1100,21 @@ EXECUTION_STATE PgSQL_Protocol::process_handshake_response_packet(unsigned char*
 			timezone = pgsql_thread___default_variables[PGSQL_TIMEZONE];
 
 		pgsql_variables.client_set_value(sess, PGSQL_TIMEZONE, timezone);
+		sess->set_default_session_variable(PGSQL_TIMEZONE, timezone);
 
 		// get intervalstyle from connection parameters
 		const char* intervalstyle = pgsql_thread___default_variables[PGSQL_INTERVALSTYLE];
-		if (intervalstyle)
+		if (intervalstyle) {
 			pgsql_variables.client_set_value(sess, PGSQL_INTERVALSTYLE, intervalstyle);
+			sess->set_default_session_variable(PGSQL_INTERVALSTYLE, intervalstyle);
+		}
 
 		// get standard_conforming_strings from connection parameters
 		const char* standard_conforming_strings = pgsql_thread___default_variables[PGSQL_STANDARD_CONFORMING_STRINGS];
-		if (standard_conforming_strings)
+		if (standard_conforming_strings) {
 			pgsql_variables.client_set_value(sess, PGSQL_STANDARD_CONFORMING_STRINGS, standard_conforming_strings);
+			sess->set_default_session_variable(PGSQL_STANDARD_CONFORMING_STRINGS, standard_conforming_strings);
+		}
 
 		const char* options = (*myds)->myconn->conn_params.get_value(PG_OPTIONS);
 
@@ -1107,9 +1131,10 @@ EXECUTION_STATE PgSQL_Protocol::process_handshake_response_packet(unsigned char*
 				} 
 			}
 
-			if (idx != PGSQL_NAME_LAST_HIGH_WM)
+			if (idx != PGSQL_NAME_LAST_HIGH_WM) {
 				pgsql_variables.client_set_value(sess, idx, option.second.c_str());
-			else {
+				sess->set_default_session_variable((enum pgsql_variable_name)idx, option.second.c_str());
+			} else {
 				const char* val = option.second.c_str();
 				const char* escaped_str = escape_string_backslash_spaces(val);
 				sess->untracked_option_parameters = "-c " + option.first + "=" + escaped_str + " ";

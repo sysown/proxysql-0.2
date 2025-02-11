@@ -1,4 +1,4 @@
-#include "../deps/json/json.hpp"
+﻿#include "../deps/json/json.hpp"
 using json = nlohmann::json;
 #define PROXYJSON
 
@@ -661,6 +661,10 @@ PgSQL_Session::~PgSQL_Session() {
 	if (proxysql_node_address) {
 		delete proxysql_node_address;
 		proxysql_node_address = NULL;
+	}
+
+	for (int i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
+		reset_default_session_variable((enum pgsql_variable_name)i);
 	}
 }
 
@@ -4889,16 +4893,39 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 						if (idx != PGSQL_NAME_LAST_HIGH_WM) {
 
 							if ((value1.size() == sizeof("DEFAULT") - 1) && strncasecmp(value1.c_str(), (char*)"DEFAULT",sizeof("DEFAULT")-1) == 0) {
-								const char* value1 = (idx < PGSQL_NAME_LAST_LOW_WM) ? pgsql_thread___default_variables[idx] : pgsql_tracked_variables[idx].default_value;
+								const char* value_tmp = get_default_session_variable((enum pgsql_variable_name)idx);
+								value1 = value_tmp ? value_tmp : ((idx < PGSQL_NAME_LAST_LOW_WM) ? pgsql_thread___default_variables[idx] : pgsql_tracked_variables[idx].default_value);
 							}
 
+							if (idx == PGSQL_DATESTYLE) {
+								assert(current_datestyle.format != DATESTYLE_FORMAT_NONE);
+								assert(current_datestyle.order != DATESTYLE_ORDER_NONE);
+								// Convert DateStyle to a string. Any missing parts will be filled using the current DateStyle value.
+								// For example:
+								// If current DateStyle is 'ISO, MDY' and the user sets 'DMY' the resulting DateStyle will be 'ISO, DMY'
+								value1 = PgSQL_DateStyle_Util::datestyle_to_string(value1, current_datestyle);
+
+								// if something goes wrong, the value will be empty
+								if (value1.empty()) return false;
+							} 
+								
 							proxy_debug(PROXY_DEBUG_MYSQL_COM, 8, "Changing connection %s to %s\n", var.c_str(), value1.c_str());
 							uint32_t var_hash_int = SpookyHash::Hash32(value1.c_str(), value1.length(), 10);
 							if (pgsql_variables.client_get_hash(this, pgsql_tracked_variables[idx].idx) != var_hash_int) {
 								if (!pgsql_variables.client_set_value(this, pgsql_tracked_variables[idx].idx, value1.c_str())) {
 									return false;
 								}
-								send_param_status = IS_PGTRACKED_VAR_OPTION_SET_PARAM_STATUS(pgsql_tracked_variables[idx]);
+								if (idx == PGSQL_DATESTYLE) {
+									// always set current_datestyle
+									current_datestyle = PgSQL_DateStyle_Util::parse_datestyle(value1);
+									// No need to set send_param_status to true, as the original DateStyle value may have been modified.  
+								    // When send_param_status is true, it always sends the original value provided by the user in the SET statement.  
+									if (IS_PGTRACKED_VAR_OPTION_SET_PARAM_STATUS(pgsql_tracked_variables[idx])) {
+										param_status.push_back(std::make_pair(var, value1));
+									}
+								} else {
+									send_param_status = IS_PGTRACKED_VAR_OPTION_SET_PARAM_STATUS(pgsql_tracked_variables[idx]);
+								}
 							}
 						}
 					} else if (pgsql_variables_boolean.find(var) != pgsql_variables_boolean.end()) {
@@ -5203,7 +5230,8 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 				if (!charset.empty()) {
 
 					if ((charset.size() == sizeof("DEFAULT") - 1) && strncasecmp(charset.c_str(), (char*)"DEFAULT", sizeof("DEFAULT") - 1) == 0) {
-						charset = pgsql_thread___default_variables[PGSQL_CLIENT_ENCODING];
+						const char* charset_tmp = get_default_session_variable(PGSQL_CLIENT_ENCODING); 
+						charset = charset_tmp ? charset_tmp : pgsql_thread___default_variables[PGSQL_CLIENT_ENCODING];
 					}
 
 					proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "Processing SET CLIENT_ENCODING %s\n", charset.c_str());
@@ -5290,7 +5318,12 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 					if (i == PGSQL_NAME_LAST_LOW_WM) continue;
 
 					const char* name = pgsql_tracked_variables[i].set_variable_name;
-					const char* value = (i < PGSQL_NAME_LAST_LOW_WM) ? pgsql_thread___default_variables[i] : pgsql_tracked_variables[i].default_value;
+					const char* value = get_default_session_variable((enum pgsql_variable_name)i);
+
+					if (value == NULL) {
+						value = (i < PGSQL_NAME_LAST_LOW_WM) ? pgsql_thread___default_variables[i] : pgsql_tracked_variables[i].default_value;
+					}
+					
 					proxy_debug(PROXY_DEBUG_MYSQL_COM, 8, "Changing connection %s to %s\n", name, value);
 					uint32_t var_hash_int = SpookyHash::Hash32(value, strlen(value), 10);
 					if (pgsql_variables.client_get_hash(this, pgsql_tracked_variables[i].idx) != var_hash_int) {
@@ -5323,7 +5356,12 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 
 				if (idx != PGSQL_NAME_LAST_HIGH_WM) {
 					const char* name = pgsql_tracked_variables[idx].set_variable_name;
-					const char* value = (idx < PGSQL_NAME_LAST_LOW_WM) ? pgsql_thread___default_variables[idx] : pgsql_tracked_variables[idx].default_value;
+					const char* value = get_default_session_variable((enum pgsql_variable_name)idx);
+
+					if (value == NULL) {
+						value = (idx < PGSQL_NAME_LAST_LOW_WM) ? pgsql_thread___default_variables[idx] : pgsql_tracked_variables[idx].default_value;
+					}
+
 					uint32_t var_hash_int = SpookyHash::Hash32(value, strlen(value), 10);
 					if (pgsql_variables.client_get_hash(this, pgsql_tracked_variables[idx].idx) != var_hash_int) {
 						if (!pgsql_variables.client_set_value(this, pgsql_tracked_variables[idx].idx, value)) {
@@ -6679,4 +6717,229 @@ void PgSQL_Session::switch_fast_forward_to_normal_mode() {
 		// cannot switch Permanent Fast Forward to Normal
 		assert(0);
 	}
+}
+
+void PgSQL_Session::set_default_session_variable(enum pgsql_variable_name idx, const char* value) {
+	assert(value);
+	if (idx >= 0 && idx < PGSQL_NAME_LAST_HIGH_WM) {
+		if (default_session_variables[idx]) {
+			free(default_session_variables[idx]);
+		}
+		default_session_variables[idx] = strdup(value);
+	}
+}
+
+const char* PgSQL_Session::get_default_session_variable(enum pgsql_variable_name idx) {
+	if (idx >= 0 && idx < PGSQL_NAME_LAST_HIGH_WM) {
+		return default_session_variables[idx];
+	}
+	return NULL;
+}
+
+void PgSQL_Session::reset_default_session_variable(enum pgsql_variable_name idx) {
+	if (idx >= 0 && idx < PGSQL_NAME_LAST_HIGH_WM) {
+		if (default_session_variables[idx]) {
+			free(default_session_variables[idx]);
+			default_session_variables[idx] = NULL;
+		}
+	}
+}
+
+// Optimized single‐pass parser for PostgreSQL DateStyle strings.
+// It supports input in one of these forms:
+//   - "ISO, MDY"  (two tokens separated by a comma)
+//   - "ISO"       (a single token; the second string will be empty)
+// Leading and trailing whitespace is removed from each token.
+std::vector<std::string> PgSQL_DateStyle_Util::split_datestyle(std::string_view input) {
+	std::string token1, token2;
+	// Reserve capacity in case the input is large (typically not needed for DateStyle)
+	token1.reserve(input.size());
+	token2.reserve(input.size());
+
+	// Track last non-space character positions; -1 means “none yet.”
+	int lastNonSpace1 = -1, lastNonSpace2 = -1;
+	// currentToken: 1 = populating token1, 2 = populating token2.
+	int currentToken = 1;
+
+	for (char c : input) {
+		if (c == ',') {
+			// When a comma is encountered, finalize token1 and switch to token2.
+			if (currentToken == 1) {
+				if (lastNonSpace1 != -1) {
+					token1.resize(lastNonSpace1 + 1); // trim trailing whitespace from token1
+				}
+				currentToken = 2;
+			}
+			else {
+				// More than one comma encountered – not allowed.
+				proxy_error("Invalid \"datestyle\" value was provided. %s\n", input.data());
+				return {};
+			}
+		}
+		else {
+			// Determine which token to fill.
+			std::string* currentStr = (currentToken == 1) ? &token1 : &token2;
+			int* lastNonSpace = (currentToken == 1) ? &lastNonSpace1 : &lastNonSpace2;
+
+			// Cache is-space check.
+			bool is_space = std::isspace(static_cast<unsigned char>(c));
+			// Skip leading whitespace for a new token.
+			if (currentStr->empty() && is_space) {
+				continue;
+			}
+			// Append the character.
+			currentStr->push_back(c);
+			// Update lastNonSpace index if the character is not a whitespace.
+			if (!is_space) {
+				*lastNonSpace = static_cast<int>(currentStr->size()) - 1;
+			}
+		}
+	}
+
+	// Final trimming for the token being built.
+	if (currentToken == 1) {
+		if (lastNonSpace1 != -1) {
+			token1.resize(lastNonSpace1 + 1);
+		}
+	}
+	else { // currentToken == 2
+		if (lastNonSpace2 != -1) {
+			token2.resize(lastNonSpace2 + 1);
+		}
+	}
+
+	std::vector<std::string> result;
+	result.reserve(2);
+	for (const std::string& token : { token1, token2 }) {
+		if (!token.empty()) {
+			result.emplace_back(token);
+		}
+	}
+	return result;
+}
+
+PgSQL_DateStyle_t PgSQL_DateStyle_Util::parse_datestyle(std::string_view input) {
+    PgSQL_DateStyleFormat_t newDateStyle = DATESTYLE_FORMAT_NONE;
+    PgSQL_DateStyleOrder_t newDateOrder = DATESTYLE_ORDER_NONE;
+    bool have_style = false;
+    bool have_order = false;
+    bool ok = true;
+
+    auto split_tokens = split_datestyle(input);
+
+    if (split_tokens.empty()) {
+        return { DATESTYLE_FORMAT_NONE, DATESTYLE_ORDER_NONE };
+    }
+
+    for (std::string_view token : split_tokens) {
+        const char* tok = token.data();
+        if (strncasecmp(tok, "ISO", sizeof("ISO") - 1) == 0) {
+            if (have_style && newDateStyle != DATESTYLE_FORMAT_ISO)
+                ok = false;     /* conflicting styles */
+            newDateStyle = DATESTYLE_FORMAT_ISO;
+            have_style = true;
+        }
+        else if (strncasecmp(tok, "SQL", sizeof("SQL") - 1) == 0) {
+            if (have_style && newDateStyle != DATESTYLE_FORMAT_SQL)
+                ok = false;     /* conflicting styles */
+            newDateStyle = DATESTYLE_FORMAT_SQL;
+            have_style = true;
+        }
+        else if (strncasecmp(tok, "POSTGRES", sizeof("POSTGRES") - 1) == 0) {
+            if (have_style && newDateStyle != DATESTYLE_FORMAT_POSTGRES)
+                ok = false;     /* conflicting styles */
+            newDateStyle = DATESTYLE_FORMAT_POSTGRES;
+            have_style = true;
+        }
+        else if (strncasecmp(tok, "GERMAN", sizeof("GERMAN") - 1) == 0) {
+            if (have_style && newDateStyle != DATESTYLE_FORMAT_GERMAN)
+                ok = false;     /* conflicting styles */
+            newDateStyle = DATESTYLE_FORMAT_GERMAN;
+            have_style = true;
+            /* GERMAN also sets DMY, unless explicitly overridden */
+            if (!have_order)
+                newDateOrder = DATESTYLE_ORDER_DMY;
+        }
+        else if (strncasecmp(tok, "YMD", sizeof("YMD") - 1) == 0) {
+            if (have_order && newDateOrder != DATESTYLE_ORDER_YMD)
+                ok = false;     /* conflicting orders */
+            newDateOrder = DATESTYLE_ORDER_YMD;
+            have_order = true;
+        }
+        else if (strncasecmp(tok, "DMY", sizeof("DMY") - 1) == 0 ||
+            strncasecmp(tok, "EURO", sizeof("EURO") - 1) == 0) {
+            if (have_order && newDateOrder != DATESTYLE_ORDER_DMY)
+                ok = false;     /* conflicting orders */
+            newDateOrder = DATESTYLE_ORDER_DMY;
+            have_order = true;
+        }
+        else if (strncasecmp(tok, "MDY", sizeof("MDY") - 1) == 0 ||
+            strncasecmp(tok, "US", sizeof("US") - 1) == 0 ||
+            strncasecmp(tok, "NONEURO", sizeof("NONEURO") - 1) == 0) {
+            if (have_order && newDateOrder != DATESTYLE_ORDER_MDY)
+                ok = false;     /* conflicting orders */
+            newDateOrder = DATESTYLE_ORDER_MDY;
+            have_order = true;
+        }
+    }
+
+    if (!ok) {
+        proxy_debug(PROXY_DEBUG_MYSQL_QUERY_PROCESSOR, 5, "Conflicting \"datestyle\" value. %s\n", input.data());
+        return { DATESTYLE_FORMAT_NONE, DATESTYLE_ORDER_NONE };
+    }
+
+    return { newDateStyle, newDateOrder };
+}
+
+std::string PgSQL_DateStyle_Util::datestyle_to_string(PgSQL_DateStyle_t datestyle, const PgSQL_DateStyle_t& default_datestyle) {
+
+	if (datestyle.format == DATESTYLE_FORMAT_NONE && datestyle.order == DATESTYLE_ORDER_NONE) {
+		assert(0);
+		return {};
+	}
+
+	if (datestyle.format == DATESTYLE_FORMAT_NONE && default_datestyle.format != DATESTYLE_FORMAT_NONE) {
+		datestyle.format = default_datestyle.format;
+	}
+
+	if (datestyle.order == DATESTYLE_ORDER_NONE && default_datestyle.order != DATESTYLE_ORDER_NONE) {
+		datestyle.order = default_datestyle.order;
+	}
+
+	std::string result;
+	result.reserve(32);
+	switch (datestyle.format)
+	{
+	case DATESTYLE_FORMAT_ISO:
+		result.append("ISO");
+		break;
+	case DATESTYLE_FORMAT_SQL:
+		result.append("SQL");
+		break;
+	case DATESTYLE_FORMAT_GERMAN:
+		result.append("German");
+		break;
+	default:
+		result.append("Postgres");
+		break;
+	}
+
+	switch (datestyle.order)
+	{
+	case DATESTYLE_ORDER_YMD:
+		result.append(", YMD");
+		break;
+	case DATESTYLE_ORDER_DMY:
+		result.append(", DMY");
+		break;
+	default:
+		result.append(", MDY");
+		break;
+	}
+
+	return result;
+}
+
+std::string PgSQL_DateStyle_Util::datestyle_to_string(std::string_view input, const PgSQL_DateStyle_t& default_datestyle) {
+	return datestyle_to_string(parse_datestyle(input), default_datestyle);
 }

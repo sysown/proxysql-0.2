@@ -43,7 +43,86 @@ enum PgSQL_ps_type : uint8_t {
 	PgSQL_ps_type_execute_stmt = 0x2
 };
 
+/* Enumerated types for output format and date order */
+typedef enum {
+	DATESTYLE_FORMAT_NONE = 0,
+	DATESTYLE_FORMAT_ISO,
+	DATESTYLE_FORMAT_SQL,
+	DATESTYLE_FORMAT_POSTGRES,
+	DATESTYLE_FORMAT_GERMAN
+} PgSQL_DateStyleFormat_t;
 
+typedef enum {
+	DATESTYLE_ORDER_NONE = 0,
+	DATESTYLE_ORDER_MDY,
+	DATESTYLE_ORDER_DMY,
+	DATESTYLE_ORDER_YMD
+} PgSQL_DateStyleOrder_t;
+
+/* Structure to hold the parsed DateStyle */
+typedef struct {
+	PgSQL_DateStyleFormat_t format;
+	PgSQL_DateStyleOrder_t order;
+} PgSQL_DateStyle_t;
+
+// Utility class for handling PostgreSQL DateStyle
+class PgSQL_DateStyle_Util {
+private:
+	/**
+	  * @brief Splits DateStyle string into tokens
+	  *
+	  * This function takes a DateStyle string as input and splits it into tokens.
+	  * It trims leading and trailing whitespace from each token and returns a vector containing the tokens.
+	  * If the input string contains more than one comma, an error is logged, and an empty vector is returned.
+	  *
+	  * @param input A string_view representing the DateStyle input to be split.
+	  * @return A vector of strings containing the split tokens. If the input is invalid, an empty vector is returned.
+	  *
+	  */
+	static std::vector<std::string> split_datestyle(std::string_view input);
+
+public:
+	/**
+	  * @brief Parses the given DateStyle string and returns the corresponding DateStyle format and order.
+	  *
+	  * This function splits the input string into tokens and processes
+	  * each token to identify the DateStyle format and order. If conflicting styles or orders are found, the
+	  * function returns a default DateStyle with none format and order.
+	  *
+	  * @param input A string_view representing the DateStyle input to be parsed.
+	  * @return A PgSQL_DateStyle_t structure containing the parsed DateStyle format and order.
+	  *
+	  */
+	static PgSQL_DateStyle_t parse_datestyle(std::string_view input);
+
+	/**
+	  * @brief Converts a PgSQL_DateStyle_t structure to a string representation.
+	  *
+	  * This function takes PgSQL_DateStyle_t structure and converts it to a string representation.
+	  * If the format or order in the provided datestyle is not set (DATESTYLE_FORMAT_NONE or DATESTYLE_ORDER_NONE),
+	  * it uses the corresponding values from the default_datestyle.
+	  *
+	  * @param datestyle The PgSQL_DateStyle_t structure to be converted to a string.
+	  * @param default_datestyle The default PgSQL_DateStyle_t structure to use if the provided datestyle is incomplete.
+	  * @return A string representation of the PgSQL_DateStyle_t structure.
+	  *
+	  */
+	static std::string datestyle_to_string(PgSQL_DateStyle_t datestyle, const PgSQL_DateStyle_t& default_datestyle);
+
+	/**
+	  * @brief Converts a DateStyle string to its string representation using a default DateStyle.
+	  *
+	  * This function takes a DateStyle string as input, parses it, and converts it to a string representation.
+	  * If the input DateStyle string is incomplete, the function uses the provided default DateStyle
+	  * to fill in the missing parts.
+	  *
+	  * @param input A string_view representing the DateStyle input to be converted.
+	  * @param default_datestyle A PgSQL_DateStyle_t structure representing the default DateStyle to use if the input is incomplete.
+	  * @return A string representation of DateStyle.
+	  *
+	  */
+	static std::string datestyle_to_string(std::string_view input, const PgSQL_DateStyle_t& default_datestyle);
+};
 
 //std::string proxysql_session_type_str(enum proxysql_session_type session_type);
 
@@ -290,6 +369,8 @@ public:
 	PtrSize_t mirrorPkt;
 	PtrSize_t pkt;
 	std::string untracked_option_parameters;
+	PgSQL_DateStyle_t current_datestyle = {};
+	char* default_session_variables[PGSQL_NAME_LAST_HIGH_WM] = {};
 
 #if 0
 	// uint64_t
@@ -452,6 +533,10 @@ public:
 	void generate_status_one_hostgroup(int hid, std::string& s);
 	void reset_warning_hostgroup_flag_and_release_connection();
 	void set_previous_status_mode3(bool allow_execute = true);
+
+	void set_default_session_variable(enum pgsql_variable_name idx, const char* value);
+	const char* get_default_session_variable(enum pgsql_variable_name idx);
+	void reset_default_session_variable(enum pgsql_variable_name idx);
 };
 
 #define PgSQL_KILL_QUERY       1
