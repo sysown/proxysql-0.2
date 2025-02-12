@@ -99,8 +99,9 @@ jobs:
         git sparse-checkout list
         ./setup.sh test_mariadb-connector-c/mariadb-connector-c
         git switch ${{ env.TESTTREE }}
-        #git -C ./proxysql switch ${{ env.SHA }}
-        #git -C ./proxysql pull --tags
+        git config user.email "GH-Actions@proxysql.com"
+        git config user.name "GH-Actions"
+        git rebase main -f -s recursive -X theirs
         
         # use cached build
         rm -rf ./proxysql && mv ../proxysql . || true
