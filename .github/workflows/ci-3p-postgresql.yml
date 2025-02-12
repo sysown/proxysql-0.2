@@ -18,6 +18,7 @@ env:
   TESTNAME: postgresql
   TESTDIST: debian12
   SHA: ${{ inputs.trigger && fromJson(inputs.trigger).event.workflow_run.head_sha || github.sha }}
+  BRANCH: ${{ inputs.trigger && fromJson(inputs.trigger).event.workflow_run.head_branch || github.ref_name }}
 
 jobs:
   test:
@@ -103,7 +104,7 @@ jobs:
         git switch ${{ env.TESTTREE }}
         
         # use cached build
-        rm -rf ./proxysql && mv ../proxysql .
+        rm -rf ./proxysql && mv ../proxysql . || true
         
         # set tested database infra
         #sed -i 's/^fn_test_proxysql m/#fn_test_proxysql m/' run-tests.bash

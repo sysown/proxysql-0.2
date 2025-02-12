@@ -18,6 +18,7 @@ env:
   TESTNAME: mysql-connector-j
   TESTDIST: debian12
   SHA: ${{ inputs.trigger && fromJson(inputs.trigger).event.workflow_run.head_sha || github.sha }}
+  BRANCH: ${{ inputs.trigger && fromJson(inputs.trigger).event.workflow_run.head_branch || github.ref_name }}
 
 jobs:
   test:
@@ -81,6 +82,7 @@ jobs:
 #        echo "Cache available '${BLDCACHE}'"
 
     - name: Cache restore bin
+      if: ${{ env.BRANCH != 'none' }}
       uses: actions/cache/restore@v4
       with:
         key: ${{ env.BLDCACHE }}
@@ -98,7 +100,7 @@ jobs:
         git switch ${{ env.TESTTREE }}
         
         # use cached build
-        rm -rf ./proxysql && mv ../proxysql .
+        rm -rf ./proxysql && mv ../proxysql . || true
         
         # extend timout
         cd test_mysql-connector-j
