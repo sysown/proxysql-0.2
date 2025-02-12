@@ -256,7 +256,11 @@ enum pgsql_variable_name {
 	PGSQL_NAME_LAST_LOW_WM,
 	PGSQL_BYTEA_OUTPUT,
 	PGSQL_CLIENT_MIN_MESSAGES,
+	PGSQL_ENABLE_BITMAPSCAN,
+	PGSQL_ENABLE_INDEXSCAN,
+	PGSQL_ENABLE_SEQSCAN,
 	PGSQL_ESCAPE_STRING_WARNING,
+	PGSQL_MAINTENANCE_WORK_MEM,
 	PGSQL_NAME_LAST_HIGH_WM
 };
 
@@ -1767,7 +1771,11 @@ pgsql_variable_st pgsql_tracked_variables[] {
 	{ PGSQL_NAME_LAST_LOW_WM,      session_status___NONE, "placeholder", "placeholder", "0" , 0, nullptr },  // this is just a placeholder to separate the previous index from the next block
 	{ PGSQL_BYTEA_OUTPUT,		   SETTING_VARIABLE,	"bytea_output", "bytea_output", "hex", (PGTRACKED_VAR_OPT_QUOTE), nullptr },
 	{ PGSQL_CLIENT_MIN_MESSAGES,   SETTING_VARIABLE,	"client_min_messages", "client_min_messages", "NOTICE", (PGTRACKED_VAR_OPT_QUOTE), nullptr },
-	{ PGSQL_ESCAPE_STRING_WARNING, SETTING_VARIABLE,    "escape_string_warning", "escape_string_warning", "on", (PGTRACKED_VAR_OPT_BOOL), nullptr }
+	{ PGSQL_ENABLE_BITMAPSCAN,	   SETTING_VARIABLE,	"enable_bitmapscan", "enable_bitmapscan", "on", (PGTRACKED_VAR_OPT_BOOL), nullptr },
+	{ PGSQL_ENABLE_INDEXSCAN,	   SETTING_VARIABLE,	"enable_indexscan", "enable_indexscan", "on", (PGTRACKED_VAR_OPT_BOOL), nullptr },
+	{ PGSQL_ENABLE_SEQSCAN,		   SETTING_VARIABLE,	"enable_seqscan", "enable_seqscan", "on", (PGTRACKED_VAR_OPT_BOOL), nullptr },
+	{ PGSQL_ESCAPE_STRING_WARNING, SETTING_VARIABLE,    "escape_string_warning", "escape_string_warning", "on", (PGTRACKED_VAR_OPT_BOOL), nullptr },
+	{ PGSQL_MAINTENANCE_WORK_MEM,  SETTING_VARIABLE,    "maintenance_work_mem", "maintenance_work_mem", "64MB", (PGTRACKED_VAR_OPT_QUOTE), nullptr },
 };
 
 #else

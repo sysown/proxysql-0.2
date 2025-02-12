@@ -80,6 +80,8 @@ static inline char is_normal_char(char c) {
 
 static const std::set<std::string> pgsql_variables_boolean = {
 	"standard_conforming_strings",
+	"enable_indexscan",
+	"enable_seqscan",
 	"escape_string_warning"
 };
 
@@ -92,7 +94,8 @@ static const std::set<std::string> pgsql_variables_strings = {
 	"timezone",
 	"time zone",
 	"bytea_output",
-	"client_min_messages"
+	"client_min_messages",
+	"maintenance_work_mem"
 };
 
 #include "proxysql_find_charset.h"
@@ -863,7 +866,7 @@ void PgSQL_Session::generate_proxysql_internal_session_json(json& j) {
 				//j["backends"][i]["conn"]["status"]["get_lock"] = _myconn->get_status(STATUS_MYSQL_CONNECTION_GET_LOCK);
 				//j["backends"][i]["conn"]["status"]["lock_tables"] = _myconn->get_status(STATUS_MYSQL_CONNECTION_LOCK_TABLES);
 				j["backends"][i]["conn"]["status"]["has_savepoint"] = _myconn->get_status(STATUS_MYSQL_CONNECTION_HAS_SAVEPOINT);
-				//j["backends"][i]["conn"]["status"]["temporary_table"] = _myconn->get_status(STATUS_MYSQL_CONNECTION_TEMPORARY_TABLE);
+				j["backends"][i]["conn"]["status"]["temporary_table"] = _myconn->get_status(STATUS_MYSQL_CONNECTION_TEMPORARY_TABLE);
 				j["backends"][i]["conn"]["status"]["user_variable"] = _myconn->get_status(STATUS_MYSQL_CONNECTION_USER_VARIABLE);
 				//j["backends"][i]["conn"]["status"]["found_rows"] = _myconn->get_status(STATUS_MYSQL_CONNECTION_FOUND_ROWS);
 				j["backends"][i]["conn"]["status"]["no_multiplex"] = _myconn->get_status(STATUS_MYSQL_CONNECTION_NO_MULTIPLEX);
