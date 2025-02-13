@@ -117,6 +117,15 @@ jobs:
         #sed -i 's/^fn_test_proxysql m/#fn_test_proxysql m/' run-tests.bash
         #sed -i 's/^fn_test_proxysql_dev m/#fn_test_proxysql_dev m/' run-tests.bash
         #sed -i '/^fn_start_prep$/a fn_test_proxysql_dev ${{ matrix.infradb }}' run-tests.bash
+
+        # cherry-pick utf8mb4 patch from django 5.2.x
+        # https://github.com/django/django/commit/9609b48b9149aa0b96208588b99ce6161be6a287
+        cd django-framework
+        if [[ $(git branch --show-current) == stable/5.1.x ]]; then
+          git cherry-pick -n 9609b48 || true
+          git add docs/releases/5.2.txt || true
+          git cherry-pick -n --continue || true
+        fi
         
     - name: Run tests
       run: |
