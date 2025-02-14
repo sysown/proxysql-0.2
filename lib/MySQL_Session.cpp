@@ -7408,24 +7408,25 @@ unsigned long long MySQL_Session::IdleTime() {
 
 // this is called either from RequestEnd(), or at the end of executing
 // prepared statements
-void MySQL_Session::LogQuery(MySQL_Data_Stream *myds) {
+void MySQL_Session::LogQuery(MySQL_Data_Stream *myds, const char * errmsg) {
 	// we need to access statistics before calling CurrentQuery.end()
 	// so we track the time here
 	CurrentQuery.end_time=thread->curtime;
 
 	if (qpo) {
 		if (qpo->log==1) {
-			GloMyLogger->log_request(this, myds);	// we send for logging only if logging is enabled for this query
+			GloMyLogger->log_request(this, myds, errmsg);	// we send for logging only if logging is enabled for this query
 		} else {
 			if (qpo->log==-1) {
 				if (mysql_thread___eventslog_default_log==1) {
-					GloMyLogger->log_request(this, myds);	// we send for logging only if enabled by default
+					GloMyLogger->log_request(this, myds, errmsg);	// we send for logging only if enabled by default
 				}
 			}
 		}
 	}
 }
-void MySQL_Session::RequestEnd(MySQL_Data_Stream *myds) {
+
+void MySQL_Session::RequestEnd(MySQL_Data_Stream *myds, const char * errmsg) {
 	// check if multiplexing needs to be disabled
 	char *qdt = NULL;
 
@@ -7446,7 +7447,7 @@ void MySQL_Session::RequestEnd(MySQL_Data_Stream *myds) {
 			break;
 		default:
 			if (session_fast_forward == SESSION_FORWARD_TYPE_NONE) {
-				LogQuery(myds);
+				LogQuery(myds, errmsg);
 			}
 			break;
 	}

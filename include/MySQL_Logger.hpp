@@ -429,6 +429,7 @@ public:
 	 * @brief Logs a request event.
 	 * @param sess A pointer to the MySQL_Session object.
 	 * @param myds A pointer to the MySQL_Data_Stream object.
+	 * @param errmsg A pointer to an error, if present.
 	 *
 	 * This function logs information about a MySQL request, including the query, timestamps, user information, and other relevant details.
 	 * It creates a MySQL_Event object, populates it with data from the session and data stream, and writes it to the event log file and/or the circular buffer.
@@ -439,7 +440,7 @@ public:
 	 * The function uses mutexes to protect shared resources and avoid race conditions.
 	 * The function assumes ownership of the dynamically allocated memory for the `MySQL_Event` object created within this function.
 	 */
-	void log_request(MySQL_Session* sess, MySQL_Data_Stream* myds);
+	void log_request(MySQL_Session* sess, MySQL_Data_Stream* myds, const char * errmsg = nullptr);
 
 	/**
 	 * @brief Logs an audit entry.

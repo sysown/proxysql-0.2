@@ -740,7 +740,7 @@ void MySQL_Logger::audit_set_datadir(char *s) {
 	flush_log();
 };
 
-void MySQL_Logger::log_request(MySQL_Session *sess, MySQL_Data_Stream *myds) {
+void MySQL_Logger::log_request(MySQL_Session *sess, MySQL_Data_Stream *myds, const char * errmsg) {
 	int elmhs = mysql_thread___eventslog_buffer_history_size;
 	if (elmhs == 0) {
 		if (events.enabled==false) return;
