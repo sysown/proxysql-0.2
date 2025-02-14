@@ -318,8 +318,6 @@ PgSQL_Connection_Placeholder::PgSQL_Connection_Placeholder() {
 	largest_query_length=0;
 	warning_count=0;
 	multiplex_delayed=false;
-	MyRS=NULL;
-	MyRS_reuse=NULL;
 	unknown_transaction_status = false;
 	creation_time=0;
 	auto_increment_delay_token = 0;
@@ -367,14 +365,7 @@ PgSQL_Connection_Placeholder::~PgSQL_Connection_Placeholder() {
 		close_mysql(); // this take care of closing pgsql connection
 		pgsql=NULL;
 	}
-	if (MyRS) {
-		delete MyRS;
-		MyRS = NULL;
-	}
-	if (MyRS_reuse) {
-		delete MyRS_reuse;
-		MyRS_reuse = NULL;
-	}
+
 	if (query.stmt) {
 		query.stmt=NULL;
 	}
@@ -761,96 +752,6 @@ int PgSQL_Connection_Placeholder::async_set_autocommit(short event, bool ac) {
 	return 1;
 }
 #endif // 0
-
-int PgSQL_Connection_Placeholder::async_set_names(short event, unsigned int c) {
-	PROXY_TRACE();
-	assert(pgsql);
-	assert(ret_mysql);
-	server_status=parent->status; // we copy it here to avoid race condition. The caller will see this
-	if (IsServerOffline())
-		return -1;
-
-	switch (async_state_machine) {
-		case ASYNC_SET_NAMES_SUCCESSFUL:
-			unknown_transaction_status = false;
-			async_state_machine=ASYNC_IDLE;
-			return 0;
-			break;
-		case ASYNC_SET_NAMES_FAILED:
-			return -1;
-			break;
-		case ASYNC_IDLE:
-			/* useless statement. should be removed after thorough testing */
-			//set_charset(c, CONNECT_START);
-			async_state_machine=ASYNC_SET_NAMES_START;
-		default:
-			handler(event);
-			break;
-	}
-
-	// check again
-	switch (async_state_machine) {
-		case ASYNC_SET_NAMES_SUCCESSFUL:
-			unknown_transaction_status = false;
-			async_state_machine=ASYNC_IDLE;
-			return 0;
-			break;
-		case ASYNC_SET_NAMES_FAILED:
-			return -1;
-			break;
-		default:
-			return 1;
-			break;
-	}
-	return 1;
-}
-
-int PgSQL_Connection_Placeholder::async_set_option(short event, bool mask) {
-	PROXY_TRACE();
-	assert(pgsql);
-	assert(ret_mysql);
-	server_status=parent->status; // we copy it here to avoid race condition. The caller will see this
-	if (IsServerOffline())
-		return -1;
-
-	switch (async_state_machine) {
-		case ASYNC_SET_OPTION_SUCCESSFUL:
-			unknown_transaction_status = false;
-			async_state_machine=ASYNC_IDLE;
-			return 0;
-			break;
-		case ASYNC_SET_OPTION_FAILED:
-			return -1;
-			break;
-		case ASYNC_IDLE:
-			if (mask)
-				options.client_flag |= CLIENT_MULTI_STATEMENTS;
-			else
-				options.client_flag &= ~CLIENT_MULTI_STATEMENTS;
-			async_state_machine=ASYNC_SET_OPTION_START;
-		default:
-			handler(event);
-			break;
-	}
-
-	// check again
-	switch (async_state_machine) {
-		case ASYNC_SET_OPTION_SUCCESSFUL:
-			unknown_transaction_status = false;
-			async_state_machine=ASYNC_IDLE;
-			return 0;
-			break;
-		case ASYNC_SET_OPTION_FAILED:
-			return -1;
-			break;
-		default:
-			return 1;
-			break;
-	}
-	return 1;
-}
-
-
 
 // This function check if autocommit=0 and if there are any savepoint.
 // this is an attempt to mitigate MySQL bug https://bugs.pgsql.com/bug.php?id=107875

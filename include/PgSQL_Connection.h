@@ -427,9 +427,6 @@ class PgSQL_Connection_Placeholder {
 	void set_query(char *stmt, unsigned long length);
 	
 	int async_set_autocommit(short event, bool);
-	int async_set_names(short event, unsigned int nr);
-
-	int async_set_option(short event, bool mask);
 
 	void stmt_prepare_start();
 	void stmt_prepare_cont(short event);
@@ -471,19 +468,6 @@ class PgSQL_Connection_Placeholder {
 	unsigned int number_of_matching_session_variables(const PgSQL_Connection *client_conn, unsigned int& not_matching);
 	unsigned long get_mysql_thread_id() { return pgsql ? pgsql->thread_id : 0; }
 
-
-	/********* These will be removed **********/
-	MySQL_ResultSet* MyRS;
-	MySQL_ResultSet* MyRS_reuse;
-	
-	// these method should not be called from this class
-	int async_select_db(short event) { assert(0); return -1; }
-	bool IsServerOffline() { assert(0); return false; }
-	bool IsKnownActiveTransaction() { assert(0); return false; }
-	bool IsActiveTransaction() { assert(0); return false; }
-	PG_ASYNC_ST handler(short event) { assert(0); return ASYNC_IDLE; }
-	void ProcessQueryAndSetStatusFlags(char* query_digest_text);
-	/********* End of remove ******************/
 };
 
 class PgSQL_Connection : public PgSQL_Connection_Placeholder {
