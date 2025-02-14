@@ -5349,10 +5349,6 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 
 					const char* name = pgsql_tracked_variables[i].set_variable_name;
 					const char* value = get_default_session_variable((enum pgsql_variable_name)i);
-
-					if (value == NULL) {
-						value = (i < PGSQL_NAME_LAST_LOW_WM) ? pgsql_thread___default_variables[i] : pgsql_tracked_variables[i].default_value;
-					}
 					
 					proxy_debug(PROXY_DEBUG_MYSQL_COM, 8, "Changing connection %s to %s\n", name, value);
 					uint32_t var_hash_int = SpookyHash::Hash32(value, strlen(value), 10);
@@ -5388,10 +5384,6 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 				if (idx != PGSQL_NAME_LAST_HIGH_WM) {
 					const char* name = pgsql_tracked_variables[idx].set_variable_name;
 					const char* value = get_default_session_variable((enum pgsql_variable_name)idx);
-
-					if (value == NULL) {
-						value = (idx < PGSQL_NAME_LAST_LOW_WM) ? pgsql_thread___default_variables[idx] : pgsql_tracked_variables[idx].default_value;
-					}
 
 					uint32_t var_hash_int = SpookyHash::Hash32(value, strlen(value), 10);
 					if (pgsql_variables.client_get_hash(this, pgsql_tracked_variables[idx].idx) != var_hash_int) {
@@ -6761,9 +6753,15 @@ void PgSQL_Session::set_default_session_variable(enum pgsql_variable_name idx, c
 }
 
 const char* PgSQL_Session::get_default_session_variable(enum pgsql_variable_name idx) {
+	// Check if index is within valid range
 	if (idx >= 0 && idx < PGSQL_NAME_LAST_HIGH_WM) {
-		return default_session_variables[idx];
+		// Attempt to retrieve value from default session variables
+		const char* val = default_session_variables[idx];
+
+		// Return the found value, or fall back to thread-specific default if null
+		return (val) ? val : pgsql_thread___default_variables[idx];
 	}
+
 	return NULL;
 }
 

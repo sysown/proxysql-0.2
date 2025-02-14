@@ -535,7 +535,19 @@ public:
 	void set_previous_status_mode3(bool allow_execute = true);
 
 	void set_default_session_variable(enum pgsql_variable_name idx, const char* value);
+
+	/**
+	 * @brief Retrieves default session variable
+	 *
+	 * This function tries to retrieve value of default session variable if present (provided in connection parameters). 
+	 * If value is not found, it falls back to the thread-specific default variables.
+	 *
+	 * @param idx The index of the session variable to retrieve.
+	 * @return The value of the session variable 
+	 * 
+	 */
 	const char* get_default_session_variable(enum pgsql_variable_name idx);
+	
 	void reset_default_session_variable(enum pgsql_variable_name idx);
 };
 
