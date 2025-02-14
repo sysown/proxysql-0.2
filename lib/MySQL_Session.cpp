@@ -5716,7 +5716,7 @@ void MySQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 	if (session_type == PROXYSQL_SESSION_MYSQL) {
 		__sync_fetch_and_add(&MyHGM->status.frontend_use_db, 1);
 		string nq=string((char *)pkt->ptr+sizeof(mysql_hdr)+1,pkt->size-sizeof(mysql_hdr)-1);
-		SetParser parser(nq);
+		MySQL_Set_Stmt_Parser parser(nq);
 		string errmsg = "";
 		string schemaname = parser.parse_USE_query(errmsg);
 		if (schemaname != "") {
@@ -5994,7 +5994,7 @@ bool MySQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 			) {
 				proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "Parsing SET command %s\n", nq.c_str());
 				proxy_debug(PROXY_DEBUG_MYSQL_QUERY_PROCESSOR, 5, "Parsing SET command = %s\n", nq.c_str());
-				SetParser parser(nq);
+				MySQL_Set_Stmt_Parser parser(nq);
 				std::map<std::string, std::vector<std::string>> set = {};
 				if (mysql_thread___set_parser_algorithm == 1) { // legacy behavior
 					set = parser.parse1();
@@ -6547,7 +6547,7 @@ bool MySQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 					}
 				}
 			} else if (match_regexes && match_regexes[2]->match(dig)) {
-				SetParser parser(nq);
+				MySQL_Set_Stmt_Parser parser(nq);
 				std::map<std::string, std::vector<std::string>> set = parser.parse2();
 
 				for(auto it = std::begin(set); it != std::end(set); ++it) {
@@ -6612,7 +6612,7 @@ bool MySQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 					}
 				}
 			} else if (match_regexes && match_regexes[3]->match(dig)) {
-				SetParser parser(nq);
+				MySQL_Set_Stmt_Parser parser(nq);
 				std::string charset = parser.parse_character_set();
 				const MARIADB_CHARSET_INFO * c;
 				if (!charset.empty()) {

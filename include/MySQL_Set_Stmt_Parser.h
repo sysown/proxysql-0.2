@@ -1,5 +1,6 @@
-#ifndef __CLASS_SET_PARSER_H
-#define __CLASS_SET_PARSER_H
+#ifndef __CLASS_MYSQL_SET_STMT_PARSER_H
+#define __CLASS_MYSQL_SET_STMT_PARSER_H
+
 #include <string>
 #include <map>
 #include <vector>
@@ -9,7 +10,7 @@
 
 //#define PARSERDEBUG
 
-class SetParser {
+class MySQL_Set_Stmt_Parser {
 	private:
 	// parse1v2 variables used for compile the RE only once
 	bool parse1v2_init;
@@ -20,13 +21,13 @@ class SetParser {
 #ifdef PARSERDEBUG
 	int verbosity;
 	public:
-	SetParser(std::string q, int verb = 0);
+	MySQL_Set_Stmt_Parser(std::string q, int verb = 0);
 #else
 	public:
-	SetParser(std::string q);
+	MySQL_Set_Stmt_Parser(std::string q);
 #endif
-	// set_query() allows to change the query associated to a SetParser.
-	// This allow to parse multiple queries using just a single SetParser.
+	// set_query() allows to change the query associated to a MySQL_Set_Stmt_Parser.
+	// This allow to parse multiple queries using just a single MySQL_Set_Stmt_Parser.
 	// At the moment this makes sense only when using parse1v2() because it
 	// allows to compile the regular expression only once
 	void set_query(const std::string& q);
@@ -48,8 +49,7 @@ class SetParser {
 	// built-in testing
 	void test_parse_USE_query();
 #endif // DEBUG
-	~SetParser();
+	~MySQL_Set_Stmt_Parser();
 };
 
-
-#endif /* __CLASS_SET_PARSER_H */
+#endif /* __CLASS_MYSQL_SET_STMT_PARSER_H */

@@ -278,13 +278,6 @@ public:
 	void fill_client_internal_session(nlohmann::json &j, int idx);
 };
 
-enum pgsql_charset_action {
-	POSTGRESQL_CHARSET_ACTION_UNKNOWN,
-	POSTGRESQL_CHARSET_ACTION_NAMES,
-	POSTGRESQL_CHARSET_ACTION_CHARSET,
-	POSTGRESQL_CHARSET_ACTION_CONNECT_START
-};
-
 class PgSQL_Connection_userinfo {
 	private:
 	uint64_t compute_hash();
@@ -335,11 +328,11 @@ class PgSQL_Connection_Placeholder {
 
 	PgSQL_Conn_Param conn_params;
 
-	PgSQL_Variable variables[SQL_NAME_LAST_HIGH_WM];
-	uint32_t var_hash[SQL_NAME_LAST_HIGH_WM];
+	PgSQL_Variable variables[PGSQL_NAME_LAST_HIGH_WM];
+	uint32_t var_hash[PGSQL_NAME_LAST_HIGH_WM] = {0};
 	// for now we store possibly missing variables in the lower range
 	// we may need to fix that, but this will cost performance
-	bool var_absent[SQL_NAME_LAST_HIGH_WM] = {false};
+	bool var_absent[PGSQL_NAME_LAST_HIGH_WM] = {false};
 
 	std::vector<uint32_t> dynamic_variables_idx;
 	unsigned int reorder_dynamic_variables_idx();
@@ -403,13 +396,13 @@ class PgSQL_Connection_Placeholder {
 	bool processing_multi_statement;
 	bool multiplex_delayed;
 	bool unknown_transaction_status;
-	void compute_unknown_transaction_status();
+	
 	char gtid_uuid[128];
 	PgSQL_Connection_Placeholder();
 	~PgSQL_Connection_Placeholder();
 	bool set_autocommit(bool);
 	bool set_no_backslash_escapes(bool);
-	unsigned int set_charset(unsigned int, enum pgsql_charset_action);
+	
 
 	void set_status(bool set, uint32_t status_flag);
 	bool get_status(uint32_t status_flag);
@@ -435,7 +428,6 @@ class PgSQL_Connection_Placeholder {
 	
 	int async_set_autocommit(short event, bool);
 	int async_set_names(short event, unsigned int nr);
-	int async_send_simple_command(short event, char *stmt, unsigned long length); // no result set expected
 
 	int async_set_option(short event, bool mask);
 
@@ -516,7 +508,8 @@ public:
 	int  async_query(short event, char* stmt, unsigned long length, MYSQL_STMT** _stmt = NULL, stmt_execute_metadata_t* _stmt_meta = NULL);
 	int  async_ping(short event);
 	int  async_reset_session(short event);
-	
+	int	 async_send_simple_command(short event, char* stmt, unsigned long length); // no result set expected
+
 	void next_event(PG_ASYNC_ST new_st);
 	bool IsAutoCommit();
 	bool is_connected() const;
@@ -618,6 +611,8 @@ public:
 	void update_bytes_recv(uint64_t bytes_recv);
 	void update_bytes_sent(uint64_t bytes_sent);
 	void ProcessQueryAndSetStatusFlags(char* query_digest_text);
+	void set_charset(const char* charset);
+	void connect_start_SetCharset(const char* client_encoding, uint32_t hash = 0);
 
 	inline const PGconn* get_pg_connection() const { return pgsql_conn; }
 	inline int get_pg_server_version() { return PQserverVersion(pgsql_conn); }
@@ -646,6 +641,19 @@ public:
 	const char* get_pg_connection_status_str();
 	const char* get_pg_transaction_status_str();
 	unsigned int get_memory_usage() const;
+
+
+	static int char_to_encoding(const char* name) {
+		return pg_char_to_encoding(name);
+	}
+
+	static const char* encoding_to_char(int encoding) {
+		return pg_encoding_to_char(encoding);
+	}
+
+	static int valid_server_encoding_id(int encoding) {
+		return pg_valid_server_encoding_id(encoding);
+	}
 
 	//PgSQL_Conn_Param conn_params;
 	PgSQL_ErrorInfo error_info;

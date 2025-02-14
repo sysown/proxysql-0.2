@@ -61,7 +61,7 @@ bool executeQueries(PGconn* conn, const std::vector<std::string>& queries) {
             return PGRES_TUPLES_OK;
         }
         else if (strncasecmp(buf, "COPY", sizeof("COPY") - 1) == 0) {
-			if (strstr(query, "FROM") && strstr(query, "STDIN")) {
+			if (strstr(query, "FROM") && (strstr(query, "STDIN") || strstr(query, "STDOUT"))) {
 				return PGRES_COPY_IN;
             }
         }
@@ -773,6 +773,49 @@ void testSTDIN_PERMANENT_FAST_FORWARD(PGconn* admin_conn, PGconn* conn, std::fst
     PQclear(PQgetResult(backend_conn.get()));
 }
 
+/**
+ * @brief Tests the COPY IN functionality using STDOUT in TEXT format.
+ *
+ * This function executes a COPY IN command to insert data into a PostgreSQL table
+ * using the STDOUT method in TEXT format. It verifies the success of the data transmission
+ * and checks the logs for specific commands to ensure the session mode switches correctly.
+ *
+ * @param admin_conn A pointer to the admin PGconn connection.
+ * @param conn A pointer to the PGconn connection used for the COPY IN operation.
+ * @param f_proxysql_log A reference to the fstream object for ProxySQL logs.
+ */
+void testSTDOUT_TEXT_FORMAT(PGconn* admin_conn, PGconn* conn, std::fstream& f_proxysql_log) {
+    if (!executeQueries(conn, { "COPY copy_in_test(column1,column2,column3,column4,column5) FROM STDOUT" }))
+        return;
+
+    ok(check_logs_for_command(f_proxysql_log, ".*\\[INFO\\].* Switching to Fast Forward mode \\(Session Type:0x06\\)"), "Session Switched to fast forward mode");
+
+    bool success = true;
+
+    for (unsigned int i = 0; i < test_data.size(); i++) {
+        const char* data = test_data[i];
+        bool last = (i == (test_data.size() - 1));
+        if (!sendCopyData(conn, data, strlen(data), last)) {
+            success = false;
+            break;
+        }
+    }
+
+    ok(success, "Copy data transmission should be successful");
+
+    PGresult* res = PQgetResult(conn);
+
+    ok((PQresultStatus(res) == PGRES_COMMAND_OK), "Rows successfully inserted. %s", PQerrorMessage(conn));
+
+    const char* row_count_str = PQcmdTuples(res);
+    const int row_count = atoi(row_count_str);
+
+    ok(row_count == test_data.size(), "Total rows inserted: %d. Expected: %ld", row_count, test_data.size());
+    PQclear(res);
+
+    ok(check_logs_for_command(f_proxysql_log, ".*\\[INFO\\] Switching back to Normal mode \\(Session Type:0x06\\).*"), "Switching back to Normal mode");
+}
+
 std::vector<std::pair<std::string, void (*)(PGconn*, PGconn*, std::fstream& f_proxysql_log)>> tests = {
     { "COPY ... FROM STDIN Text Format", testSTDIN_TEXT_FORMAT },
     { "COPY ... FROM STDIN Binary Format", testSTDIN_TEXT_BINARY },
@@ -781,7 +824,8 @@ std::vector<std::pair<std::string, void (*)(PGconn*, PGconn*, std::fstream& f_pr
     { "COPY ... FROM STDIN Transaction Error", testSTDIN_TRANSACTION_ERROR },
     { "COPY ... FROM STDIN File", testSTDIN_FILE },
     { "COPY ... FROM STDIN Multistatement", testSTDIN_MULTISTATEMENT },
-    { "COPY ... FROM STDIN Permanent Fast Forward", testSTDIN_PERMANENT_FAST_FORWARD }
+    { "COPY ... FROM STDOUT Text Format", testSTDOUT_TEXT_FORMAT },
+	{ "COPY ... FROM STDIN Permanent Fast Forward", testSTDIN_PERMANENT_FAST_FORWARD }
 };
 
 void execute_tests(bool with_ssl, bool diff_conn) {
@@ -851,7 +895,7 @@ void execute_tests(bool with_ssl, bool diff_conn) {
 
 int main(int argc, char** argv) {
 
-    plan(46 * 2); // Total number of tests planned
+    plan(51 * 2); // Total number of tests planned
 
     if (cl.getEnv())
         return exit_status();
