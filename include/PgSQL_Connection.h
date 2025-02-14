@@ -425,8 +425,6 @@ class PgSQL_Connection_Placeholder {
 	void set_option_cont(short event);
 #endif // 0
 	void set_query(char *stmt, unsigned long length);
-	
-	int async_set_autocommit(short event, bool);
 
 	void stmt_prepare_start();
 	void stmt_prepare_cont(short event);
@@ -486,9 +484,7 @@ public:
 	void reset_session_cont(short event);
 	
 	int  async_connect(short event);
-#if 0
-	int  async_set_autocommit(short event, bool ac);
-#endif // 0
+
 	int  async_query(short event, char* stmt, unsigned long length, MYSQL_STMT** _stmt = NULL, stmt_execute_metadata_t* _stmt_meta = NULL);
 	int  async_ping(short event);
 	int  async_reset_session(short event);

@@ -709,48 +709,6 @@ void PgSQL_Connection_Placeholder::process_rows_in_ASYNC_STMT_EXECUTE_STORE_RESU
 	bytes_info.bytes_recv += total_size;
 }
 
-int PgSQL_Connection_Placeholder::async_set_autocommit(short event, bool ac) {
-	PROXY_TRACE();
-	assert(pgsql);
-	assert(ret_mysql);
-	server_status=parent->status; // we copy it here to avoid race condition. The caller will see this
-	if (IsServerOffline())
-		return -1;
-
-	switch (async_state_machine) {
-		case ASYNC_SET_AUTOCOMMIT_SUCCESSFUL:
-			unknown_transaction_status = false;
-			async_state_machine=ASYNC_IDLE;
-			return 0;
-			break;
-		case ASYNC_SET_AUTOCOMMIT_FAILED:
-			return -1;
-			break;
-		case ASYNC_QUERY_END:
-		case ASYNC_IDLE:
-			set_autocommit(ac);
-			async_state_machine=ASYNC_SET_AUTOCOMMIT_START;
-		default:
-			handler(event);
-			break;
-	}
-
-	// check again
-	switch (async_state_machine) {
-		case ASYNC_SET_AUTOCOMMIT_SUCCESSFUL:
-			unknown_transaction_status = false;
-			async_state_machine=ASYNC_IDLE;
-			return 0;
-			break;
-		case ASYNC_SET_AUTOCOMMIT_FAILED:
-			return -1;
-			break;
-		default:
-			return 1;
-			break;
-	}
-	return 1;
-}
 #endif // 0
 
 // This function check if autocommit=0 and if there are any savepoint.
@@ -1979,50 +1937,6 @@ void PgSQL_Connection::async_free_result() {
 	}
 	new_result = false;
 }
-
-#if 0
-int PgSQL_Connection::async_set_autocommit(short event, bool ac) {
-	PROXY_TRACE();
-	assert(pgsql_conn);
-	server_status = parent->status; // we copy it here to avoid race condition. The caller will see this
-	if (IsServerOffline())
-		return -1;
-
-	switch (async_state_machine) {
-	case ASYNC_SET_AUTOCOMMIT_SUCCESSFUL:
-		unknown_transaction_status = false;
-		async_state_machine = ASYNC_IDLE;
-		return 0;
-		break;
-	case ASYNC_SET_AUTOCOMMIT_FAILED:
-		return -1;
-		break;
-	case ASYNC_QUERY_END:
-	case ASYNC_IDLE:
-		set_autocommit(ac);
-		async_state_machine = ASYNC_SET_AUTOCOMMIT_START;
-	default:
-		handler(event);
-		break;
-	}
-
-	// check again
-	switch (async_state_machine) {
-	case ASYNC_SET_AUTOCOMMIT_SUCCESSFUL:
-		unknown_transaction_status = false;
-		async_state_machine = ASYNC_IDLE;
-		return 0;
-		break;
-	case ASYNC_SET_AUTOCOMMIT_FAILED:
-		return -1;
-		break;
-	default:
-		return 1;
-		break;
-	}
-	return 1;
-}
-#endif // 0
 
 bool PgSQL_Connection::IsAutoCommit() {
 	bool ret = true;
