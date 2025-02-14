@@ -337,7 +337,7 @@ void Base_Session<S, DS, B, T>::return_proxysql_internal(PtrSize_t* pkt) {
 		assert(0);
 	}
 	if (mirror == false) {
-		RequestEnd(NULL);
+		RequestEnd(NULL, 0, NULL);
 	}
 	else {
 		client_myds->DSS = STATE_SLEEP;
