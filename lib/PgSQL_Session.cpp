@@ -6502,7 +6502,7 @@ void PgSQL_Session::LogQuery(PgSQL_Data_Stream* myds) {
 		}
 	}
 }
-void PgSQL_Session::RequestEnd(PgSQL_Data_Stream* myds) {
+void PgSQL_Session::RequestEnd(PgSQL_Data_Stream* myds, const unsigned int myerrno, const char * errmsg) {
 	// check if multiplexing needs to be disabled
 	char* qdt = NULL;
 
