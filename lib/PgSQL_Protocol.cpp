@@ -1123,7 +1123,7 @@ EXECUTION_STATE PgSQL_Protocol::process_handshake_response_packet(unsigned char*
 		for (auto& option : options_list) {
 			int idx = PGSQL_NAME_LAST_HIGH_WM;
 			for (int i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
-				if (i == PGSQL_NAME_LAST_LOW_WM)
+				if (i == PGSQL_NAME_LAST_LOW_WM) 
 					continue;
 				if (variable_name_exists(pgsql_tracked_variables[i], option.first.c_str()) == true) {
 					idx = i;

@@ -1182,7 +1182,7 @@ __thread int pgsql_thread___query_cache_soft_ttl_pct;
 __thread int pgsql_thread___query_cache_handle_warnings;
 
 __thread bool pgsql_thread___session_idle_show_processlist;
-__thread char* pgsql_thread___default_variables[PGSQL_NAME_LAST_LOW_WM];
+__thread char* pgsql_thread___default_variables[PGSQL_NAME_LAST_HIGH_WM];
 __thread int pgsql_thread___handle_unknown_charset;
 //---------------------------
 
@@ -1482,7 +1482,7 @@ extern __thread int pgsql_thread___query_cache_soft_ttl_pct;
 extern __thread int pgsql_thread___query_cache_handle_warnings;
 
 extern __thread bool pgsql_thread___session_idle_show_processlist;
-extern __thread char* pgsql_thread___default_variables[PGSQL_NAME_LAST_LOW_WM];
+extern __thread char* pgsql_thread___default_variables[PGSQL_NAME_LAST_HIGH_WM];
 extern __thread int pgsql_thread___handle_unknown_charset;
 //---------------------------
 
@@ -1769,13 +1769,13 @@ pgsql_variable_st pgsql_tracked_variables[] {
 	{ PGSQL_STANDARD_CONFORMING_STRINGS, SETTING_VARIABLE, "standard_conforming_strings", "standard_conforming_strings", "on", (PGTRACKED_VAR_OPT_BOOL | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE | PGTRACKED_VAR_OPT_PARAM_STATUS), nullptr },
 	{ PGSQL_TIMEZONE,			   SETTING_VARIABLE,	"timezone", "timezone", "GMT" , (PGTRACKED_VAR_OPT_QUOTE | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE | PGTRACKED_VAR_OPT_PARAM_STATUS), { "TIME ZONE", nullptr } },
 	{ PGSQL_NAME_LAST_LOW_WM,      session_status___NONE, "placeholder", "placeholder", "0" , 0, nullptr },  // this is just a placeholder to separate the previous index from the next block
-	{ PGSQL_BYTEA_OUTPUT,		   SETTING_VARIABLE,	"bytea_output", "bytea_output", "hex", (PGTRACKED_VAR_OPT_QUOTE), nullptr },
-	{ PGSQL_CLIENT_MIN_MESSAGES,   SETTING_VARIABLE,	"client_min_messages", "client_min_messages", "NOTICE", (PGTRACKED_VAR_OPT_QUOTE), nullptr },
-	{ PGSQL_ENABLE_BITMAPSCAN,	   SETTING_VARIABLE,	"enable_bitmapscan", "enable_bitmapscan", "on", (PGTRACKED_VAR_OPT_BOOL), nullptr },
-	{ PGSQL_ENABLE_INDEXSCAN,	   SETTING_VARIABLE,	"enable_indexscan", "enable_indexscan", "on", (PGTRACKED_VAR_OPT_BOOL), nullptr },
-	{ PGSQL_ENABLE_SEQSCAN,		   SETTING_VARIABLE,	"enable_seqscan", "enable_seqscan", "on", (PGTRACKED_VAR_OPT_BOOL), nullptr },
-	{ PGSQL_ESCAPE_STRING_WARNING, SETTING_VARIABLE,    "escape_string_warning", "escape_string_warning", "on", (PGTRACKED_VAR_OPT_BOOL), nullptr },
-	{ PGSQL_MAINTENANCE_WORK_MEM,  SETTING_VARIABLE,    "maintenance_work_mem", "maintenance_work_mem", "64MB", (PGTRACKED_VAR_OPT_QUOTE), nullptr },
+	{ PGSQL_BYTEA_OUTPUT,		   SETTING_VARIABLE,	"bytea_output", "bytea_output", "hex", (PGTRACKED_VAR_OPT_QUOTE | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE), nullptr },
+	{ PGSQL_CLIENT_MIN_MESSAGES,   SETTING_VARIABLE,	"client_min_messages", "client_min_messages", "NOTICE", (PGTRACKED_VAR_OPT_QUOTE | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE), nullptr },
+	{ PGSQL_ENABLE_BITMAPSCAN,	   SETTING_VARIABLE,	"enable_bitmapscan", "enable_bitmapscan", "on", (PGTRACKED_VAR_OPT_BOOL | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE), nullptr },
+	{ PGSQL_ENABLE_INDEXSCAN,	   SETTING_VARIABLE,	"enable_indexscan", "enable_indexscan", "on", (PGTRACKED_VAR_OPT_BOOL | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE), nullptr },
+	{ PGSQL_ENABLE_SEQSCAN,		   SETTING_VARIABLE,	"enable_seqscan", "enable_seqscan", "on", (PGTRACKED_VAR_OPT_BOOL | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE), nullptr },
+	{ PGSQL_ESCAPE_STRING_WARNING, SETTING_VARIABLE,    "escape_string_warning", "escape_string_warning", "on", (PGTRACKED_VAR_OPT_BOOL | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE), nullptr },
+	{ PGSQL_MAINTENANCE_WORK_MEM,  SETTING_VARIABLE,    "maintenance_work_mem", "maintenance_work_mem", "64MB", (PGTRACKED_VAR_OPT_QUOTE | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE), nullptr },
 };
 
 #else

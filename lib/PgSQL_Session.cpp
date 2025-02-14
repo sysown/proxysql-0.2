@@ -4896,20 +4896,46 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 						if (idx != PGSQL_NAME_LAST_HIGH_WM) {
 
 							if ((value1.size() == sizeof("DEFAULT") - 1) && strncasecmp(value1.c_str(), (char*)"DEFAULT",sizeof("DEFAULT")-1) == 0) {
-								const char* value_tmp = get_default_session_variable((enum pgsql_variable_name)idx);
-								value1 = value_tmp ? value_tmp : ((idx < PGSQL_NAME_LAST_LOW_WM) ? pgsql_thread___default_variables[idx] : pgsql_tracked_variables[idx].default_value);
+								value1 = get_default_session_variable((enum pgsql_variable_name)idx);
 							}
 
 							if (idx == PGSQL_DATESTYLE) {
 								assert(current_datestyle.format != DATESTYLE_FORMAT_NONE);
 								assert(current_datestyle.order != DATESTYLE_ORDER_NONE);
+
+								// PostgreSQL strangely accepts an empty value for datestyle, but it does not alter previously set vaclue.
+								if (value1.empty()) {
+									client_myds->DSS = STATE_QUERY_SENT_NET;
+									unsigned int nTrx = NumActiveTransactions();
+									const char trx_state = (nTrx ? 'T' : 'I');
+									client_myds->myprot.generate_ok_packet(true, true, NULL, 0, dig, trx_state, NULL, param_status);
+									RequestEnd(NULL);
+									l_free(pkt->size, pkt->ptr);
+									return true;
+								}
+
 								// Convert DateStyle to a string. Any missing parts will be filled using the current DateStyle value.
 								// For example:
 								// If current DateStyle is 'ISO, MDY' and the user sets 'DMY' the resulting DateStyle will be 'ISO, DMY'
-								value1 = PgSQL_DateStyle_Util::datestyle_to_string(value1, current_datestyle);
-
+								const std::string& value_tmp = PgSQL_DateStyle_Util::datestyle_to_string(value1, current_datestyle);
 								// if something goes wrong, the value will be empty
-								if (value1.empty()) return false;
+								if (value_tmp.empty()) {
+									char* m = NULL;
+									char* errmsg = NULL;
+									proxy_error("invalid value for parameter \"DateStyle\": \"%s\"\n", value1.c_str());
+									m = (char*)"invalid value for parameter \"DateStyle\": \"%s\"";
+									errmsg = (char*)malloc(value1.length() + strlen(m));
+									sprintf(errmsg, m, value1.c_str());
+
+									client_myds->DSS = STATE_QUERY_SENT_NET;
+									client_myds->myprot.generate_error_packet(true, true, errmsg,
+										PGSQL_ERROR_CODES::ERRCODE_INVALID_PARAMETER_VALUE, false, true);
+									client_myds->DSS = STATE_SLEEP;
+									status = WAITING_CLIENT_DATA;
+									free(errmsg);
+									return true;
+								}
+								value1 = value_tmp;
 							} 
 								
 							proxy_debug(PROXY_DEBUG_MYSQL_COM, 8, "Changing connection %s to %s\n", var.c_str(), value1.c_str());
@@ -5233,8 +5259,8 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 				if (!charset.empty()) {
 
 					if ((charset.size() == sizeof("DEFAULT") - 1) && strncasecmp(charset.c_str(), (char*)"DEFAULT", sizeof("DEFAULT") - 1) == 0) {
-						const char* charset_tmp = get_default_session_variable(PGSQL_CLIENT_ENCODING); 
-						charset = charset_tmp ? charset_tmp : pgsql_thread___default_variables[PGSQL_CLIENT_ENCODING];
+						charset = get_default_session_variable(PGSQL_CLIENT_ENCODING);
+						assert(charset.empty() == false);
 					}
 
 					proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "Processing SET CLIENT_ENCODING %s\n", charset.c_str());
@@ -5246,14 +5272,14 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 				if (charset_encoding == -1) {
 					char* m = NULL;
 					char* errmsg = NULL;
-					proxy_error("Cannot find charset [%s]\n", charset.c_str());
-					m = (char*)"Unknown character set: '%s'";
+					proxy_error("invalid value for parameter \"Client_Encoding\": \"%s\"\n", charset.c_str());
+					m = (char*)"invalid value for parameter \"Client_Encoding\": \"%s\"";
 					errmsg = (char*)malloc(charset.length() + strlen(m));
 					sprintf(errmsg, m, charset.c_str());
 
 					client_myds->DSS = STATE_QUERY_SENT_NET;
 					client_myds->myprot.generate_error_packet(true, true, errmsg,
-						PGSQL_ERROR_CODES::ERRCODE_SYNTAX_ERROR_OR_ACCESS_RULE_VIOLATION, false, true);
+						PGSQL_ERROR_CODES::ERRCODE_INVALID_PARAMETER_VALUE, false, true);
 					client_myds->DSS = STATE_SLEEP;
 					status = WAITING_CLIENT_DATA;
 					free(errmsg);
@@ -5318,7 +5344,8 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 
 				for (int i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
 
-					if (i == PGSQL_NAME_LAST_LOW_WM) continue;
+					if (i == PGSQL_NAME_LAST_LOW_WM) 
+						continue;
 
 					const char* name = pgsql_tracked_variables[i].set_variable_name;
 					const char* value = get_default_session_variable((enum pgsql_variable_name)i);
@@ -5349,7 +5376,8 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 				int idx = PGSQL_NAME_LAST_HIGH_WM;
 				for (int i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
 
-					if (i == PGSQL_NAME_LAST_LOW_WM) continue;
+					if (i == PGSQL_NAME_LAST_LOW_WM) 
+						continue;
 
 					if (variable_name_exists(pgsql_tracked_variables[i], nq.c_str()) == true) {
 						idx = i;
@@ -6754,6 +6782,10 @@ void PgSQL_Session::reset_default_session_variable(enum pgsql_variable_name idx)
 //   - "ISO"       (a single token; the second string will be empty)
 // Leading and trailing whitespace is removed from each token.
 std::vector<std::string> PgSQL_DateStyle_Util::split_datestyle(std::string_view input) {
+
+	if (input.empty())
+		return {};
+
 	std::string token1, token2;
 	// Reserve capacity in case the input is large (typically not needed for DateStyle)
 	token1.reserve(input.size());
@@ -6897,7 +6929,6 @@ PgSQL_DateStyle_t PgSQL_DateStyle_Util::parse_datestyle(std::string_view input) 
 std::string PgSQL_DateStyle_Util::datestyle_to_string(PgSQL_DateStyle_t datestyle, const PgSQL_DateStyle_t& default_datestyle) {
 
 	if (datestyle.format == DATESTYLE_FORMAT_NONE && datestyle.order == DATESTYLE_ORDER_NONE) {
-		assert(0);
 		return {};
 	}
 

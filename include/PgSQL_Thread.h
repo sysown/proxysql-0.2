@@ -957,7 +957,7 @@ public:
 		char* ldap_user_variable;
 		char* add_ldap_user_comment;
 		char* default_session_track_gtids;
-		char* default_variables[PGSQL_NAME_LAST_LOW_WM];
+		char* default_variables[PGSQL_NAME_LAST_HIGH_WM];
 		char* firewall_whitelist_errormsg;
 #ifdef DEBUG
 		bool session_debug;
