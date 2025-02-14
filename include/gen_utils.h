@@ -271,6 +271,33 @@ public:
 
 #endif /* __CLASS_PTR_ARRAY_H */
 
+#ifndef CLASS_ConditionalLock_H
+#define CLASS_ConditionalLock_H
+#include <mutex>
+
+class ConditionalLock {
+private:
+	std::mutex& mutex;
+	bool locked;
+
+public:
+	ConditionalLock(std::mutex& m, bool should_lock) : mutex(m), locked(should_lock) {
+		if (locked) {
+			mutex.lock();
+		}
+	}
+
+	~ConditionalLock() {
+		if (locked) {
+			mutex.unlock();
+		}
+	}
+
+	// Prevent copying and assignment
+	ConditionalLock(const ConditionalLock&) = delete;
+	ConditionalLock& operator=(const ConditionalLock&) = delete;
+};
+#endif // CLASS_ConditionalLock_H
 
 
 #ifndef __GEN_FUNCTIONS

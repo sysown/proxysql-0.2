@@ -137,7 +137,7 @@ struct CopyCmdMatcher {
 	}
 };
 
-class __attribute__((aligned(64))) PgSQL_Thread : public Base_Thread
+class __attribute__((aligned(64))) PgSQL_Thread : public Base_Thread<PgSQL_Thread>
 {
 private:
 	unsigned int servers_table_version_previous;
@@ -231,6 +231,7 @@ public:
 	struct {
 		unsigned long long stvar[PG_st_var_END];
 		unsigned int active_transactions;
+		std::atomic<unsigned int> non_idle_client_connections;
 	} status_variables;
 
 	struct {
@@ -392,7 +393,7 @@ public:
 	 * active and needs to be removed from the thread's session list.
 	 *
 	 */
-	void unregister_session(int);
+	//void unregister_session(int);
 
 	/**
 	 * @brief Returns a pointer to the `pollfd` structure for a specific data stream.
@@ -535,7 +536,7 @@ public:
 	 * removed from the connection handler list.
 	 *
 	 */
-	void unregister_session_connection_handler(int idx, bool _new = false);
+	//void unregister_session_connection_handler(int idx, bool _new = false);
 
 	/**
 	 * @brief Handles a new connection accepted by a listener.
@@ -648,6 +649,10 @@ public:
 	 *
 	 */
 	void Scan_Sessions_to_Kill(PtrArray * mysess);
+
+
+	void Scan_Sessions_to_Kill(const std::vector<PgSQL_Session *>& sessions);
+	void Scan_Sessions_to_Kill_innerLoop(PgSQL_Session *_sess);
 
 	/**
 	 * @brief  Scans all session arrays across all threads to identify and kill sessions.
