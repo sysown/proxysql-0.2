@@ -194,6 +194,7 @@ class __attribute__((aligned(64))) MySQL_Thread : public Base_Thread<MySQL_Threa
 
 	// if set_parser_algorithm == 2 , a single thr_SetParser is used
 	SetParser *thr_SetParser;
+	bool GloMyQPro_init_thread = false;
 
 	MySQL_Thread();
 	~MySQL_Thread();

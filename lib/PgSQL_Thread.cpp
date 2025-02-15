@@ -2683,7 +2683,9 @@ PgSQL_Thread::~PgSQL_Thread() {
 			delete sess;
 		}
 		mysql_sessions.clear();
-		GloPgQPro->end_thread(); // only for real threads
+		if (GloMyQPro_init_thread == true) {
+			GloPgQPro->end_thread(); // only for real threads
+		}
 	//}
 
 	if (mirror_queue_mysql_sessions) {
@@ -2851,6 +2853,7 @@ bool PgSQL_Thread::init() {
 	my_idle_conns = (PgSQL_Connection**)malloc(sizeof(PgSQL_Connection*) * SESSIONS_FOR_CONNECTIONS_HANDLER);
 	memset(my_idle_conns, 0, sizeof(PgSQL_Connection*) * SESSIONS_FOR_CONNECTIONS_HANDLER);
 	GloPgQPro->init_thread();
+	GloMyQPro_init_thread = true;
 	refresh_variables();
 	i = pipe(pipefd);
 	ioctl_FIONBIO(pipefd[0], 1);

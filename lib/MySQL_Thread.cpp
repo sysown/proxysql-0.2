@@ -2812,7 +2812,9 @@ MySQL_Thread::~MySQL_Thread() {
 		mysql_sessions.clear();
 		//delete mysql_sessions;
 		//mysql_sessions=NULL;
-		GloMyQPro->end_thread(); // only for real threads
+		if (GloMyQPro_init_thread == true) {
+			GloMyQPro->end_thread(); // only for real threads
+		}
 //	}
 
 	if (mirror_queue_mysql_sessions) {
@@ -2969,6 +2971,7 @@ bool MySQL_Thread::init() {
 	my_idle_conns=(MySQL_Connection **)malloc(sizeof(MySQL_Connection *)*SESSIONS_FOR_CONNECTIONS_HANDLER);
 	memset(my_idle_conns,0,sizeof(MySQL_Connection *)*SESSIONS_FOR_CONNECTIONS_HANDLER);
 	GloMyQPro->init_thread();
+	GloMyQPro_init_thread = true;
 	refresh_variables();
 	i=pipe(pipefd);
 	ioctl_FIONBIO(pipefd[0],1);
