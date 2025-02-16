@@ -89,7 +89,7 @@ enum MySQL_Thread_status_variable {
 	MY_st_var_END
 };
 
-class __attribute__((aligned(64))) MySQL_Thread : public Base_Thread
+class __attribute__((aligned(64))) MySQL_Thread : public Base_Thread<MySQL_Thread>
 {
 	friend class PgSQL_Thread;
 	private:
@@ -179,6 +179,7 @@ class __attribute__((aligned(64))) MySQL_Thread : public Base_Thread
 	struct {
 		unsigned long long stvar[MY_st_var_END];
 		unsigned int active_transactions;
+		std::atomic<unsigned int> non_idle_client_connections;
 	} status_variables;
 
 	struct {
@@ -193,6 +194,7 @@ class __attribute__((aligned(64))) MySQL_Thread : public Base_Thread
 
 	// if set_parser_algorithm == 2 , a single thr_SetParser is used
 	SetParser *thr_SetParser;
+	bool GloMyQPro_init_thread = false;
 
 	MySQL_Thread();
 	~MySQL_Thread();
@@ -206,7 +208,7 @@ class __attribute__((aligned(64))) MySQL_Thread : public Base_Thread
   void poll_listener_add(int sock);
   void poll_listener_del(int sock);
   //void register_session(MySQL_Session *, bool up_start=true);
-  void unregister_session(int);
+  //void unregister_session(int);
   struct pollfd * get_pollfd(unsigned int i);
   bool process_data_on_data_stream(MySQL_Data_Stream *myds, unsigned int n);
 	//void ProcessAllSessions_SortingSessions();
@@ -216,13 +218,15 @@ class __attribute__((aligned(64))) MySQL_Thread : public Base_Thread
 	void process_all_sessions();
   void refresh_variables();
   void register_session_connection_handler(MySQL_Session *_sess, bool _new=false);
-  void unregister_session_connection_handler(int idx, bool _new=false);
+  //void unregister_session_connection_handler(int idx, bool _new=false);
   void listener_handle_new_connection(MySQL_Data_Stream *myds, unsigned int n);
 	void Get_Memory_Stats();
 	MySQL_Connection * get_MyConn_local(unsigned int, MySQL_Session *sess, char *gtid_uuid, uint64_t gtid_trxid, int max_lag_ms);
 	void push_MyConn_local(MySQL_Connection *);
 	void return_local_connections();
 	void Scan_Sessions_to_Kill(PtrArray *mysess);
+	void Scan_Sessions_to_Kill(const std::vector<MySQL_Session *>& sessions);
+	void Scan_Sessions_to_Kill_innerLoop(MySQL_Session *_sess);
 	void Scan_Sessions_to_Kill_All();
 };
 
@@ -528,6 +532,9 @@ class MySQL_Threads_Handler
 		int connpoll_reset_queue_length;
 		char *eventslog_filename;
 		int eventslog_filesize;
+		int eventslog_buffer_history_size;
+		int eventslog_table_memory_size;
+		int eventslog_buffer_max_query_length;
 		int eventslog_default_log;
 		int eventslog_format;
 		char *auditlog_filename;

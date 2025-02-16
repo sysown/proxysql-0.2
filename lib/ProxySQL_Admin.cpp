@@ -366,6 +366,7 @@ static char * admin_variables_names[]= {
 	(char *)"stats_mysql_connection_pool",
 	(char *)"stats_mysql_query_cache",
 	(char *)"stats_mysql_query_digest_to_disk",
+	(char *)"stats_mysql_eventslog_sync_buffer_to_disk",
 	(char *)"stats_system_cpu",
 	(char *)"stats_system_memory",
 	(char *)"mysql_ifaces",
@@ -1959,7 +1960,7 @@ void *child_mysql(void *arg) {
 	mysql_thr->curtime=monotonic_time();
 	GloMyQPro->init_thread();
 	mysql_thr->refresh_variables();
-	MySQL_Session *sess=mysql_thr->create_new_session_and_client_data_stream<MySQL_Thread, MySQL_Session*>(client);
+	MySQL_Session *sess=mysql_thr->create_new_session_and_client_data_stream(client);
 	sess->thread=mysql_thr;
 	sess->session_type = PROXYSQL_SESSION_ADMIN;
 	sess->handler_function=admin_session_handler<MySQL_Session>;
@@ -2079,7 +2080,7 @@ void* child_postgres(void* arg) {
 	pgsql_thr->curtime = monotonic_time();
 	GloPgQPro->init_thread();
 	pgsql_thr->refresh_variables();
-	PgSQL_Session* sess = pgsql_thr->create_new_session_and_client_data_stream<PgSQL_Thread, PgSQL_Session*>(client);
+	PgSQL_Session* sess = pgsql_thr->create_new_session_and_client_data_stream(client);
 	sess->thread = pgsql_thr;
 	sess->session_type = PROXYSQL_SESSION_ADMIN;
 	sess->handler_function=admin_session_handler<PgSQL_Session>;
@@ -2347,6 +2348,14 @@ __end_while_pool:
 				curtime2 = curtime2/1000;
 				proxy_info("Automatically saved stats_mysql_query_digest to disk: %llums to write %d entries\n", curtime2-curtime1, r1);
 			}
+			if (GloProxyStats->MySQL_Logger_dump_eventslog_timetoget(curtime)) {
+				unsigned long long curtime1=monotonic_time();
+				int r1 = GloMyLogger->processEvents(nullptr, SPA->statsdb_disk);
+				unsigned long long curtime2=monotonic_time();
+				curtime1 = curtime1/1000;
+				curtime2 = curtime2/1000;
+				proxy_info("Automatically saved history_mysql_query_events to disk: %llums to write %d entries\n", curtime2-curtime1, r1);
+			}
 			if (GloProxyStats->system_cpu_timetoget(curtime)) {
 				GloProxyStats->system_cpu_sets();
 			}
@@ -2517,6 +2526,10 @@ void update_modules_metrics() {
 	if (GloProxyCluster) {
 		GloProxyCluster->p_update_metrics();
 	}
+	// Update Logger metrics
+	if (GloMyLogger) {
+		GloMyLogger->p_update_metrics();
+	}
 
 	// Update admin metrics
 	GloAdmin->p_update_metrics();
@@ -2633,12 +2646,14 @@ ProxySQL_Admin::ProxySQL_Admin() :
 	variables.stats_mysql_connections = 60;
 	variables.stats_mysql_query_cache = 60;
 	variables.stats_mysql_query_digest_to_disk = 0;
+	variables.stats_mysql_eventslog_sync_buffer_to_disk = 0;
 	variables.stats_system_cpu = 60;
 	variables.stats_system_memory = 60;
 	GloProxyStats->variables.stats_mysql_connection_pool = 60;
 	GloProxyStats->variables.stats_mysql_connections = 60;
 	GloProxyStats->variables.stats_mysql_query_cache = 60;
 	GloProxyStats->variables.stats_mysql_query_digest_to_disk = 0;
+	GloProxyStats->variables.stats_mysql_eventslog_sync_buffer_to_disk = 0;
 	GloProxyStats->variables.stats_system_cpu = 60;
 #ifndef NOJEM
 	GloProxyStats->variables.stats_system_memory = 60;
@@ -3288,6 +3303,10 @@ char * ProxySQL_Admin::get_variable(char *name) {
 			sprintf(intbuf,"%d",variables.stats_mysql_query_digest_to_disk);
 			return strdup(intbuf);
 		}
+		if (!strcasecmp(name,"stats_mysql_eventslog_sync_buffer_to_disk")) {
+			sprintf(intbuf,"%d",variables.stats_mysql_eventslog_sync_buffer_to_disk);
+			return strdup(intbuf);
+		}
 		if (!strcasecmp(name,"stats_system_cpu")) {
 			sprintf(intbuf,"%d",variables.stats_system_cpu);
 			return strdup(intbuf);
@@ -3614,6 +3633,16 @@ bool ProxySQL_Admin::set_variable(char *name, char *value, bool lock) {  // this
 			if (intv >= 0 && intv <= 24*3600) {
 				variables.stats_mysql_query_digest_to_disk=intv;
 				GloProxyStats->variables.stats_mysql_query_digest_to_disk=intv;
+				return true;
+			} else {
+				return false;
+			}
+		}
+		if (!strcasecmp(name,"stats_mysql_eventslog_sync_buffer_to_disk")) {
+			int intv=atoi(value);
+			if (intv >= 0 && intv <= 24*3600) {
+				variables.stats_mysql_eventslog_sync_buffer_to_disk=intv;
+				GloProxyStats->variables.stats_mysql_eventslog_sync_buffer_to_disk=intv;
 				return true;
 			} else {
 				return false;
