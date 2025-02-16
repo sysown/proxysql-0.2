@@ -324,7 +324,7 @@ PgSQL_Connection_Placeholder::PgSQL_Connection_Placeholder() {
 	statuses.questions = 0;
 	statuses.pgconnpoll_get = 0;
 	statuses.pgconnpoll_put = 0;
-	memset(&connected_host_details, 0, sizeof(connected_host_details));
+	
 };
 
 PgSQL_Connection_Placeholder::~PgSQL_Connection_Placeholder() {
@@ -369,14 +369,7 @@ PgSQL_Connection_Placeholder::~PgSQL_Connection_Placeholder() {
 		options.session_track_gtids=NULL;
 	}
 
-	if (connected_host_details.hostname) {
-		free(connected_host_details.hostname);
-		connected_host_details.hostname = NULL;
-	}
-	if (connected_host_details.ip) {
-		free(connected_host_details.ip);
-		connected_host_details.hostname = NULL;
-	}
+
 };
 
 bool PgSQL_Connection_Placeholder::set_autocommit(bool _ac) {
@@ -648,6 +641,7 @@ PgSQL_Connection::PgSQL_Connection() {
 	new_result = true;
 	is_copy_out = false;
 	reset_error();
+	memset(&connected_host_details, 0, sizeof(connected_host_details));
 }
 
 PgSQL_Connection::~PgSQL_Connection() {

@@ -348,10 +348,7 @@ class PgSQL_Connection_Placeholder {
 	PgSQL_Connection_userinfo *userinfo;
 	PgSQL_Data_Stream *myds;
 
-	struct {
-		char* hostname;
-		char* ip;
-	} connected_host_details;
+	
 	/**
 	 * @brief Keeps tracks of the 'server_status'. Do not confuse with the 'server_status' from the
 	 *  'MYSQL' connection itself. This flag keeps track of the configured server status from the
@@ -586,6 +583,11 @@ public:
 	unsigned int number_of_matching_session_variables(const PgSQL_Connection* client_conn, unsigned int& not_matching);
 
 	void reset();
+
+	struct {
+		char* hostname;
+		char* ip;
+	} connected_host_details;
 
 	PgSQL_Variable variables[PGSQL_NAME_LAST_HIGH_WM];
 	uint32_t var_hash[PGSQL_NAME_LAST_HIGH_WM];
