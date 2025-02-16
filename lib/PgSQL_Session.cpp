@@ -3569,13 +3569,6 @@ void PgSQL_Session::handler___status_WAITING_CLIENT_DATA() {
 	// is left below as an example of how to perform a more passive maintenance over session connections.
 }
 
-// this function was inline
-void PgSQL_Session::handler_rc0_Process_GTID(PgSQL_Connection* myconn) {
-	if (myconn->get_gtid(mybe->gtid_uuid, &mybe->gtid_trxid)) {
-
-	}
-}
-
 int PgSQL_Session::handler() {
 #if ENABLE_TIMER
 	Timer timer(thread->Timers.Sessions_Handlers);
@@ -3851,8 +3844,6 @@ handler_again:
 							transaction_started_at = 0; // reset it
 					}
 				}
-
-				//handler_rc0_Process_GTID(myconn);
 
 				// if we are locked on hostgroup, the value of autocommit is copied from the backend connection
 				// see bug #3549

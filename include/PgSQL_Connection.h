@@ -303,7 +303,7 @@ class PgSQL_Connection_Placeholder {
 	private:
 	void update_warning_count_from_connection();
 	void update_warning_count_from_statement();
-	bool is_expired(unsigned long long timeout);
+
 	unsigned long long inserted_into_pool;
 	public:
 	struct {
@@ -397,7 +397,6 @@ class PgSQL_Connection_Placeholder {
 	bool multiplex_delayed;
 	bool unknown_transaction_status;
 	
-	char gtid_uuid[128];
 	PgSQL_Connection_Placeholder();
 	~PgSQL_Connection_Placeholder();
 	bool set_autocommit(bool);
@@ -406,44 +405,8 @@ class PgSQL_Connection_Placeholder {
 
 	void set_status(bool set, uint32_t status_flag);
 	bool get_status(uint32_t status_flag);
-#if 0
-	void set_status_sql_log_bin0(bool);
-	bool get_status_sql_log_bin0();
-	void set_autocommit_start();
-	void set_autocommit_cont(short event);
-#endif // 0
-	void set_names_start();
-	void set_names_cont(short event);
-#ifndef PROXYSQL_USE_RESULT
-	void store_result_start();
-	void store_result_cont(short event);
-#endif // PROXYSQL_USE_RESULT
-#if 0
-	void initdb_start();
-	void initdb_cont(short event);
-	void set_option_start();
-	void set_option_cont(short event);
-#endif // 0
+
 	void set_query(char *stmt, unsigned long length);
-
-	void stmt_prepare_start();
-	void stmt_prepare_cont(short event);
-	void stmt_execute_start();
-	void stmt_execute_cont(short event);
-	void stmt_execute_store_result_start();
-	void stmt_execute_store_result_cont(short event);
-
-#if 0
-	/**
-	 * @brief Process the rows returned by 'async_stmt_execute_store_result'. Extracts all the received
-	 *   rows from 'query.stmt->result.data' but the last one, adds them to 'MyRS', frees the buffer
-	 *   used by 'query.stmt' and allocates a new one with the last row, leaving it ready for being filled
-	 *   with the new rows to be received.
-	 * @param processed_bytes Reference to the already processed bytes to be updated with the rows
-	 *   that are being read and added to 'MyRS'.
-	 */
-	void process_rows_in_ASYNC_STMT_EXECUTE_STORE_RESULT_CONT(unsigned long long& processed_bytes);
-#endif // 0
 
 	void async_free_result();
 
@@ -455,11 +418,8 @@ class PgSQL_Connection_Placeholder {
 	void optimize();
 	void close_mysql();
 
-	void set_is_client(); // used for local_stmts
-
 	void reset();
 
-	bool get_gtid(char *buff, uint64_t *trx_id);
 	void reduce_auto_increment_delay_token() { if (auto_increment_delay_token) auto_increment_delay_token--; };
 
 	bool match_tracked_options(const PgSQL_Connection *c);

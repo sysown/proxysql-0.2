@@ -329,7 +329,6 @@ PgSQL_Connection_Placeholder::PgSQL_Connection_Placeholder() {
 	statuses.questions = 0;
 	statuses.pgconnpoll_get = 0;
 	statuses.pgconnpoll_put = 0;
-	memset(gtid_uuid,0,sizeof(gtid_uuid));
 	memset(&connected_host_details, 0, sizeof(connected_host_details));
 };
 
@@ -437,12 +436,6 @@ void PgSQL_Connection_Placeholder::update_warning_count_from_statement() {
 	}
 }
 
-bool PgSQL_Connection_Placeholder::is_expired(unsigned long long timeout) {
-// FIXME: here the check should be a sanity check
-// FIXME: for now this is just a temporary (and stupid) check
-	return false;
-}
-
 void PgSQL_Connection_Placeholder::set_status(bool set, uint32_t status_flag) {
 	if (set) {
 		this->status_flags |= status_flag;
@@ -454,20 +447,6 @@ void PgSQL_Connection_Placeholder::set_status(bool set, uint32_t status_flag) {
 bool PgSQL_Connection_Placeholder::get_status(uint32_t status_flag) {
 	return this->status_flags & status_flag;
 }
-
-#if 0
-void PgSQL_Connection_Placeholder::set_status_sql_log_bin0(bool v) {
-	if (v) {
-		status_flags |= STATUS_MYSQL_CONNECTION_SQL_LOG_BIN0;
-	} else {
-		status_flags &= ~STATUS_MYSQL_CONNECTION_SQL_LOG_BIN0;
-	}
-}
-
-bool PgSQL_Connection_Placeholder::get_status_sql_log_bin0() {
-	return status_flags & STATUS_MYSQL_CONNECTION_SQL_LOG_BIN0;
-}
-#endif // 0
 
 unsigned int PgSQL_Connection_Placeholder::reorder_dynamic_variables_idx() {
 	dynamic_variables_idx.clear();
@@ -515,59 +494,6 @@ unsigned int PgSQL_Connection_Placeholder::number_of_matching_session_variables(
 	return ret;
 }
 
-#if 0
-void PgSQL_Connection_Placeholder::initdb_start() {
-	PROXY_TRACE();
-	PgSQL_Connection_userinfo *client_ui=myds->sess->client_myds->myconn->userinfo;
-	async_exit_status = mysql_select_db_start(&interr,pgsql,client_ui->dbname);
-}
-
-void PgSQL_Connection_Placeholder::initdb_cont(short event) {
-	proxy_debug(PROXY_DEBUG_MYSQL_PROTOCOL, 6,"event=%d\n", event);
-	async_exit_status = mysql_select_db_cont(&interr,pgsql, mysql_status(event, true));
-}
-
-void PgSQL_Connection_Placeholder::set_option_start() {
-	PROXY_TRACE();
-
-	enum_mysql_set_option set_option;
-	set_option=((options.client_flag & CLIENT_MULTI_STATEMENTS) ? MYSQL_OPTION_MULTI_STATEMENTS_ON : MYSQL_OPTION_MULTI_STATEMENTS_OFF);
-	async_exit_status = mysql_set_server_option_start(&interr,pgsql,set_option);
-}
-
-void PgSQL_Connection_Placeholder::set_option_cont(short event) {
-	proxy_debug(PROXY_DEBUG_MYSQL_PROTOCOL, 6,"event=%d\n", event);
-	async_exit_status = mysql_set_server_option_cont(&interr,pgsql, mysql_status(event, true));
-}
-
-void PgSQL_Connection_Placeholder::set_autocommit_start() {
-	PROXY_TRACE();
-	async_exit_status = mysql_autocommit_start(&ret_bool, pgsql, options.autocommit);
-}
-
-void PgSQL_Connection_Placeholder::set_autocommit_cont(short event) {
-	proxy_debug(PROXY_DEBUG_MYSQL_PROTOCOL, 6,"event=%d\n", event);
-	async_exit_status = mysql_autocommit_cont(&ret_bool, pgsql, mysql_status(event, true));
-}
-#endif // 0
-
-void PgSQL_Connection_Placeholder::set_names_start() {
-	PROXY_TRACE();
-	const MARIADB_CHARSET_INFO * c = proxysql_find_charset_nr(atoi(pgsql_variables.client_get_value(myds->sess, SQL_CHARACTER_SET)));
-	if (!c) {
-		// LCOV_EXCL_START
-		proxy_error("Not existing charset number %u\n", atoi(pgsql_variables.client_get_value(myds->sess, SQL_CHARACTER_SET)));
-		assert(0);
-		// LCOV_EXCL_STOP
-	}
-	async_exit_status = mysql_set_character_set_start(&interr,pgsql, NULL, atoi(pgsql_variables.client_get_value(myds->sess, SQL_CHARACTER_SET)));
-}
-
-void PgSQL_Connection_Placeholder::set_names_cont(short event) {
-	proxy_debug(PROXY_DEBUG_MYSQL_PROTOCOL, 6,"event=%d\n", event);
-	async_exit_status = mysql_set_character_set_cont(&interr,pgsql, mysql_status(event, true));
-}
-
 void PgSQL_Connection_Placeholder::set_query(char *stmt, unsigned long length) {
 	query.length=length;
 	query.ptr=stmt;
@@ -579,137 +505,7 @@ void PgSQL_Connection_Placeholder::set_query(char *stmt, unsigned long length) {
 	}
 }
 
-void PgSQL_Connection_Placeholder::stmt_prepare_start() {
-	PROXY_TRACE();
-	query.stmt=mysql_stmt_init(pgsql);
-	my_bool my_arg=true;
-	mysql_stmt_attr_set(query.stmt, STMT_ATTR_UPDATE_MAX_LENGTH, &my_arg);
-	async_exit_status = mysql_stmt_prepare_start(&interr , query.stmt, query.ptr, query.length);
-}
-
-void PgSQL_Connection_Placeholder::stmt_prepare_cont(short event) {
-	proxy_debug(PROXY_DEBUG_MYSQL_PROTOCOL, 6,"event=%d\n", event);
-	async_exit_status = mysql_stmt_prepare_cont(&interr , query.stmt , mysql_status(event, true));
-}
-
-void PgSQL_Connection_Placeholder::stmt_execute_start() {
-	PROXY_TRACE();
-	int _rc=0;
-	assert(query.stmt->mysql); // if we reached here, we hit bug #740
-	_rc=mysql_stmt_bind_param(query.stmt, query.stmt_meta->binds); // FIXME : add error handling
-	if (_rc) {
-		proxy_error("mysql_stmt_bind_param() failed: %s", mysql_stmt_error(query.stmt));
-	}
-	// if for whatever reason the previous execution failed, state is left to an inconsistent value
-	// see bug #3547
-	// here we force the state to be MYSQL_STMT_PREPARED
-	// it is a nasty hack because we shouldn't change states that should belong to the library
-	// I am not sure if this is a bug in the backend library or not
-	query.stmt->state= MYSQL_STMT_PREPARED;
-	async_exit_status = mysql_stmt_execute_start(&interr , query.stmt);
-}
-
-void PgSQL_Connection_Placeholder::stmt_execute_cont(short event) {
-	proxy_debug(PROXY_DEBUG_MYSQL_PROTOCOL, 6,"event=%d\n", event);
-	async_exit_status = mysql_stmt_execute_cont(&interr , query.stmt , mysql_status(event, true));
-}
-
-void PgSQL_Connection_Placeholder::stmt_execute_store_result_start() {
-	PROXY_TRACE();
-	async_exit_status = mysql_stmt_store_result_start(&interr, query.stmt);
-}
-
-void PgSQL_Connection_Placeholder::stmt_execute_store_result_cont(short event) {
-	proxy_debug(PROXY_DEBUG_MYSQL_PROTOCOL, 6,"event=%d\n", event);
-	async_exit_status = mysql_stmt_store_result_cont(&interr , query.stmt , mysql_status(event, true));
-}
-
-#ifndef PROXYSQL_USE_RESULT
-void PgSQL_Connection_Placeholder::store_result_start() {
-	PROXY_TRACE();
-	async_exit_status = mysql_store_result_start(&mysql_result, pgsql);
-}
-
-void PgSQL_Connection_Placeholder::store_result_cont(short event) {
-	proxy_debug(PROXY_DEBUG_MYSQL_PROTOCOL, 6,"event=%d\n", event);
-	async_exit_status = mysql_store_result_cont(&mysql_result , pgsql , mysql_status(event, true));
-}
-#endif // PROXYSQL_USE_RESULT
-
-void PgSQL_Connection_Placeholder::set_is_client() {
-	//-- local_stmts->set_is_client(myds->sess);
-}
-
 #define NEXT_IMMEDIATE(new_st) do { async_state_machine = new_st; goto handler_again; } while (0)
-
-#if 0
-void PgSQL_Connection_Placeholder::process_rows_in_ASYNC_STMT_EXECUTE_STORE_RESULT_CONT(unsigned long long& processed_bytes) {
-	PROXY_TRACE2();
-	// there is more than 1 row
-	unsigned long long total_size=0;
-	long long unsigned int irs = 0;
-	MYSQL_ROWS *ir = query.stmt->result.data;
-	for (irs = 0; irs < query.stmt->result.rows -1 ; irs++) {
-		// while iterating the rows we also count the bytes
-		total_size+=ir->length;
-		if (ir->length > 0xFFFFFF) {
-			total_size+=(ir->length / 0xFFFFFF) * sizeof(mysql_hdr);
-		}
-		total_size+=sizeof(mysql_hdr);
-		// add the row to the resulset
-		unsigned int br=MyRS->add_row(ir);
-		// increment counters for the bytes processed
-		__sync_fetch_and_add(&parent->bytes_recv,br);
-		myds->sess->thread->status_variables.stvar[st_var_queries_backends_bytes_recv]+=br;
-		myds->bytes_info.bytes_recv += br;
-		bytes_info.bytes_recv += br;
-		processed_bytes+=br;	// issue #527 : this variable will store the amount of bytes processed during this event
-
-		// we stop when we 'ir->next' will be pointing to the last row
-		if (irs <= query.stmt->result.rows - 2) {
-			ir = ir->next;
-		}
-	}
-	// at this point, ir points to the last row
-	// next, we create a new MYSQL_ROWS that is a copy of the last row
-	MYSQL_ROWS *lcopy = (MYSQL_ROWS *)malloc(sizeof(MYSQL_ROWS) + ir->length);
-	lcopy->length = ir->length;
-	lcopy->data= (MYSQL_ROW)(lcopy + 1);
-	memcpy((char *)lcopy->data, (char *)ir->data, ir->length);
-	// next we proceed to reset all the buffer
-
-	// this invalidates the local variables inside the coroutines
-	// pointing to the previous allocated memory for 'stmt->result'.
-	// For more context see: #3324
-	ma_free_root(&query.stmt->result.alloc, MYF(MY_KEEP_PREALLOC));
-	query.stmt->result.data= NULL;
-	query.stmt->result_cursor= NULL;
-	query.stmt->result.rows = 0;
-
-	// we will now copy back the last row and make it the only row available
-	MYSQL_ROWS *current = (MYSQL_ROWS *)ma_alloc_root(&query.stmt->result.alloc, sizeof(MYSQL_ROWS) + lcopy->length);
-	current->data= (MYSQL_ROW)(current + 1);
-	// update 'stmt->result.data' to the new allocated memory and copy the backed last row
-	query.stmt->result.data = current;
-	memcpy((char *)current->data, (char *)lcopy->data, lcopy->length);
-	// update the 'current->length' with the length of the copied row
-	current->length = lcopy->length;
-
-	// we free the copy
-	free(lcopy);
-	// change the rows count to 1
-	query.stmt->result.rows = 1;
-	// we should also configure the cursor, but because we scan it using our own
-	// algorithm, this is not needed
-
-	// now we update bytes counter
-	__sync_fetch_and_add(&parent->bytes_recv,total_size);
-	myds->sess->thread->status_variables.stvar[st_var_queries_backends_bytes_recv]+=total_size;
-	myds->bytes_info.bytes_recv += total_size;
-	bytes_info.bytes_recv += total_size;
-}
-
-#endif // 0
 
 // This function check if autocommit=0 and if there are any savepoint.
 // this is an attempt to mitigate MySQL bug https://bugs.pgsql.com/bug.php?id=107875
@@ -940,39 +736,6 @@ void PgSQL_Connection_Placeholder::reset() {
 		options.session_track_gtids_sent = false;
 	}
 }
-
-bool PgSQL_Connection_Placeholder::get_gtid(char *buff, uint64_t *trx_id) {
-	// note: current implementation for for OWN GTID only!
-	bool ret = false;
-	if (buff==NULL || trx_id == NULL) {
-		return ret;
-	}
-	if (pgsql) {
-		if (pgsql->net.last_errno==0) { // only if there is no error
-			if (pgsql->server_status & SERVER_SESSION_STATE_CHANGED) { // only if status changed
-				const char *data;
-				size_t length;
-				if (mysql_session_track_get_first(pgsql, SESSION_TRACK_GTIDS, &data, &length) == 0) {
-					if (length >= (sizeof(gtid_uuid) - 1)) {
-						length = sizeof(gtid_uuid) - 1;
-					}
-					if (memcmp(gtid_uuid,data,length)) {
-						// copy to local buffer in PgSQL_Connection
-						memcpy(gtid_uuid,data,length);
-						gtid_uuid[length]=0;
-						// copy to external buffer in MySQL_Backend
-						memcpy(buff,data,length);
-						buff[length]=0;
-						__sync_fetch_and_add(&myds->sess->thread->status_variables.stvar[st_var_gtid_session_collected],1);
-						ret = true;
-					}
-				}
-			}
-		}
-	}
-	return ret;
-}
-
 
 
 PgSQL_Connection::PgSQL_Connection() {
