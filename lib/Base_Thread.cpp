@@ -348,9 +348,11 @@ void Base_Thread<T>::read_one_byte_from_pipe(unsigned int n) {
 		//fprintf(stderr,"Got signal from admin , done nothing\n"); // FIXME: this is just the skeleton for issue #253
 		if (c) {
 			// we are being signaled to sleep for some ms. Before going to sleep we also release the mutex
+			thr->mysql_sessions_mutex.unlock(); // we must also release mysql_sessions_mutex
 			pthread_mutex_unlock(&thr->thread_mutex);
 			usleep(c*1000);
 			pthread_mutex_lock(&thr->thread_mutex);
+			thr->mysql_sessions_mutex.lock();
 			// we enter in maintenance loop only if c is set
 			// when threads are signaling each other, there is no need to set maintenance_loop
 			maintenance_loop=true;
