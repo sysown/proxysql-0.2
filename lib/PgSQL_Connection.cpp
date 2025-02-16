@@ -288,11 +288,6 @@ PgSQL_Connection_Placeholder::PgSQL_Connection_Placeholder() {
 	status_flags=0;
 	last_time_used=0;
 
-	for (auto i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
-		variables[i].value = NULL;
-		var_hash[i] = 0;
-	}
-
 	options.client_flag = 0;
 	options.server_capabilities = 0;
 	options.compression_min_length=0;
@@ -374,14 +369,6 @@ PgSQL_Connection_Placeholder::~PgSQL_Connection_Placeholder() {
 		options.session_track_gtids=NULL;
 	}
 
-	for (auto i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
-		if (variables[i].value) {
-			free(variables[i].value);
-			variables[i].value = NULL;
-			var_hash[i] = 0;
-		}
-	}
-
 	if (connected_host_details.hostname) {
 		free(connected_host_details.hostname);
 		connected_host_details.hostname = NULL;
@@ -446,52 +433,6 @@ void PgSQL_Connection_Placeholder::set_status(bool set, uint32_t status_flag) {
 
 bool PgSQL_Connection_Placeholder::get_status(uint32_t status_flag) {
 	return this->status_flags & status_flag;
-}
-
-unsigned int PgSQL_Connection_Placeholder::reorder_dynamic_variables_idx() {
-	dynamic_variables_idx.clear();
-	// note that we are inserting the index already ordered
-	for (auto i = PGSQL_NAME_LAST_LOW_WM + 1 ; i < PGSQL_NAME_LAST_HIGH_WM ; i++) {
-		if (var_hash[i] != 0) {
-			dynamic_variables_idx.push_back(i);
-		}
-	}
-	unsigned int r = dynamic_variables_idx.size();
-	return r;
-}
-
-unsigned int PgSQL_Connection_Placeholder::number_of_matching_session_variables(const PgSQL_Connection *client_conn, unsigned int& not_matching) {
-	unsigned int ret=0;
-	for (auto i = 0; i < PGSQL_NAME_LAST_LOW_WM; i++) {
-		if (client_conn->var_hash[i]) { // client has a variable set
-			if (var_hash[i] == client_conn->var_hash[i]) { // server conection has the variable set to the same value
-				ret++;
-			} else {
-				not_matching++;
-			}
-		}
-	}
-	// increse not_matching y the sum of client and server variables
-	// when a match is found the counter will be reduced by 2
-	not_matching += client_conn->dynamic_variables_idx.size();
-	not_matching += dynamic_variables_idx.size();
-	std::vector<uint32_t>::const_iterator it_c = client_conn->dynamic_variables_idx.begin(); // client connection iterator
-	std::vector<uint32_t>::const_iterator it_s = dynamic_variables_idx.begin();              // server connection iterator
-	for ( ; it_c != client_conn->dynamic_variables_idx.end() && it_s != dynamic_variables_idx.end() ; it_c++) {
-		while (it_s != dynamic_variables_idx.end() && *it_s < *it_c) {
-			it_s++;
-		}
-		if (it_s != dynamic_variables_idx.end()) {
-			if (*it_s == *it_c) {
-				if (var_hash[*it_s] == client_conn->var_hash[*it_c]) { // server conection has the variable set to the same value
-					// when a match is found the counter is reduced by 2
-					not_matching-=2;
-					ret++;
-				}
-			}
-		}
-	}
-	return ret;
 }
 
 void PgSQL_Connection_Placeholder::set_query(char *stmt, unsigned long length) {
@@ -690,52 +631,6 @@ void PgSQL_Connection_Placeholder::close_mysql() {
 	mysql_close_no_command(pgsql);
 }
 
-void PgSQL_Connection_Placeholder::reset() {
-	bool old_no_multiplex_hg = get_status(STATUS_MYSQL_CONNECTION_NO_MULTIPLEX_HG);
-	bool old_compress = get_status(STATUS_MYSQL_CONNECTION_COMPRESSION);
-	status_flags=0;
-	// reconfigure STATUS_MYSQL_CONNECTION_NO_MULTIPLEX_HG
-	set_status(old_no_multiplex_hg,STATUS_MYSQL_CONNECTION_NO_MULTIPLEX_HG);
-	// reconfigure STATUS_MYSQL_CONNECTION_COMPRESSION
-	set_status(old_compress,STATUS_MYSQL_CONNECTION_COMPRESSION);
-	reusable=true;
-	options.last_set_autocommit=-1; // never sent
-	warning_count=0;
-	delete local_stmts;
-	local_stmts=new MySQL_STMTs_local_v14(false);
-	creation_time = monotonic_time();
-
-	for (auto i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
-		var_hash[i] = 0;
-		if (variables[i].value) {
-			free(variables[i].value);
-			variables[i].value = NULL;
-			var_hash[i] = 0;
-		}
-	}
-	dynamic_variables_idx.clear();
-
-	if (options.init_connect) {
-		free(options.init_connect);
-		options.init_connect = NULL;
-		options.init_connect_sent = false;
-	}
-	auto_increment_delay_token = 0;
-	if (options.ldap_user_variable) {
-		if (options.ldap_user_variable_value) {
-			free(options.ldap_user_variable_value);
-			options.ldap_user_variable_value = NULL;
-		}
-		options.ldap_user_variable = NULL;
-		options.ldap_user_variable_sent = false;
-	}
-	options.session_track_gtids_int = 0;
-	if (options.session_track_gtids) {
-		free (options.session_track_gtids);
-		options.session_track_gtids = NULL;
-		options.session_track_gtids_sent = false;
-	}
-}
 
 
 PgSQL_Connection::PgSQL_Connection() {
@@ -744,6 +639,12 @@ PgSQL_Connection::PgSQL_Connection() {
 	pgsql_result = NULL;
 	query_result = NULL;
 	query_result_reuse = NULL;
+
+	for (int i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
+		variables[i].value = NULL;
+		var_hash[i] = 0;
+	}
+
 	new_result = true;
 	is_copy_out = false;
 	reset_error();
@@ -773,7 +674,7 @@ PgSQL_Connection::~PgSQL_Connection() {
 		delete query_result_reuse;
 		query_result_reuse = NULL;
 	}
-	for (auto i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
+	for (int i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
 		if (variables[i].value) {
 			free(variables[i].value);
 			variables[i].value = NULL;
@@ -2478,3 +2379,98 @@ int PgSQL_Connection::async_send_simple_command(short event, char* stmt, unsigne
 
 	return 1;
 }
+
+unsigned int PgSQL_Connection::reorder_dynamic_variables_idx() {
+	dynamic_variables_idx.clear();
+	// note that we are inserting the index already ordered
+	for (auto i = PGSQL_NAME_LAST_LOW_WM + 1; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
+		if (var_hash[i] != 0) {
+			dynamic_variables_idx.push_back(i);
+		}
+	}
+	unsigned int r = dynamic_variables_idx.size();
+	return r;
+}
+
+unsigned int PgSQL_Connection::number_of_matching_session_variables(const PgSQL_Connection* client_conn, unsigned int& not_matching) {
+	unsigned int ret = 0;
+	for (auto i = 0; i < PGSQL_NAME_LAST_LOW_WM; i++) {
+		if (client_conn->var_hash[i]) { // client has a variable set
+			if (var_hash[i] == client_conn->var_hash[i]) { // server conection has the variable set to the same value
+				ret++;
+			}
+			else {
+				not_matching++;
+			}
+		}
+	}
+	// increse not_matching y the sum of client and server variables
+	// when a match is found the counter will be reduced by 2
+	not_matching += client_conn->dynamic_variables_idx.size();
+	not_matching += dynamic_variables_idx.size();
+	std::vector<uint32_t>::const_iterator it_c = client_conn->dynamic_variables_idx.begin(); // client connection iterator
+	std::vector<uint32_t>::const_iterator it_s = dynamic_variables_idx.begin();              // server connection iterator
+	for (; it_c != client_conn->dynamic_variables_idx.end() && it_s != dynamic_variables_idx.end(); it_c++) {
+		while (it_s != dynamic_variables_idx.end() && *it_s < *it_c) {
+			it_s++;
+		}
+		if (it_s != dynamic_variables_idx.end()) {
+			if (*it_s == *it_c) {
+				if (var_hash[*it_s] == client_conn->var_hash[*it_c]) { // server conection has the variable set to the same value
+					// when a match is found the counter is reduced by 2
+					not_matching -= 2;
+					ret++;
+				}
+			}
+		}
+	}
+	return ret;
+}
+
+void PgSQL_Connection::reset() {
+	bool old_no_multiplex_hg = get_status(STATUS_MYSQL_CONNECTION_NO_MULTIPLEX_HG);
+	bool old_compress = get_status(STATUS_MYSQL_CONNECTION_COMPRESSION);
+	status_flags = 0;
+	// reconfigure STATUS_MYSQL_CONNECTION_NO_MULTIPLEX_HG
+	set_status(old_no_multiplex_hg, STATUS_MYSQL_CONNECTION_NO_MULTIPLEX_HG);
+	// reconfigure STATUS_MYSQL_CONNECTION_COMPRESSION
+	set_status(old_compress, STATUS_MYSQL_CONNECTION_COMPRESSION);
+	reusable = true;
+	options.last_set_autocommit = -1; // never sent
+	warning_count = 0;
+	delete local_stmts;
+	local_stmts = new MySQL_STMTs_local_v14(false);
+	creation_time = monotonic_time();
+
+	for (int i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
+		var_hash[i] = 0;
+		if (variables[i].value) {
+			free(variables[i].value);
+			variables[i].value = NULL;
+			var_hash[i] = 0;
+		}
+	}
+	dynamic_variables_idx.clear();
+
+	if (options.init_connect) {
+		free(options.init_connect);
+		options.init_connect = NULL;
+		options.init_connect_sent = false;
+	}
+	auto_increment_delay_token = 0;
+	if (options.ldap_user_variable) {
+		if (options.ldap_user_variable_value) {
+			free(options.ldap_user_variable_value);
+			options.ldap_user_variable_value = NULL;
+		}
+		options.ldap_user_variable = NULL;
+		options.ldap_user_variable_sent = false;
+	}
+	options.session_track_gtids_int = 0;
+	if (options.session_track_gtids) {
+		free(options.session_track_gtids);
+		options.session_track_gtids = NULL;
+		options.session_track_gtids_sent = false;
+	}
+}
+

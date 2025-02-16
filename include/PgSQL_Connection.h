@@ -326,17 +326,6 @@ class PgSQL_Connection_Placeholder {
 		bool no_backslash_escapes;
 	} options;
 
-	PgSQL_Conn_Param conn_params;
-
-	PgSQL_Variable variables[PGSQL_NAME_LAST_HIGH_WM];
-	uint32_t var_hash[PGSQL_NAME_LAST_HIGH_WM] = {0};
-	// for now we store possibly missing variables in the lower range
-	// we may need to fix that, but this will cost performance
-	bool var_absent[PGSQL_NAME_LAST_HIGH_WM] = {false};
-
-	std::vector<uint32_t> dynamic_variables_idx;
-	unsigned int reorder_dynamic_variables_idx();
-
 	struct {
 		unsigned long length;
 		char *ptr;
@@ -418,12 +407,10 @@ class PgSQL_Connection_Placeholder {
 	void optimize();
 	void close_mysql();
 
-	void reset();
+	
 
 	void reduce_auto_increment_delay_token() { if (auto_increment_delay_token) auto_increment_delay_token--; };
-
-	bool match_tracked_options(const PgSQL_Connection *c);
-	unsigned int number_of_matching_session_variables(const PgSQL_Connection *client_conn, unsigned int& not_matching);
+	
 	unsigned long get_mysql_thread_id() { return pgsql ? pgsql->thread_id : 0; }
 
 };
@@ -595,7 +582,19 @@ public:
 		return pg_valid_server_encoding_id(encoding);
 	}
 
-	//PgSQL_Conn_Param conn_params;
+	unsigned int reorder_dynamic_variables_idx();
+	unsigned int number_of_matching_session_variables(const PgSQL_Connection* client_conn, unsigned int& not_matching);
+
+	void reset();
+
+	PgSQL_Variable variables[PGSQL_NAME_LAST_HIGH_WM];
+	uint32_t var_hash[PGSQL_NAME_LAST_HIGH_WM];
+	// for now we store possibly missing variables in the lower range
+	// we may need to fix that, but this will cost performance
+	bool var_absent[PGSQL_NAME_LAST_HIGH_WM] = { false };
+	std::vector<uint32_t> dynamic_variables_idx;
+
+	PgSQL_Conn_Param conn_params;
 	PgSQL_ErrorInfo error_info;
 	PGconn* pgsql_conn;
 	uint8_t result_type;
