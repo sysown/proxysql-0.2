@@ -55,7 +55,7 @@ void Base_Thread<T>::register_session(TypeSession * _sess, bool up_start) {
 //	}
 	//T thr = this;
 	_sess->match_regexes=match_regexes;
-	if constexpr (std::is_same_v<T, PgSQL_Thread*>) {
+	if constexpr (std::is_same_v<T, PgSQL_Thread>) {
 		_sess->copy_cmd_matcher = (static_cast<PgSQL_Thread*>(this))->copy_cmd_matcher;
 	}
 
