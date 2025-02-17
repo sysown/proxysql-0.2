@@ -276,13 +276,11 @@ bool PgSQL_Connection_userinfo::set_dbname(const char* db) {
 
 PgSQL_Connection_Placeholder::PgSQL_Connection_Placeholder() {
 	pgsql=NULL;
-	async_state_machine=ASYNC_CONNECT_START;
-	ret_mysql=NULL;
-	send_quit=true;
+	
+	
+	
 
-	reusable=false;
-
-	status_flags=0;
+	
 	last_time_used=0;
 
 	options.client_flag = 0;
@@ -300,26 +298,20 @@ PgSQL_Connection_Placeholder::PgSQL_Connection_Placeholder() {
 	options.ldap_user_variable_value=NULL;
 	options.ldap_user_variable_sent=false;
 	options.session_track_gtids_int=0;
-	compression_pkt_id=0;
-	mysql_result=NULL;
+	
 	query.ptr=NULL;
 	query.length=0;
 	query.stmt=NULL;
 	query.stmt_meta=NULL;
 	query.stmt_result=NULL;
-	largest_query_length=0;
-	multiplex_delayed=false;
-	unknown_transaction_status = false;
+	
+	
+	
 	creation_time=0;
 	auto_increment_delay_token = 0;
-	processing_multi_statement=false;
+	
 	proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 4, "Creating new PgSQL_Connection %p\n", this);
 	local_stmts=new MySQL_STMTs_local_v14(false); // false by default, it is a backend
-	bytes_info.bytes_recv = 0;
-	bytes_info.bytes_sent = 0;
-	statuses.questions = 0;
-	statuses.pgconnpoll_get = 0;
-	statuses.pgconnpoll_put = 0;
 	
 };
 
@@ -333,25 +325,7 @@ PgSQL_Connection_Placeholder::~PgSQL_Connection_Placeholder() {
 	if (local_stmts) {
 		delete local_stmts;
 	}
-	if (pgsql) {
-		// always decrease the counter
-		if (ret_mysql) {
-			__sync_fetch_and_sub(&PgHGM->status.server_connections_connected,1);
-			if (query.stmt_result) {
-				if (query.stmt_result->handle) {
-					query.stmt_result->handle->status = MYSQL_STATUS_READY; // avoid calling mthd_my_skip_result()
-				}
-			}
-			if (mysql_result) {
-				if (mysql_result->handle) {
-					mysql_result->handle->status = MYSQL_STATUS_READY; // avoid calling mthd_my_skip_result()
-				}
-			}
-			//async_free_result();
-		}
-		close_mysql(); // this take care of closing pgsql connection
-		pgsql=NULL;
-	}
+
 
 	if (query.stmt) {
 		query.stmt=NULL;
@@ -371,89 +345,15 @@ bool PgSQL_Connection_Placeholder::set_autocommit(bool _ac) {
 	return _ac;
 }
 
-bool PgSQL_Connection_Placeholder::set_no_backslash_escapes(bool _ac) {
-	proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 4, "Setting no_backslash_escapes %d\n", _ac);
-	options.no_backslash_escapes=_ac;
-	return _ac;
-}
 
 void print_backtrace(void);
 
 
 
-void PgSQL_Connection_Placeholder::set_status(bool set, uint32_t status_flag) {
-	if (set) {
-		this->status_flags |= status_flag;
-	} else {
-		this->status_flags &= ~status_flag;
-	}
-}
-
-bool PgSQL_Connection_Placeholder::get_status(uint32_t status_flag) {
-	return this->status_flags & status_flag;
-}
-
-void PgSQL_Connection_Placeholder::set_query(char *stmt, unsigned long length) {
-	query.length=length;
-	query.ptr=stmt;
-	if (length > largest_query_length) {
-		largest_query_length=length;
-	}
-	if (query.stmt) {
-		query.stmt=NULL;
-	}
-}
-
 #define NEXT_IMMEDIATE(new_st) do { async_state_machine = new_st; goto handler_again; } while (0)
 
-// This function check if autocommit=0 and if there are any savepoint.
-// this is an attempt to mitigate MySQL bug https://bugs.pgsql.com/bug.php?id=107875
-bool PgSQL_Connection_Placeholder::AutocommitFalse_AndSavepoint() {
-	bool ret=false;
-	if (IsAutoCommit() == false) {
-		if (get_status(STATUS_MYSQL_CONNECTION_HAS_SAVEPOINT) == true) {
-			ret = true;
-		}
-	}
-	return ret;
-}
 
-bool PgSQL_Connection_Placeholder::IsAutoCommit() {
-	bool ret=false;
-	if (pgsql) {
-		ret = (pgsql->server_status & SERVER_STATUS_AUTOCOMMIT);
-		if (ret) {
-			if (options.last_set_autocommit==0) {
-				// it seems we hit bug http://bugs.pgsql.com/bug.php?id=66884
-				// we last sent SET AUTOCOMMIT = 0 , but the server says it is 1
-				// we assume that what we sent last is correct .  #873
-				ret = false;
-			}
-		} else {
-			if (options.last_set_autocommit==-1) {
-				// if a connection was reset (thus last_set_autocommit==-1)
-				// the information related to SERVER_STATUS_AUTOCOMMIT is lost
-				// therefore we fall back on the safe assumption that autocommit==1
-				ret = true;
-			}
-		}
-	}
-	return ret;
-}
 
-bool PgSQL_Connection_Placeholder::MultiplexDisabled(bool check_delay_token) {
-// status_flags stores information about the status of the connection
-// can be used to determine if multiplexing can be enabled or not
-	bool ret=false;
-	if (status_flags & (STATUS_MYSQL_CONNECTION_USER_VARIABLE | STATUS_MYSQL_CONNECTION_PREPARED_STATEMENT |
-		STATUS_MYSQL_CONNECTION_LOCK_TABLES | STATUS_MYSQL_CONNECTION_TEMPORARY_TABLE | STATUS_MYSQL_CONNECTION_GET_LOCK | STATUS_MYSQL_CONNECTION_NO_MULTIPLEX |
-		STATUS_MYSQL_CONNECTION_SQL_LOG_BIN0 | STATUS_MYSQL_CONNECTION_FOUND_ROWS | STATUS_MYSQL_CONNECTION_NO_MULTIPLEX_HG |
-		STATUS_MYSQL_CONNECTION_HAS_SAVEPOINT | STATUS_MYSQL_CONNECTION_HAS_WARNINGS) ) {
-		ret=true;
-	}
-	if (check_delay_token && auto_increment_delay_token) return true;
-	return ret;
-}
 
 bool PgSQL_Connection_Placeholder::IsKeepMultiplexEnabledVariables(char *query_digest_text) {
 	if (query_digest_text==NULL) return true;
@@ -551,45 +451,6 @@ bool PgSQL_Connection_Placeholder::IsKeepMultiplexEnabledVariables(char *query_d
 	return true;
 }
 
-void PgSQL_Connection_Placeholder::optimize() {
-	if (pgsql->net.max_packet > 65536) { // FIXME: temporary, maybe for very long time . This needs to become a global variable
-		if ( ( pgsql->net.buff == pgsql->net.read_pos ) &&  ( pgsql->net.read_pos == pgsql->net.write_pos ) ) {
-			free(pgsql->net.buff);
-			pgsql->net.max_packet=8192;
-			pgsql->net.buff=(unsigned char *)malloc(pgsql->net.max_packet);
-			memset(pgsql->net.buff,0,pgsql->net.max_packet);
-			pgsql->net.read_pos=pgsql->net.buff;
-			pgsql->net.write_pos=pgsql->net.buff;
-			pgsql->net.buff_end=pgsql->net.buff+pgsql->net.max_packet;
-		}
-	}
-}
-
-// close_mysql() is a replacement for mysql_close()
-// if avoids that a QUIT command stops forever
-// FIXME: currently doesn't support encryption and compression
-void PgSQL_Connection_Placeholder::close_mysql() {
-	if ((send_quit) && (pgsql->net.pvio) && ret_mysql) {
-		char buff[5];
-		mysql_hdr myhdr;
-		myhdr.pkt_id=0;
-		myhdr.pkt_length=1;
-		memcpy(buff, &myhdr, sizeof(mysql_hdr));
-		buff[4]=0x01;
-		int fd=pgsql->net.fd;
-#ifdef __APPLE__
-		int arg_on=1;
-		setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, (char *) &arg_on, sizeof(int));
-		send(fd, buff, 5, 0);
-#else
-		send(fd, buff, 5, MSG_NOSIGNAL);
-#endif
-	}
-//	int rc=0;
-	mysql_close_no_command(pgsql);
-}
-
-
 
 PgSQL_Connection::PgSQL_Connection() {
 	pgsql_conn = NULL;
@@ -600,6 +461,20 @@ PgSQL_Connection::PgSQL_Connection() {
 	myds = NULL;
 	parent = NULL;
 	fd = -1;
+	status_flags = 0;
+	largest_query_length = 0;
+	bytes_info.bytes_recv = 0;
+	bytes_info.bytes_sent = 0;
+	statuses.questions = 0;
+	statuses.pgconnpoll_get = 0;
+	statuses.pgconnpoll_put = 0;
+	unknown_transaction_status = false;
+	send_quit = true;
+	reusable = false;
+	multiplex_delayed = false;
+	processing_multi_statement = false;
+	async_state_machine = ASYNC_CONNECT_START;
+
 	userinfo = new PgSQL_Connection_userinfo();
 
 	for (int i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
@@ -2467,3 +2342,53 @@ void PgSQL_Connection::update_warning_count_from_statement() {
 	}
 }
 */
+
+void PgSQL_Connection::set_status(bool set, uint32_t status_flag) {
+	if (set) {
+		this->status_flags |= status_flag;
+	}
+	else {
+		this->status_flags &= ~status_flag;
+	}
+}
+
+bool PgSQL_Connection::get_status(uint32_t status_flag) {
+	return this->status_flags & status_flag;
+}
+
+bool PgSQL_Connection::MultiplexDisabled(bool check_delay_token) {
+	// status_flags stores information about the status of the connection
+	// can be used to determine if multiplexing can be enabled or not
+	bool ret = false;
+	if (status_flags & (STATUS_MYSQL_CONNECTION_USER_VARIABLE | STATUS_MYSQL_CONNECTION_PREPARED_STATEMENT |
+		STATUS_MYSQL_CONNECTION_LOCK_TABLES | STATUS_MYSQL_CONNECTION_TEMPORARY_TABLE | STATUS_MYSQL_CONNECTION_GET_LOCK | STATUS_MYSQL_CONNECTION_NO_MULTIPLEX |
+		STATUS_MYSQL_CONNECTION_SQL_LOG_BIN0 | STATUS_MYSQL_CONNECTION_FOUND_ROWS | STATUS_MYSQL_CONNECTION_NO_MULTIPLEX_HG |
+		STATUS_MYSQL_CONNECTION_HAS_SAVEPOINT | STATUS_MYSQL_CONNECTION_HAS_WARNINGS)) {
+		ret = true;
+	}
+	if (check_delay_token && auto_increment_delay_token) return true;
+	return ret;
+}
+
+// This function check if autocommit=0 and if there are any savepoint.
+// this is an attempt to mitigate MySQL bug https://bugs.pgsql.com/bug.php?id=107875
+bool PgSQL_Connection::AutocommitFalse_AndSavepoint() {
+	bool ret = false;
+	if (IsAutoCommit() == false) {
+		if (get_status(STATUS_MYSQL_CONNECTION_HAS_SAVEPOINT) == true) {
+			ret = true;
+		}
+	}
+	return ret;
+}
+
+void PgSQL_Connection::set_query(char* stmt, unsigned long length) {
+	query.length = length;
+	query.ptr = stmt;
+	if (length > largest_query_length) {
+		largest_query_length = length;
+	}
+	if (query.stmt) {
+		query.stmt = NULL;
+	}
+}

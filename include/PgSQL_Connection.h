@@ -336,61 +336,27 @@ class PgSQL_Connection_Placeholder {
 
 	MySQL_STMTs_local_v14 *local_stmts;	// local view of prepared statements
 	MYSQL *pgsql;
-	MYSQL *ret_mysql;
-	MYSQL_RES *mysql_result;
-	MYSQL_ROW mysql_row;
 
 
 	
-	
-
-	bytes_stats_t bytes_info; // bytes statistics
-	struct {
-		unsigned long long questions;
-		unsigned long long pgconnpoll_get;
-		unsigned long long pgconnpoll_put;
-	} statuses;
-
-	unsigned long largest_query_length;
-	
-	/**
-	 * @brief This represents the internal knowledge of ProxySQL about the connection. It keeps track of those
-	 *  states which *are not reflected* into 'server_status', but are relevant for connection handling.
-	 */
-	uint32_t status_flags;
-	int async_exit_status; // exit status of MariaDB Client Library Non blocking API
-	int interr;	// integer return
-	PG_ASYNC_ST async_state_machine;	// Async state machine
 	short wait_events;
-	uint8_t compression_pkt_id;
+	
 	my_bool ret_bool;
-	bool async_fetch_row_start;
-	bool send_quit;
-	bool reusable;
-	bool processing_multi_statement;
-	bool multiplex_delayed;
-	bool unknown_transaction_status;
+	
+
+
 	
 	PgSQL_Connection_Placeholder();
 	~PgSQL_Connection_Placeholder();
 	bool set_autocommit(bool);
-	bool set_no_backslash_escapes(bool);
 	
-
-	void set_status(bool set, uint32_t status_flag);
-	bool get_status(uint32_t status_flag);
-
-	void set_query(char *stmt, unsigned long length);
 
 	void async_free_result();
 
+
 	
-	bool IsAutoCommit();
-	bool AutocommitFalse_AndSavepoint();
-	bool MultiplexDisabled(bool check_delay_token = true);
 	bool IsKeepMultiplexEnabledVariables(char *query_digest_text);
-	void optimize();
-	void close_mysql();
+
 
 	
 
@@ -567,15 +533,28 @@ public:
 		return pg_valid_server_encoding_id(encoding);
 	}
 
+	void set_status(bool set, uint32_t status_flag);
+	bool get_status(uint32_t status_flag);
+	bool MultiplexDisabled(bool check_delay_token = true);
+
+	bool AutocommitFalse_AndSavepoint();
+
 	unsigned int reorder_dynamic_variables_idx();
 	unsigned int number_of_matching_session_variables(const PgSQL_Connection* client_conn, unsigned int& not_matching);
-
+	void set_query(char* stmt, unsigned long length);
 	void reset();
 
 	struct {
 		char* hostname;
 		char* ip;
 	} connected_host_details;
+
+	bytes_stats_t bytes_info; // bytes statistics
+	struct {
+		unsigned long long questions;
+		unsigned long long pgconnpoll_get;
+		unsigned long long pgconnpoll_put;
+	} statuses;
 
 	PgSQL_Variable variables[PGSQL_NAME_LAST_HIGH_WM];
 	uint32_t var_hash[PGSQL_NAME_LAST_HIGH_WM];
@@ -599,13 +578,29 @@ public:
 	PSresult  ps_result;
 	PgSQL_Query_Result* query_result;
 	PgSQL_Query_Result* query_result_reuse;
+	PG_ASYNC_ST async_state_machine;	// Async state machine
 	bool new_result;
 	bool is_copy_out;
+
+	bool send_quit;
+	bool reusable;
+	bool processing_multi_statement;
+	bool multiplex_delayed;
+
+
 	PgSQL_SrvC *parent;
 	PgSQL_Connection_userinfo* userinfo;
 	PgSQL_Data_Stream* myds;
 	//unsigned int warning_count;
 	int fd;
+	/**
+	 * @brief This represents the internal knowledge of ProxySQL about the connection. It keeps track of those
+	 *  states which *are not reflected* into 'server_status', but are relevant for connection handling.
+	 */
+	uint32_t status_flags;
+	unsigned long largest_query_length;
+	int async_exit_status; // exit status of Non blocking API
+	bool unknown_transaction_status;
 
 private:
 	// Handles the COPY OUT response from the server.
