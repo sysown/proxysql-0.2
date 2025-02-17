@@ -3322,7 +3322,7 @@ void PgSQL_Session::handler_rc0_PROCESSING_STMT_EXECUTE(PgSQL_Data_Stream* myds)
 		GloMyStmt->unlock();
 		/********************************************************************/
 	}
-	MySQL_Stmt_Result_to_MySQL_wire(CurrentQuery.mysql_stmt, myds->myconn);
+	//MySQL_Stmt_Result_to_MySQL_wire(CurrentQuery.mysql_stmt, myds->myconn);
 	LogQuery(myds);
 	if (CurrentQuery.stmt_meta) {
 		if (CurrentQuery.stmt_meta->pkt) {
@@ -4696,87 +4696,22 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 
 	if (pkt->size > (unsigned int)pgsql_thread___max_allowed_packet) {
 		handler_WCD_SS_MCQ_qpo_LargePacket(pkt);
-		reset_warning_hostgroup_flag_and_release_connection();
 		return true;
 	}
 
 	if (qpo->OK_msg) {
 		handler_WCD_SS_MCQ_qpo_OK_msg(pkt);
-		reset_warning_hostgroup_flag_and_release_connection();
 		return true;
 	}
 
 	if (qpo->error_msg) {
 		handler_WCD_SS_MCQ_qpo_error_msg(pkt);
-		reset_warning_hostgroup_flag_and_release_connection();
 		return true;
 	}
 
 	if (prepare_stmt_type & PgSQL_ps_type_execute_stmt) {	// for prepared statement execute we exit here
-		reset_warning_hostgroup_flag_and_release_connection();
 		goto __exit_set_destination_hostgroup;
 	}
-
-	// handle warnings
-	if (CurrentQuery.QueryParserArgs.digest_text) {
-		const char* dig_text = CurrentQuery.QueryParserArgs.digest_text;
-		const size_t dig_len = strlen(dig_text);
-
-		if (dig_len > 0) {
-			if ((dig_len == 13) && (strncasecmp(dig_text, "SHOW WARNINGS", 13) == 0)) {
-				proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "Intercepted '%s'\n", dig_text);
-				if (warning_in_hg > -1) {
-					proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "Changing current_hostgroup to '%d'\n", warning_in_hg);
-					current_hostgroup = warning_in_hg;
-					return false;
-				}
-				else {
-					proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "No warnings were detected in the previous query. Sending an empty response.\n");
-					std::unique_ptr<SQLite3_result> resultset(new SQLite3_result(3));
-					resultset->add_column_definition(SQLITE_TEXT, "Level");
-					resultset->add_column_definition(SQLITE_TEXT, "Code");
-					resultset->add_column_definition(SQLITE_TEXT, "Message");
-					SQLite3_to_MySQL(resultset.get(), NULL, 0, &client_myds->myprot, false, (client_myds->myconn->options.client_flag & CLIENT_DEPRECATE_EOF));
-					client_myds->DSS = STATE_SLEEP;
-					status = WAITING_CLIENT_DATA;
-					if (mirror == false) {
-						RequestEnd(NULL);
-					}
-					l_free(pkt->size, pkt->ptr);
-					return true;
-				}
-			}
-
-			if ((dig_len == 22) && (strncasecmp(dig_text, "SHOW COUNT(*) WARNINGS", 22) == 0)) {
-				proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "Intercepted '%s'\n", dig_text);
-				std::string warning_count = "0";
-				if (warning_in_hg > -1) {
-					proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "Changing current_hostgroup to '%d'\n", warning_in_hg);
-					current_hostgroup = warning_in_hg;
-					assert(mybe && mybe->server_myds && mybe->server_myds->myconn && mybe->server_myds->myconn->pgsql);
-					warning_count = std::to_string(mybe->server_myds->myconn->warning_count);
-				}
-				else {
-					proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "No warnings were detected in the previous query. Sending an empty response.\n");
-				}
-				std::unique_ptr<SQLite3_result> resultset(new SQLite3_result(1));
-				resultset->add_column_definition(SQLITE_TEXT, "@@session.warning_count");
-				char* pta[1];
-				pta[0] = (char*)warning_count.c_str();
-				resultset->add_row(pta);
-				SQLite3_to_MySQL(resultset.get(), NULL, 0, &client_myds->myprot, false, (client_myds->myconn->options.client_flag & CLIENT_DEPRECATE_EOF));
-				client_myds->DSS = STATE_SLEEP;
-				status = WAITING_CLIENT_DATA;
-				if (mirror == false) {
-					RequestEnd(NULL);
-				}
-				l_free(pkt->size, pkt->ptr);
-				return true;
-			}
-		}
-	}
-
-	reset_warning_hostgroup_flag_and_release_connection();
 
     // Check if the session is not locked on a hostgroup and there are untracked option parameters
     if (locked_on_hostgroup < 0 && untracked_option_parameters.empty() == false) {
@@ -5884,61 +5819,6 @@ void PgSQL_Session::handler___client_DSS_QUERY_SENT___server_DSS_NOT_INITIALIZED
 	}
 }
 
-void PgSQL_Session::MySQL_Stmt_Result_to_MySQL_wire(MYSQL_STMT* stmt, PgSQL_Connection* myconn) {
-	PgSQL_Query_Result* query_result = NULL;
-	if (myconn) {
-		if (myconn->query_result) {
-			query_result = myconn->query_result;
-		}
-	}
-	/*
-		MYSQL_RES *stmt_result=myconn->query.stmt_result;
-		if (stmt_result) {
-			MySQL_ResultSet *query_result=new MySQL_ResultSet();
-			query_result->init(&client_myds->myprot, stmt_result, stmt->pgsql, stmt);
-			query_result->get_resultset(client_myds->PSarrayOUT);
-			CurrentQuery.rows_sent = query_result->num_rows;
-			//removed  bool resultset_completed=query_result->get_resultset(client_myds->PSarrayOUT);
-			delete query_result;
-	*/
-	if (query_result) {
-		//assert(query_result->result);
-		//query_result->init_with_stmt(myconn);
-		CurrentQuery.rows_sent = query_result->get_num_rows();
-		const auto _affected_rows = query_result->get_affected_rows();
-		if (_affected_rows != static_cast<unsigned long long>(-1)) {
-			CurrentQuery.affected_rows = _affected_rows;
-			CurrentQuery.have_affected_rows = true;
-		}
-		bool resultset_completed = query_result->get_resultset(client_myds->PSarrayOUT);
-		assert(resultset_completed); // the resultset should always be completed if MySQL_Result_to_MySQL_wire is called
-	}
-	else {
-		MYSQL* pgsql = stmt->mysql;
-		// no result set
-		int myerrno = mysql_stmt_errno(stmt);
-		if (myerrno == 0) {
-			unsigned int num_rows = mysql_affected_rows(stmt->mysql);
-			unsigned int nTrx = NumActiveTransactions();
-			uint16_t setStatus = (nTrx ? SERVER_STATUS_IN_TRANS : 0);
-			if (autocommit) setStatus |= SERVER_STATUS_AUTOCOMMIT;
-			if (pgsql->server_status & SERVER_MORE_RESULTS_EXIST)
-				setStatus |= SERVER_MORE_RESULTS_EXIST;
-			setStatus |= (pgsql->server_status & ~SERVER_STATUS_AUTOCOMMIT); // get flags from server_status but ignore autocommit
-			setStatus = setStatus & ~SERVER_STATUS_CURSOR_EXISTS; // Do not send cursor #1128
-			client_myds->myprot.generate_pkt_OK(true, NULL, NULL, client_myds->pkt_sid + 1, num_rows, pgsql->insert_id, setStatus, myconn ? myconn->warning_count : 0, pgsql->info);
-			client_myds->pkt_sid++;
-		}
-		else {
-			// error
-			char sqlstate[10];
-			sprintf(sqlstate, "%s", mysql_sqlstate(pgsql));
-			client_myds->myprot.generate_pkt_ERR(true, NULL, NULL, client_myds->pkt_sid + 1, mysql_errno(pgsql), sqlstate, mysql_error(pgsql));
-			client_myds->pkt_sid++;
-		}
-	}
-}
-
 void PgSQL_Session::PgSQL_Result_to_PgSQL_wire(PgSQL_Connection* _conn, PgSQL_Data_Stream* _myds) {
 	if (_conn == NULL) {
 		// error
@@ -6562,27 +6442,6 @@ void PgSQL_Session::generate_status_one_hostgroup(int hid, std::string& s) {
 	}
 	s = j_res.dump();
 	delete resultset;
-}
-
-void PgSQL_Session::reset_warning_hostgroup_flag_and_release_connection()
-{
-	if (warning_in_hg > -1) {
-		// if we've reached this point, it means that warning was found in the previous query, but the
-		// current executed query is not 'SHOW WARNINGS' or 'SHOW COUNT(*) FROM WARNINGS', so we can safely reset warning_in_hg and 
-		// return connection back to the connection pool.
-		PgSQL_Backend* _mybe = find_backend(warning_in_hg);
-		if (_mybe) {
-			PgSQL_Data_Stream* myds = _mybe->server_myds;
-			if (myds && myds->myconn) {
-				myds->myconn->warning_count = 0;
-				myds->myconn->set_status(false, STATUS_MYSQL_CONNECTION_HAS_WARNINGS);
-				if ((myds->myconn->reusable == true) && myds->myconn->IsActiveTransaction() == false && myds->myconn->MultiplexDisabled() == false) {
-					myds->return_MySQL_Connection_To_Pool();
-				}
-			}
-		}
-		warning_in_hg = -1;
-	}
 }
 
 /**

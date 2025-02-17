@@ -300,11 +300,6 @@ class PgSQL_Connection_userinfo {
 };
 
 class PgSQL_Connection_Placeholder {
-	private:
-	void update_warning_count_from_connection();
-	void update_warning_count_from_statement();
-
-	unsigned long long inserted_into_pool;
 	public:
 	struct {
 		char *server_version;
@@ -338,23 +333,16 @@ class PgSQL_Connection_Placeholder {
 	unsigned long long last_time_used;
 	unsigned long long timeout;
 	int auto_increment_delay_token;
-	int fd;
+
 	MySQL_STMTs_local_v14 *local_stmts;	// local view of prepared statements
 	MYSQL *pgsql;
 	MYSQL *ret_mysql;
 	MYSQL_RES *mysql_result;
 	MYSQL_ROW mysql_row;
-	PgSQL_SrvC *parent;
-	PgSQL_Connection_userinfo *userinfo;
-	PgSQL_Data_Stream *myds;
+
 
 	
-	/**
-	 * @brief Keeps tracks of the 'server_status'. Do not confuse with the 'server_status' from the
-	 *  'MYSQL' connection itself. This flag keeps track of the configured server status from the
-	 *  parent 'MySrvC'.
-	 */
-	enum MySerStatus server_status; // this to solve a side effect of #774
+	
 
 	bytes_stats_t bytes_info; // bytes statistics
 	struct {
@@ -364,7 +352,7 @@ class PgSQL_Connection_Placeholder {
 	} statuses;
 
 	unsigned long largest_query_length;
-	unsigned int warning_count;
+	
 	/**
 	 * @brief This represents the internal knowledge of ProxySQL about the connection. It keeps track of those
 	 *  states which *are not reflected* into 'server_status', but are relevant for connection handling.
@@ -596,6 +584,13 @@ public:
 	bool var_absent[PGSQL_NAME_LAST_HIGH_WM] = { false };
 	std::vector<uint32_t> dynamic_variables_idx;
 
+	/**
+	 * @brief Keeps tracks of the 'server_status'. Do not confuse with the 'server_status' from the
+	 *  'MYSQL' connection itself. This flag keeps track of the configured server status from the
+	 *  parent 'MySrvC'.
+	 */
+	enum MySerStatus server_status; // this to solve a side effect of #774
+
 	PgSQL_Conn_Param conn_params;
 	PgSQL_ErrorInfo error_info;
 	PGconn* pgsql_conn;
@@ -606,10 +601,11 @@ public:
 	PgSQL_Query_Result* query_result_reuse;
 	bool new_result;
 	bool is_copy_out;
-	//PgSQL_SrvC* parent;
-	//PgSQL_Connection_userinfo* userinfo;
-	//PgSQL_Data_Stream* myds;
-	//int fd;
+	PgSQL_SrvC *parent;
+	PgSQL_Connection_userinfo* userinfo;
+	PgSQL_Data_Stream* myds;
+	//unsigned int warning_count;
+	int fd;
 
 private:
 	// Handles the COPY OUT response from the server.
@@ -617,6 +613,8 @@ private:
 	bool handle_copy_out(const PGresult* result, uint64_t* processed_bytes);
 	static void notice_handler_cb(void* arg, const PGresult* result);
 	static void unhandled_notice_cb(void* arg, const PGresult* result);
+	//void update_warning_count_from_connection();
+	//void update_warning_count_from_statement();
 };
 
 #endif /* __CLASS_PGSQL_CONNECTION_H */

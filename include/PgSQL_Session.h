@@ -429,7 +429,7 @@ public:
 	int to_process;
 	int pending_connect;
 	enum proxysql_session_type session_type;
-	int warning_in_hg;
+	
 
 	// bool
 	bool autocommit;
@@ -487,7 +487,7 @@ public:
 
 	void SQLite3_to_MySQL(SQLite3_result*, char*, int, MySQL_Protocol*, bool in_transaction = false, bool deprecate_eof_active = false) override;
 	void PgSQL_Result_to_PgSQL_wire(PgSQL_Connection* conn, PgSQL_Data_Stream* _myds = NULL);
-	void MySQL_Stmt_Result_to_MySQL_wire(MYSQL_STMT* stmt, PgSQL_Connection* myconn);
+	
 	//unsigned int NumActiveTransactions(bool check_savpoint = false);
 	//bool HasOfflineBackends();
 	//bool SetEventInOfflineBackends();
@@ -531,7 +531,6 @@ public:
 	//bool has_any_backend();
 	void detected_broken_connection(const char* file, unsigned int line, const char* func, const char* action, PgSQL_Connection* myconn, bool verbose = false);
 	void generate_status_one_hostgroup(int hid, std::string& s);
-	void reset_warning_hostgroup_flag_and_release_connection();
 	void set_previous_status_mode3(bool allow_execute = true);
 
 	void set_default_session_variable(enum pgsql_variable_name idx, const char* value);

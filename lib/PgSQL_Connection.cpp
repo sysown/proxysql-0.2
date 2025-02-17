@@ -279,12 +279,9 @@ PgSQL_Connection_Placeholder::PgSQL_Connection_Placeholder() {
 	async_state_machine=ASYNC_CONNECT_START;
 	ret_mysql=NULL;
 	send_quit=true;
-	myds=NULL;
-	inserted_into_pool=0;
+
 	reusable=false;
-	parent=NULL;
-	userinfo=new PgSQL_Connection_userinfo();
-	fd=-1;
+
 	status_flags=0;
 	last_time_used=0;
 
@@ -311,7 +308,6 @@ PgSQL_Connection_Placeholder::PgSQL_Connection_Placeholder() {
 	query.stmt_meta=NULL;
 	query.stmt_result=NULL;
 	largest_query_length=0;
-	warning_count=0;
 	multiplex_delayed=false;
 	unknown_transaction_status = false;
 	creation_time=0;
@@ -333,10 +329,7 @@ PgSQL_Connection_Placeholder::~PgSQL_Connection_Placeholder() {
 	if (options.init_connect) free(options.init_connect);
 	if (options.ldap_user_variable) free(options.ldap_user_variable);
 	if (options.ldap_user_variable_value) free(options.ldap_user_variable_value);
-	if (userinfo) {
-		delete userinfo;
-		userinfo=NULL;
-	}
+	
 	if (local_stmts) {
 		delete local_stmts;
 	}
@@ -386,35 +379,7 @@ bool PgSQL_Connection_Placeholder::set_no_backslash_escapes(bool _ac) {
 
 void print_backtrace(void);
 
-void PgSQL_Connection_Placeholder::update_warning_count_from_connection() {
-	// if a prepared statement was cached while 'mysql_thread_query_digest' was true, and subsequently, 
-	// 'mysql_thread_query_digest' is set to false, fetching that statement from the cache may still contain the digest text.
-	// To prevent this, we will check the digest text in conjunction with 'mysql_thread_query_digest' to verify whether it 
-	// is enabled or disabled.
-	if (myds && myds->sess && myds->sess->CurrentQuery.QueryParserArgs.digest_text) { 
-		const char* dig_text = myds->sess->CurrentQuery.QueryParserArgs.digest_text;
-		const size_t dig_len = strlen(dig_text);
-		// SHOW WARNINGS doesn't have any impact warning count,
-		// so we are replication same behaviour here
-		if (parent->myhgc->handle_warnings_enabled() && 
-			(dig_len != 13 || strncasecmp(dig_text, "SHOW WARNINGS", 13) != 0)) {
-			warning_count = mysql_warning_count(pgsql);
-		}
-	}
-}
 
-void PgSQL_Connection_Placeholder::update_warning_count_from_statement() {
-	// if a prepared statement was cached while 'mysql_thread_query_digest' was true, and subsequently, 
-	// 'mysql_thread_query_digest' is set to false, fetching that statement from the cache may still contain the digest text.
-	// To prevent this, we will check the digest text in conjunction with 'mysql_thread_query_digest' to verify whether it 
-	// is enabled or disabled.
-	if (myds && myds->sess && myds->sess->CurrentQuery.stmt_info && myds->sess->CurrentQuery.stmt_info->digest_text &&
-		pgsql_thread___query_digests == true) {
-		if (parent->myhgc->handle_warnings_enabled()) {
-			warning_count = mysql_stmt_warning_count(query.stmt);
-		}
-	}
-}
 
 void PgSQL_Connection_Placeholder::set_status(bool set, uint32_t status_flag) {
 	if (set) {
@@ -632,6 +597,10 @@ PgSQL_Connection::PgSQL_Connection() {
 	pgsql_result = NULL;
 	query_result = NULL;
 	query_result_reuse = NULL;
+	myds = NULL;
+	parent = NULL;
+	fd = -1;
+	userinfo = new PgSQL_Connection_userinfo();
 
 	for (int i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
 		variables[i].value = NULL;
@@ -2431,7 +2400,6 @@ void PgSQL_Connection::reset() {
 	set_status(old_compress, STATUS_MYSQL_CONNECTION_COMPRESSION);
 	reusable = true;
 	options.last_set_autocommit = -1; // never sent
-	warning_count = 0;
 	delete local_stmts;
 	local_stmts = new MySQL_STMTs_local_v14(false);
 	creation_time = monotonic_time();
@@ -2468,3 +2436,34 @@ void PgSQL_Connection::reset() {
 	}
 }
 
+/*
+void PgSQL_Connection::update_warning_count_from_connection() {
+	// if a prepared statement was cached while 'mysql_thread_query_digest' was true, and subsequently, 
+	// 'mysql_thread_query_digest' is set to false, fetching that statement from the cache may still contain the digest text.
+	// To prevent this, we will check the digest text in conjunction with 'mysql_thread_query_digest' to verify whether it 
+	// is enabled or disabled.
+	if (myds && myds->sess && myds->sess->CurrentQuery.QueryParserArgs.digest_text) {
+		const char* dig_text = myds->sess->CurrentQuery.QueryParserArgs.digest_text;
+		const size_t dig_len = strlen(dig_text);
+		// SHOW WARNINGS doesn't have any impact warning count,
+		// so we are replication same behaviour here
+		if (parent->myhgc->handle_warnings_enabled() &&
+			(dig_len != 13 || strncasecmp(dig_text, "SHOW WARNINGS", 13) != 0)) {
+			warning_count = mysql_warning_count(pgsql);
+		}
+	}
+}
+
+void PgSQL_Connection::update_warning_count_from_statement() {
+	// if a prepared statement was cached while 'mysql_thread_query_digest' was true, and subsequently, 
+	// 'mysql_thread_query_digest' is set to false, fetching that statement from the cache may still contain the digest text.
+	// To prevent this, we will check the digest text in conjunction with 'mysql_thread_query_digest' to verify whether it 
+	// is enabled or disabled.
+	if (myds && myds->sess && myds->sess->CurrentQuery.stmt_info && myds->sess->CurrentQuery.stmt_info->digest_text &&
+		pgsql_thread___query_digests == true) {
+		if (parent->myhgc->handle_warnings_enabled()) {
+			warning_count = mysql_stmt_warning_count(query.stmt);
+		}
+	}
+}
+*/
