@@ -3998,7 +3998,7 @@ void MySQL_Thread::process_all_sessions() {
 			if (sess->to_process==1) {
 				if (sess->pause_until <= curtime) {
 					rc=sess->handler();
-					//total_active_transactions_+=sess->active_transactions;
+
 					if (rc==-1 || sess->killed==true) {
 						char _buf[1024];
 						if (sess->client_myds && sess->killed)
