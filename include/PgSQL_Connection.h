@@ -321,13 +321,7 @@ class PgSQL_Connection_Placeholder {
 		bool no_backslash_escapes;
 	} options;
 
-	struct {
-		unsigned long length;
-		char *ptr;
-		MYSQL_STMT *stmt;
-		MYSQL_RES *stmt_result;
-		stmt_execute_metadata_t *stmt_meta;
-	} query;
+
 
 	
 
@@ -360,7 +354,7 @@ public:
 	
 	int  async_connect(short event);
 
-	int  async_query(short event, char* stmt, unsigned long length, MYSQL_STMT** _stmt = NULL, stmt_execute_metadata_t* _stmt_meta = NULL);
+	int  async_query(short event, char* stmt, unsigned long length);
 	int  async_ping(short event);
 	int  async_reset_session(short event);
 	int	 async_send_simple_command(short event, char* stmt, unsigned long length); // no result set expected
@@ -526,6 +520,10 @@ public:
 	void set_query(char* stmt, unsigned long length);
 	void reset();
 
+	struct {
+		unsigned long length;
+		char* ptr;
+	} query;
 
 	struct {
 		char* hostname;

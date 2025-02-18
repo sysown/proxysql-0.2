@@ -258,15 +258,8 @@ PgSQL_Connection_Placeholder::PgSQL_Connection_Placeholder() {
 	options.ldap_user_variable_sent=false;
 	options.session_track_gtids_int=0;
 	
-	query.ptr=NULL;
-	query.length=0;
-	query.stmt=NULL;
-	query.stmt_meta=NULL;
-	query.stmt_result=NULL;
-	
-	
-	
-	
+
+
 	
 	
 	local_stmts=new MySQL_STMTs_local_v14(false); // false by default, it is a backend
@@ -285,9 +278,7 @@ PgSQL_Connection_Placeholder::~PgSQL_Connection_Placeholder() {
 	}
 
 
-	if (query.stmt) {
-		query.stmt=NULL;
-	}
+	
 
 	if (options.session_track_gtids) {
 		free(options.session_track_gtids);
@@ -431,6 +422,8 @@ PgSQL_Connection::PgSQL_Connection() {
 	last_time_used = 0;
 	creation_time = 0;
 	auto_increment_delay_token = 0;
+	query.ptr = NULL;
+	query.length = 0;
 	userinfo = new PgSQL_Connection_userinfo();
 
 	for (int i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
@@ -1352,10 +1345,6 @@ void PgSQL_Connection::async_free_result() {
 		query.ptr = NULL;
 		query.length = 0;
 	}
-	if (query.stmt_result) {
-		mysql_free_result(query.stmt_result);
-		query.stmt_result = NULL;
-	}
 	if (userinfo) {
 		// if userinfo is NULL , the connection is being destroyed
 		// because it is reset on destructor ( ~PgSQL_Connection() )
@@ -1423,7 +1412,7 @@ bool PgSQL_Connection::IsAutoCommit() {
 // 0 when the query is completed
 // 1 when the query is not completed
 // the calling function should check pgsql error in pgsql struct
-int PgSQL_Connection::async_query(short event, char* stmt, unsigned long length, MYSQL_STMT** _stmt, stmt_execute_metadata_t* stmt_meta) {
+int PgSQL_Connection::async_query(short event, char* stmt, unsigned long length) {
 	PROXY_TRACE();
 	PROXY_TRACE2();
 	assert(pgsql_conn);
@@ -1451,21 +1440,9 @@ int PgSQL_Connection::async_query(short event, char* stmt, unsigned long length,
 				myds->sess->transaction_started_at = myds->sess->thread->curtime;
 			}
 		}
-		if (stmt_meta == NULL)
-			set_query(stmt, length);
+
+		set_query(stmt, length);
 		async_state_machine = ASYNC_QUERY_START;
-		if (_stmt) {
-			query.stmt = *_stmt;
-			if (stmt_meta == NULL) {
-				async_state_machine = ASYNC_STMT_PREPARE_START;
-			}
-			else {
-				if (query.stmt_meta == NULL) {
-					query.stmt_meta = stmt_meta;
-				}
-				async_state_machine = ASYNC_STMT_EXECUTE_START;
-			}
-		}
 	default:
 		handler(event);
 		break;
@@ -1478,29 +1455,6 @@ int PgSQL_Connection::async_query(short event, char* stmt, unsigned long length,
 			return -1;
 		}
 		else {
-			return 0;
-		}
-	}
-	if (async_state_machine == ASYNC_STMT_EXECUTE_END) {
-		PROXY_TRACE2();
-		query.stmt_meta = NULL;
-		async_state_machine = ASYNC_QUERY_END;
-		compute_unknown_transaction_status();
-		if (mysql_stmt_errno(query.stmt)) {
-			return -1;
-		}
-		else {
-			return 0;
-		}
-	}
-	if (async_state_machine == ASYNC_STMT_PREPARE_SUCCESSFUL || async_state_machine == ASYNC_STMT_PREPARE_FAILED) {
-		query.stmt_meta = NULL;
-		compute_unknown_transaction_status();
-		if (async_state_machine == ASYNC_STMT_PREPARE_FAILED) {
-			return -1;
-		}
-		else {
-			*_stmt = query.stmt;
 			return 0;
 		}
 	}
@@ -2326,8 +2280,5 @@ void PgSQL_Connection::set_query(char* stmt, unsigned long length) {
 	query.ptr = stmt;
 	if (length > largest_query_length) {
 		largest_query_length = length;
-	}
-	if (query.stmt) {
-		query.stmt = NULL;
 	}
 }

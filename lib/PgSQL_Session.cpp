@@ -3119,12 +3119,13 @@ __get_pkts_from_client:
 						handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_QUERY___not_mysql(pkt);
 					}
 					break;
-				case _MYSQL_COM_STMT_PREPARE:
+				/*case _MYSQL_COM_STMT_PREPARE:
 					handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_PREPARE(pkt);
 					break;
 				case _MYSQL_COM_STMT_EXECUTE:
 					handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_EXECUTE(pkt);
 					break;
+				*/
 				default:
 					// in this switch we only handle the most common commands.
 					// The not common commands are handled by "default" , that
@@ -3398,13 +3399,14 @@ int PgSQL_Session::RunQuery(PgSQL_Data_Stream* myds, PgSQL_Connection* myconn) {
 	case PROCESSING_QUERY:
 		rc = myconn->async_query(myds->revents, myds->mysql_real_query.QueryPtr, myds->mysql_real_query.QuerySize);
 		break;
-	case PROCESSING_STMT_PREPARE:
+	/*case PROCESSING_STMT_PREPARE:
 		rc = myconn->async_query(myds->revents, (char*)CurrentQuery.QueryPointer, CurrentQuery.QueryLength, &CurrentQuery.mysql_stmt);
 		break;
 	case PROCESSING_STMT_EXECUTE:
 		PROXY_TRACE2();
 		rc = myconn->async_query(myds->revents, (char*)CurrentQuery.QueryPointer, CurrentQuery.QueryLength, &CurrentQuery.mysql_stmt, CurrentQuery.stmt_meta);
 		break;
+	*/
 	default:
 		// LCOV_EXCL_START
 		assert(0);
@@ -3527,8 +3529,8 @@ handler_again:
 	}
 	break;
 
-	case PROCESSING_STMT_PREPARE:
-	case PROCESSING_STMT_EXECUTE:
+	//case PROCESSING_STMT_PREPARE:
+	//case PROCESSING_STMT_EXECUTE:
 	case PROCESSING_QUERY:
 		//fprintf(stderr,"PROCESSING_QUERY\n");
 		if (pause_until > thread->curtime) {
@@ -3644,7 +3646,7 @@ handler_again:
 							}
 						}
 					}
-					if (status == PROCESSING_STMT_EXECUTE) {
+					/*if (status == PROCESSING_STMT_EXECUTE) {
 						CurrentQuery.mysql_stmt = myconn->local_stmts->find_backend_stmt_by_global_id(CurrentQuery.stmt_global_id);
 						if (CurrentQuery.mysql_stmt == NULL) {
 							MySQL_STMT_Global_info* stmt_info = NULL;
@@ -3665,7 +3667,7 @@ handler_again:
 								PROXY_TRACE();
 							}
 						}
-					}
+					}*/
 				}
 			}
 
@@ -5869,10 +5871,11 @@ void PgSQL_Session::RequestEnd(PgSQL_Data_Stream* myds) {
 	}
 
 	switch (status) {
-	case PROCESSING_STMT_EXECUTE:
+	/*case PROCESSING_STMT_EXECUTE:
 	case PROCESSING_STMT_PREPARE:
 		// if a prepared statement is executed, LogQuery was already called
 		break;
+	*/
 	default:
 		if (session_fast_forward == SESSION_FORWARD_TYPE_NONE) {
 			LogQuery(myds);
@@ -6253,7 +6256,7 @@ void PgSQL_Session::set_previous_status_mode3(bool allow_execute) {
 	case PROCESSING_QUERY:
 		previous_status.push(PROCESSING_QUERY);
 		break;
-	case PROCESSING_STMT_PREPARE:
+	/*case PROCESSING_STMT_PREPARE:
 		previous_status.push(PROCESSING_STMT_PREPARE);
 		break;
 	case PROCESSING_STMT_EXECUTE:
@@ -6261,6 +6264,7 @@ void PgSQL_Session::set_previous_status_mode3(bool allow_execute) {
 			previous_status.push(PROCESSING_STMT_EXECUTE);
 			break;
 		}
+	*/
 	default:
 		// LCOV_EXCL_START
 		assert(0); // Assert to indicate an unexpected status value
