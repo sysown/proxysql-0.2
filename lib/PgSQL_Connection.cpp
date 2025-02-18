@@ -257,12 +257,7 @@ PgSQL_Connection_Placeholder::PgSQL_Connection_Placeholder() {
 	options.ldap_user_variable_value=NULL;
 	options.ldap_user_variable_sent=false;
 	options.session_track_gtids_int=0;
-	
 
-
-	
-	
-	local_stmts=new MySQL_STMTs_local_v14(false); // false by default, it is a backend
 	
 };
 
@@ -272,12 +267,6 @@ PgSQL_Connection_Placeholder::~PgSQL_Connection_Placeholder() {
 	if (options.init_connect) free(options.init_connect);
 	if (options.ldap_user_variable) free(options.ldap_user_variable);
 	if (options.ldap_user_variable_value) free(options.ldap_user_variable_value);
-	
-	if (local_stmts) {
-		delete local_stmts;
-	}
-
-
 	
 
 	if (options.session_track_gtids) {
@@ -295,106 +284,6 @@ void print_backtrace(void);
 
 
 #define NEXT_IMMEDIATE(new_st) do { async_state_machine = new_st; goto handler_again; } while (0)
-
-
-
-
-bool PgSQL_Connection_Placeholder::IsKeepMultiplexEnabledVariables(char *query_digest_text) {
-	if (query_digest_text==NULL) return true;
-
-	char *query_digest_text_filter_select = NULL;
-	unsigned long query_digest_text_len=strlen(query_digest_text);
-	if (strncasecmp(query_digest_text,"SELECT ",strlen("SELECT "))==0){
-		query_digest_text_filter_select=(char*)malloc(query_digest_text_len-7+1);
-		memcpy(query_digest_text_filter_select,&query_digest_text[7],query_digest_text_len-7);
-		query_digest_text_filter_select[query_digest_text_len-7]='\0';
-	} else {
-		return false;
-	}
-	//filter @@session., @@local. and @@
-	char *match=NULL;
-	char* last_pos=NULL;
-	const int at_session_offset = strlen("@@session.");
-	const int at_local_offset = strlen("@@local."); // Alias of session
-	const int double_at_offset = strlen("@@");
-	while (query_digest_text_filter_select && (match = strcasestr(query_digest_text_filter_select,"@@session."))) {
-		memmove(match, match + at_session_offset, strlen(match) - at_session_offset);
-		last_pos = match + strlen(match) - at_session_offset;
-		*last_pos = '\0';
-	}
-	while (query_digest_text_filter_select && (match = strcasestr(query_digest_text_filter_select, "@@local."))) {
-		memmove(match, match + at_local_offset, strlen(match) - at_local_offset);
-		last_pos = match + strlen(match) - at_local_offset;
-		*last_pos = '\0';
-	}
-	while (query_digest_text_filter_select && (match = strcasestr(query_digest_text_filter_select,"@@"))) {
-		memmove(match, match + double_at_offset, strlen(match) - double_at_offset);
-		last_pos = match + strlen(match) - double_at_offset;
-		*last_pos = '\0';
-	}
-
-	std::vector<char*>query_digest_text_filter_select_v;
-	char* query_digest_text_filter_select_tok = NULL;
-	char* save_query_digest_text_ptr = NULL;
-	if (query_digest_text_filter_select) {
-		query_digest_text_filter_select_tok = strtok_r(query_digest_text_filter_select, ",", &save_query_digest_text_ptr);
-	}
-	while(query_digest_text_filter_select_tok){
-		//filter "as"/space/alias,such as select @@version as a, @@version b
-		while (1){
-			char c = *query_digest_text_filter_select_tok;
-			if (!isspace(c)){
-				break;
-			}
-			query_digest_text_filter_select_tok++;
-		}
-		char* match_as;
-		match_as=strcasestr(query_digest_text_filter_select_tok," ");
-		if(match_as){
-			query_digest_text_filter_select_tok[match_as-query_digest_text_filter_select_tok]='\0';
-			query_digest_text_filter_select_v.push_back(query_digest_text_filter_select_tok);
-		}else{
-			query_digest_text_filter_select_v.push_back(query_digest_text_filter_select_tok);
-		}
-		query_digest_text_filter_select_tok=strtok_r(NULL, ",", &save_query_digest_text_ptr);
-	}
-
-	std::vector<char*>keep_multiplexing_variables_v;
-	char* keep_multiplexing_variables_tmp;
-	char* save_keep_multiplexing_variables_ptr = NULL;
-	unsigned long keep_multiplexing_variables_len=strlen(pgsql_thread___keep_multiplexing_variables);
-	keep_multiplexing_variables_tmp=(char*)malloc(keep_multiplexing_variables_len+1);
-	memcpy(keep_multiplexing_variables_tmp, pgsql_thread___keep_multiplexing_variables, keep_multiplexing_variables_len);
-	keep_multiplexing_variables_tmp[keep_multiplexing_variables_len]='\0';
-	char* keep_multiplexing_variables_tok=strtok_r(keep_multiplexing_variables_tmp, " ,", &save_keep_multiplexing_variables_ptr);
-	while (keep_multiplexing_variables_tok){
-		keep_multiplexing_variables_v.push_back(keep_multiplexing_variables_tok);
-		keep_multiplexing_variables_tok=strtok_r(NULL, " ,", &save_keep_multiplexing_variables_ptr);
-	}
-
-	for (std::vector<char*>::iterator it=query_digest_text_filter_select_v.begin();it!=query_digest_text_filter_select_v.end();it++){
-		bool is_match=false;
-		for (std::vector<char*>::iterator it1=keep_multiplexing_variables_v.begin();it1!=keep_multiplexing_variables_v.end();it1++){
-			//printf("%s,%s\n",*it,*it1);
-			if (strncasecmp(*it,*it1,strlen(*it1))==0){
-				is_match=true;
-				break;
-			}
-		}
-		if(is_match){
-			is_match=false;
-			continue;
-		}else{
-			free(query_digest_text_filter_select);
-			free(keep_multiplexing_variables_tmp);
-			return false;
-		}
-	}
-	free(query_digest_text_filter_select);
-	free(keep_multiplexing_variables_tmp);
-	return true;
-}
-
 
 PgSQL_Connection::PgSQL_Connection() {
 	proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 4, "Creating new PgSQL_Connection %p\n", this);
@@ -1952,7 +1841,7 @@ void PgSQL_Connection::ProcessQueryAndSetStatusFlags(char* query_digest_text) {
 			switch (sqloh) {
 			case 0: // old algorithm
 				if (mul != 2) {
-					if (index(query_digest_text, '@')) { // mul = 2 has a special meaning : do not disable multiplex for variables in THIS QUERY ONLY
+					if (index(query_digest_text, '.')) { // mul = 2 has a special meaning : do not disable multiplex for variables in THIS QUERY ONLY
 						if (!IsKeepMultiplexEnabledVariables(query_digest_text)) {
 							set_status(true, STATUS_MYSQL_CONNECTION_USER_VARIABLE);
 						}
@@ -1970,7 +1859,7 @@ void PgSQL_Connection::ProcessQueryAndSetStatusFlags(char* query_digest_text) {
 			}
 		}
 		else {
-			if (mul != 2 && index(query_digest_text, '@')) { // mul = 2 has a special meaning : do not disable multiplex for variables in THIS QUERY ONLY
+			if (mul != 2 && index(query_digest_text, '.')) { // mul = 2 has a special meaning : do not disable multiplex for variables in THIS QUERY ONLY
 				if (!IsKeepMultiplexEnabledVariables(query_digest_text)) {
 					set_status(true, STATUS_MYSQL_CONNECTION_USER_VARIABLE);
 				}
@@ -2168,8 +2057,6 @@ void PgSQL_Connection::reset() {
 	set_status(old_compress, STATUS_MYSQL_CONNECTION_COMPRESSION);
 	reusable = true;
 	options.last_set_autocommit = -1; // never sent
-	delete local_stmts;
-	local_stmts = new MySQL_STMTs_local_v14(false);
 	creation_time = monotonic_time();
 
 	for (int i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
@@ -2281,4 +2168,107 @@ void PgSQL_Connection::set_query(char* stmt, unsigned long length) {
 	if (length > largest_query_length) {
 		largest_query_length = length;
 	}
+}
+
+bool PgSQL_Connection::IsKeepMultiplexEnabledVariables(char* query_digest_text) {
+
+	return true;
+	/* TODO: fix this
+	if (query_digest_text == NULL) return true;
+
+	char* query_digest_text_filter_select = NULL;
+	unsigned long query_digest_text_len = strlen(query_digest_text);
+	if (strncasecmp(query_digest_text, "SELECT ", strlen("SELECT ")) == 0) {
+		query_digest_text_filter_select = (char*)malloc(query_digest_text_len - 7 + 1);
+		memcpy(query_digest_text_filter_select, &query_digest_text[7], query_digest_text_len - 7);
+		query_digest_text_filter_select[query_digest_text_len - 7] = '\0';
+	}
+	else {
+		return false;
+	}
+	//filter @@session., @@local. and @@
+	char* match = NULL;
+	char* last_pos = NULL;
+	const int at_session_offset = strlen("@@session.");
+	const int at_local_offset = strlen("@@local."); // Alias of session
+	const int double_at_offset = strlen("@@");
+	while (query_digest_text_filter_select && (match = strcasestr(query_digest_text_filter_select, "@@session."))) {
+		memmove(match, match + at_session_offset, strlen(match) - at_session_offset);
+		last_pos = match + strlen(match) - at_session_offset;
+		*last_pos = '\0';
+	}
+	while (query_digest_text_filter_select && (match = strcasestr(query_digest_text_filter_select, "@@local."))) {
+		memmove(match, match + at_local_offset, strlen(match) - at_local_offset);
+		last_pos = match + strlen(match) - at_local_offset;
+		*last_pos = '\0';
+	}
+	while (query_digest_text_filter_select && (match = strcasestr(query_digest_text_filter_select, "@@"))) {
+		memmove(match, match + double_at_offset, strlen(match) - double_at_offset);
+		last_pos = match + strlen(match) - double_at_offset;
+		*last_pos = '\0';
+	}
+
+	std::vector<char*>query_digest_text_filter_select_v;
+	char* query_digest_text_filter_select_tok = NULL;
+	char* save_query_digest_text_ptr = NULL;
+	if (query_digest_text_filter_select) {
+		query_digest_text_filter_select_tok = strtok_r(query_digest_text_filter_select, ",", &save_query_digest_text_ptr);
+	}
+	while (query_digest_text_filter_select_tok) {
+		//filter "as"/space/alias,such as select @@version as a, @@version b
+		while (1) {
+			char c = *query_digest_text_filter_select_tok;
+			if (!isspace(c)) {
+				break;
+			}
+			query_digest_text_filter_select_tok++;
+		}
+		char* match_as;
+		match_as = strcasestr(query_digest_text_filter_select_tok, " ");
+		if (match_as) {
+			query_digest_text_filter_select_tok[match_as - query_digest_text_filter_select_tok] = '\0';
+			query_digest_text_filter_select_v.push_back(query_digest_text_filter_select_tok);
+		}
+		else {
+			query_digest_text_filter_select_v.push_back(query_digest_text_filter_select_tok);
+		}
+		query_digest_text_filter_select_tok = strtok_r(NULL, ",", &save_query_digest_text_ptr);
+	}
+
+	std::vector<char*>keep_multiplexing_variables_v;
+	char* keep_multiplexing_variables_tmp;
+	char* save_keep_multiplexing_variables_ptr = NULL;
+	unsigned long keep_multiplexing_variables_len = strlen(pgsql_thread___keep_multiplexing_variables);
+	keep_multiplexing_variables_tmp = (char*)malloc(keep_multiplexing_variables_len + 1);
+	memcpy(keep_multiplexing_variables_tmp, pgsql_thread___keep_multiplexing_variables, keep_multiplexing_variables_len);
+	keep_multiplexing_variables_tmp[keep_multiplexing_variables_len] = '\0';
+	char* keep_multiplexing_variables_tok = strtok_r(keep_multiplexing_variables_tmp, " ,", &save_keep_multiplexing_variables_ptr);
+	while (keep_multiplexing_variables_tok) {
+		keep_multiplexing_variables_v.push_back(keep_multiplexing_variables_tok);
+		keep_multiplexing_variables_tok = strtok_r(NULL, " ,", &save_keep_multiplexing_variables_ptr);
+	}
+
+	for (std::vector<char*>::iterator it = query_digest_text_filter_select_v.begin(); it != query_digest_text_filter_select_v.end(); it++) {
+		bool is_match = false;
+		for (std::vector<char*>::iterator it1 = keep_multiplexing_variables_v.begin(); it1 != keep_multiplexing_variables_v.end(); it1++) {
+			//printf("%s,%s\n",*it,*it1);
+			if (strncasecmp(*it, *it1, strlen(*it1)) == 0) {
+				is_match = true;
+				break;
+			}
+		}
+		if (is_match) {
+			is_match = false;
+			continue;
+		}
+		else {
+			free(query_digest_text_filter_select);
+			free(keep_multiplexing_variables_tmp);
+			return false;
+		}
+	}
+	free(query_digest_text_filter_select);
+	free(keep_multiplexing_variables_tmp);
+	return true;
+	*/
 }

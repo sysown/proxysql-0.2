@@ -324,15 +324,10 @@ class PgSQL_Connection_Placeholder {
 
 
 	
-
-	MySQL_STMTs_local_v14 *local_stmts;	// local view of prepared statements
-
-
-	
 	PgSQL_Connection_Placeholder();
 	~PgSQL_Connection_Placeholder();
 
-	bool IsKeepMultiplexEnabledVariables(char *query_digest_text);
+	
 
 
 };
@@ -519,6 +514,8 @@ public:
 	unsigned int number_of_matching_session_variables(const PgSQL_Connection* client_conn, unsigned int& not_matching);
 	void set_query(char* stmt, unsigned long length);
 	void reset();
+
+	bool IsKeepMultiplexEnabledVariables(char* query_digest_text);
 
 	struct {
 		unsigned long length;
