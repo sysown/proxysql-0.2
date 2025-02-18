@@ -123,40 +123,6 @@ void PgSQL_Variable::fill_client_internal_session(json &j, int idx) {
 	j["conn"][pgsql_tracked_variables[idx].internal_variable_name] = value?value:"";
 }
 
-static int
-mysql_status(short event, short cont) {
-	int status= 0;
-	if (event & POLLIN)
-		status|= MYSQL_WAIT_READ;
-	if (event & POLLOUT)
-		status|= MYSQL_WAIT_WRITE;
-//	if (event==0 && cont==true) {
-//		status |= MYSQL_WAIT_TIMEOUT;
-//	}
-//	FIXME: handle timeout
-//	if (event & PROXY_TIMEOUT)
-//		status|= MYSQL_WAIT_TIMEOUT;
-	return status;
-}
-
-/* deprecating session_vars[] because we are introducing a better algorithm
-// Defining list of session variables for comparison with query digest to disable multiplexing for "SET <variable_name>" commands
-static char * session_vars[]= {
-	// For issue #555 , multiplexing is disabled if --safe-updates is used
-	//(char *)"SQL_SAFE_UPDATES=?,SQL_SELECT_LIMIT=?,MAX_JOIN_SIZE=?",
-	// for issue #1832 , we are splitting the above into 3 variables
-//	(char *)"SQL_SAFE_UPDATES",
-//	(char *)"SQL_SELECT_LIMIT",
-//	(char *)"MAX_JOIN_SIZE",
-	(char *)"FOREIGN_KEY_CHECKS",
-	(char *)"UNIQUE_CHECKS",
-	(char *)"AUTO_INCREMENT_INCREMENT",
-	(char *)"AUTO_INCREMENT_OFFSET",
-	(char *)"TIMESTAMP",
-	(char *)"GROUP_CONCAT_MAX_LEN"
-};
-*/
-
 PgSQL_Connection_userinfo::PgSQL_Connection_userinfo() {
 	username=NULL;
 	password=NULL;
@@ -275,14 +241,7 @@ bool PgSQL_Connection_userinfo::set_dbname(const char* db) {
 }
 
 PgSQL_Connection_Placeholder::PgSQL_Connection_Placeholder() {
-	pgsql=NULL;
 	
-	
-	
-
-	
-	last_time_used=0;
-
 	options.client_flag = 0;
 	options.server_capabilities = 0;
 	options.compression_min_length=0;
@@ -307,10 +266,9 @@ PgSQL_Connection_Placeholder::PgSQL_Connection_Placeholder() {
 	
 	
 	
-	creation_time=0;
-	auto_increment_delay_token = 0;
 	
-	proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 4, "Creating new PgSQL_Connection %p\n", this);
+	
+	
 	local_stmts=new MySQL_STMTs_local_v14(false); // false by default, it is a backend
 	
 };
@@ -339,11 +297,6 @@ PgSQL_Connection_Placeholder::~PgSQL_Connection_Placeholder() {
 
 };
 
-bool PgSQL_Connection_Placeholder::set_autocommit(bool _ac) {
-	proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 4, "Setting autocommit %d\n", _ac);
-	options.autocommit=_ac;
-	return _ac;
-}
 
 
 void print_backtrace(void);
@@ -453,6 +406,7 @@ bool PgSQL_Connection_Placeholder::IsKeepMultiplexEnabledVariables(char *query_d
 
 
 PgSQL_Connection::PgSQL_Connection() {
+	proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 4, "Creating new PgSQL_Connection %p\n", this);
 	pgsql_conn = NULL;
 	result_type = 0;
 	pgsql_result = NULL;
@@ -474,7 +428,9 @@ PgSQL_Connection::PgSQL_Connection() {
 	multiplex_delayed = false;
 	processing_multi_statement = false;
 	async_state_machine = ASYNC_CONNECT_START;
-
+	last_time_used = 0;
+	creation_time = 0;
+	auto_increment_delay_token = 0;
 	userinfo = new PgSQL_Connection_userinfo();
 
 	for (int i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
@@ -651,16 +607,16 @@ handler_again:
 	case ASYNC_CONNECT_FAILED:
 		//PQfinish(pgsql_conn);//release connection even on error
 		//pgsql_conn = NULL;
-		PgHGM->p_update_pgsql_error_counter(p_pgsql_error_type::pgsql, parent->myhgc->hid, parent->address, parent->port, mysql_errno(pgsql));
-		parent->connect_error(mysql_errno(pgsql));
+		PgHGM->p_update_pgsql_error_counter(p_pgsql_error_type::pgsql, parent->myhgc->hid, parent->address, parent->port, 9999 /* TODO: fix this mysql_errno(pgsql) */);
+		parent->connect_error(9999 /* TODO: fix this mysql_errno(pgsql)*/);
 		break;
 	case ASYNC_CONNECT_TIMEOUT:
 		// to fix
 		//PQfinish(pgsql_conn);//release connection
 		//pgsql_conn = NULL;
 		proxy_error("Connect timeout on %s:%d : exceeded by %lluus\n", parent->address, parent->port, myds->sess->thread->curtime - myds->wait_until);
-		PgHGM->p_update_pgsql_error_counter(p_pgsql_error_type::pgsql, parent->myhgc->hid, parent->address, parent->port, mysql_errno(pgsql));
-		parent->connect_error(mysql_errno(pgsql));
+		PgHGM->p_update_pgsql_error_counter(p_pgsql_error_type::pgsql, parent->myhgc->hid, parent->address, parent->port, 9999/* TODO: fix this mysql_errno(pgsql)*/);
+		parent->connect_error(9999 /* TODO: fix this mysql_errno(pgsql)*/);
 		break;
 	case ASYNC_QUERY_START:
 		query_start();
@@ -723,8 +679,7 @@ handler_again:
 		break;
 	case ASYNC_USE_RESULT_CONT:
 	{
-		if (myds->sess && myds->sess->client_myds && myds->sess->mirror == false /* &&
-			myds->sess->status != SHOW_WARNINGS*/) { // see issue#4072
+		if (myds->sess && myds->sess->client_myds && myds->sess->mirror == false) { // see issue#4072
 			const unsigned int buffered_data = myds->sess->client_myds->PSarrayOUT->len * PGSQL_RESULTSET_BUFLEN;
 			if (buffered_data > overflow_safe_multiply<8,unsigned int>(pgsql_thread___threshold_resultset_size)) {
 				next_event(ASYNC_USE_RESULT_CONT); // we temporarily pause . See #1232
@@ -2105,32 +2060,16 @@ void PgSQL_Connection::ProcessQueryAndSetStatusFlags(char* query_digest_text) {
 		}
 	}*/
 	if (get_status(STATUS_MYSQL_CONNECTION_HAS_SAVEPOINT) == false) {
-		if (pgsql) {
-			if (
-				(pgsql->server_status & SERVER_STATUS_IN_TRANS)
-				||
-				((pgsql->server_status & SERVER_STATUS_AUTOCOMMIT) == 0)
-				) {
-				if (!strncasecmp(query_digest_text, "SAVEPOINT ", strlen("SAVEPOINT "))) {
-					set_status(true, STATUS_MYSQL_CONNECTION_HAS_SAVEPOINT);
-				}
+		
+		if (IsKnownActiveTransaction()) {
+			if (!strncasecmp(query_digest_text, "SAVEPOINT ", strlen("SAVEPOINT "))) {
+				set_status(true, STATUS_MYSQL_CONNECTION_HAS_SAVEPOINT);
 			}
 		}
-	}
-	else {
-		if ( // get_status(STATUS_MYSQL_CONNECTION_HAS_SAVEPOINT) == true
-			(
-				// make sure we don't have a transaction running
-				// checking just for COMMIT and ROLLBACK is not enough, because `SET autocommit=1` can commit too
-				(pgsql->server_status & SERVER_STATUS_AUTOCOMMIT)
-				&&
-				((pgsql->server_status & SERVER_STATUS_IN_TRANS) == 0)
-				)
-			||
-			(strcasecmp(query_digest_text, "COMMIT") == 0)
-			||
-			(strcasecmp(query_digest_text, "ROLLBACK") == 0)
-			) {
+	} else {
+		if ((IsKnownActiveTransaction() == false) || 
+			(strcasecmp(query_digest_text, "COMMIT") == 0) ||
+			(strcasecmp(query_digest_text, "ROLLBACK") == 0)) {
 			set_status(false, STATUS_MYSQL_CONNECTION_HAS_SAVEPOINT);
 		}
 	}

@@ -328,41 +328,18 @@ class PgSQL_Connection_Placeholder {
 		MYSQL_RES *stmt_result;
 		stmt_execute_metadata_t *stmt_meta;
 	} query;
-	char scramble_buff[40];
-	unsigned long long creation_time;
-	unsigned long long last_time_used;
-	unsigned long long timeout;
-	int auto_increment_delay_token;
+
+	
 
 	MySQL_STMTs_local_v14 *local_stmts;	// local view of prepared statements
-	MYSQL *pgsql;
-
-
-	
-	short wait_events;
-	
-	my_bool ret_bool;
-	
 
 
 	
 	PgSQL_Connection_Placeholder();
 	~PgSQL_Connection_Placeholder();
-	bool set_autocommit(bool);
-	
 
-	void async_free_result();
-
-
-	
 	bool IsKeepMultiplexEnabledVariables(char *query_digest_text);
 
-
-	
-
-	void reduce_auto_increment_delay_token() { if (auto_increment_delay_token) auto_increment_delay_token--; };
-	
-	unsigned long get_mysql_thread_id() { return pgsql ? pgsql->thread_id : 0; }
 
 };
 
@@ -520,6 +497,8 @@ public:
 	const char* get_pg_transaction_status_str();
 	unsigned int get_memory_usage() const;
 
+	inline
+	int get_backend_pid() { return (pgsql_conn) ? get_pg_backend_pid() : -1; }
 
 	static int char_to_encoding(const char* name) {
 		return pg_char_to_encoding(name);
@@ -533,6 +512,9 @@ public:
 		return pg_valid_server_encoding_id(encoding);
 	}
 
+	inline
+	void reduce_auto_increment_delay_token() { if (auto_increment_delay_token) auto_increment_delay_token--; };
+
 	void set_status(bool set, uint32_t status_flag);
 	bool get_status(uint32_t status_flag);
 	bool MultiplexDisabled(bool check_delay_token = true);
@@ -543,6 +525,7 @@ public:
 	unsigned int number_of_matching_session_variables(const PgSQL_Connection* client_conn, unsigned int& not_matching);
 	void set_query(char* stmt, unsigned long length);
 	void reset();
+
 
 	struct {
 		char* hostname;
@@ -578,7 +561,12 @@ public:
 	PSresult  ps_result;
 	PgSQL_Query_Result* query_result;
 	PgSQL_Query_Result* query_result_reuse;
+	unsigned long long creation_time;
+	unsigned long long last_time_used;
+	unsigned long long timeout;
+	int auto_increment_delay_token;
 	PG_ASYNC_ST async_state_machine;	// Async state machine
+	short wait_events;
 	bool new_result;
 	bool is_copy_out;
 
@@ -601,6 +589,9 @@ public:
 	unsigned long largest_query_length;
 	int async_exit_status; // exit status of Non blocking API
 	bool unknown_transaction_status;
+
+
+
 
 private:
 	// Handles the COPY OUT response from the server.

@@ -116,7 +116,8 @@ extern ClickHouse_Server* GloClickHouseServer;
 /*
 std::string proxysql_session_type_str(enum proxysql_session_type session_type) {
 	if (session_type == PROXYSQL_SESSION_MYSQL) {
-		return "PROXYSQL_SESSION_MYSQL";
+		return "PROXYSQL_SESSION_MYSQL";d:
+
 	} else if (session_type == PROXYSQL_SESSION_ADMIN) {
 		return "PROXYSQL_SESSION_ADMIN";
 	} else if (session_type == PROXYSQL_SESSION_STATS) {
@@ -154,7 +155,7 @@ bool PgSQL_Session_Regex::match(char *m) {
 }
 */
 
-PgSQL_KillArgs::PgSQL_KillArgs(char* u, char* p, char* h, unsigned int P, unsigned int _hid, unsigned long i, int kt, int _use_ssl, PgSQL_Thread* _mt) :
+PgSQL_KillArgs::PgSQL_KillArgs(char* u, char* p, char* h, unsigned int P, unsigned int _hid, int i, int kt, int _use_ssl, PgSQL_Thread* _mt) :
 	PgSQL_KillArgs(u, p, h, P, _hid, i, kt, _use_ssl, _mt, NULL) {
 	// resolving DNS if available in Cache
 	if (h && P) {
@@ -165,7 +166,7 @@ PgSQL_KillArgs::PgSQL_KillArgs(char* u, char* p, char* h, unsigned int P, unsign
 		}
 	}
 }
-PgSQL_KillArgs::PgSQL_KillArgs(char* u, char* p, char* h, unsigned int P, unsigned int _hid, unsigned long i, int kt, int _use_ssl, PgSQL_Thread* _mt, char* ip) {
+PgSQL_KillArgs::PgSQL_KillArgs(char* u, char* p, char* h, unsigned int P, unsigned int _hid, int i, int kt, int _use_ssl, PgSQL_Thread* _mt, char* ip) {
 	username = strdup(u);
 	password = strdup(p);
 	hostname = strdup(h);
@@ -225,13 +226,13 @@ void* PgSQL_kill_query_thread(void* arg) {
 	if (ka->port) {
 		switch (ka->kill_type) {
 		case KILL_QUERY:
-			proxy_warning("KILL QUERY %lu on %s:%d\n", ka->id, ka->hostname, ka->port);
+			proxy_warning("KILL QUERY %d on %s:%d\n", ka->id, ka->hostname, ka->port);
 			if (ka->mt) {
 				ka->mt->status_variables.stvar[st_var_killed_queries]++;
 			}
 			break;
 		case KILL_CONNECTION:
-			proxy_warning("KILL CONNECTION %lu on %s:%d\n", ka->id, ka->hostname, ka->port);
+			proxy_warning("KILL CONNECTION %d on %s:%d\n", ka->id, ka->hostname, ka->port);
 			if (ka->mt) {
 				ka->mt->status_variables.stvar[st_var_killed_connections]++;
 			}
@@ -244,10 +245,10 @@ void* PgSQL_kill_query_thread(void* arg) {
 	else {
 		switch (ka->kill_type) {
 		case KILL_QUERY:
-			proxy_warning("KILL QUERY %lu on localhost\n", ka->id);
+			proxy_warning("KILL QUERY %d on localhost\n", ka->id);
 			break;
 		case KILL_CONNECTION:
-			proxy_warning("KILL CONNECTION %lu on localhost\n", ka->id);
+			proxy_warning("KILL CONNECTION %d on localhost\n", ka->id);
 			break;
 		default:
 			break;
@@ -255,7 +256,7 @@ void* PgSQL_kill_query_thread(void* arg) {
 		ret = mysql_real_connect(pgsql, "localhost", ka->username, ka->password, NULL, 0, ka->hostname, 0);
 	}
 	if (!ret) {
-		proxy_error("Failed to connect to server %s:%d to run KILL %s %lu: Error: %s\n", ka->hostname, ka->port, (ka->kill_type == KILL_QUERY ? "QUERY" : "CONNECTION"), ka->id, mysql_error(pgsql));
+		proxy_error("Failed to connect to server %s:%d to run KILL %s %d: Error: %s\n", ka->hostname, ka->port, (ka->kill_type == KILL_QUERY ? "QUERY" : "CONNECTION"), ka->id, mysql_error(pgsql));
 		PgHGM->p_update_pgsql_error_counter(p_pgsql_error_type::pgsql, ka->hid, ka->hostname, ka->port, mysql_errno(pgsql));
 		goto __exit_kill_query_thread;
 	}
@@ -265,13 +266,13 @@ void* PgSQL_kill_query_thread(void* arg) {
 	char buf[100];
 	switch (ka->kill_type) {
 	case KILL_QUERY:
-		sprintf(buf, "KILL QUERY %lu", ka->id);
+		sprintf(buf, "KILL QUERY %d", ka->id);
 		break;
 	case KILL_CONNECTION:
-		sprintf(buf, "KILL CONNECTION %lu", ka->id);
+		sprintf(buf, "KILL CONNECTION %d", ka->id);
 		break;
 	default:
-		sprintf(buf, "KILL %lu", ka->id);
+		sprintf(buf, "KILL %d", ka->id);
 		break;
 	}
 	// FIXME: these 2 calls are blocking, fortunately on their own thread
@@ -1294,7 +1295,7 @@ int PgSQL_Session::handler_again___status_PINGING_SERVER() {
 				PgHGM->p_update_pgsql_error_counter(p_pgsql_error_type::proxysql, myconn->parent->myhgc->hid, myconn->parent->address, myconn->parent->port, ER_PROXYSQL_PING_TIMEOUT);
 			}
 			else { // rc==-1
-				int myerr = mysql_errno(myconn->pgsql);
+				int myerr = 0; // TODO: fix this mysql_errno(myconn->pgsql);
 				detected_broken_connection(__FILE__, __LINE__, __func__, "during ping", myconn,  true);
 				PgHGM->p_update_pgsql_error_counter(p_pgsql_error_type::pgsql, myconn->parent->myhgc->hid, myconn->parent->address, myconn->parent->port, myerr);
 			}
@@ -1383,7 +1384,7 @@ int PgSQL_Session::handler_again___status_RESETTING_CONNECTION() {
 
 void PgSQL_Session::handler_again___new_thread_to_kill_connection() {
 	PgSQL_Data_Stream* myds = mybe->server_myds;
-	if (myds->myconn && myds->myconn->pgsql) {
+	if (myds->myconn && false /*myds->myconn->pgsql*/) { // TODO: fix this	
 		if (myds->killed_at == 0) {
 			myds->wait_until = 0;
 			myds->killed_at = thread->curtime;
@@ -1399,7 +1400,7 @@ void PgSQL_Session::handler_again___new_thread_to_kill_connection() {
 				}
 			}
 
-			PgSQL_KillArgs* ka = new PgSQL_KillArgs(ui->username, auth_password, myds->myconn->parent->address, myds->myconn->parent->port, myds->myconn->parent->myhgc->hid, myds->myconn->pgsql->thread_id, KILL_QUERY, myds->myconn->parent->use_ssl, thread, myds->myconn->connected_host_details.ip);
+			PgSQL_KillArgs* ka = new PgSQL_KillArgs(ui->username, auth_password, myds->myconn->parent->address, myds->myconn->parent->port, myds->myconn->parent->myhgc->hid, myds->myconn->get_backend_pid(), KILL_QUERY, myds->myconn->parent->use_ssl, thread, myds->myconn->connected_host_details.ip);
 			pthread_attr_t attr;
 			pthread_attr_init(&attr);
 			pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
@@ -1489,7 +1490,7 @@ bool PgSQL_Session::handler_again___status_SETTING_INIT_CONNECT(int* _rc) {
 	else {
 		if (rc == -1 || rc == -2) {
 			// the command failed
-			int myerr = mysql_errno(myconn->pgsql);
+			int myerr = 0; // TODO: fix this mysql_errno(myconn->pgsql);
 			PgHGM->p_update_pgsql_error_counter(
 				p_pgsql_error_type::pgsql,
 				myconn->parent->myhgc->hid,
@@ -1523,13 +1524,13 @@ bool PgSQL_Session::handler_again___status_SETTING_INIT_CONNECT(int* _rc) {
 				return ret;
 			}
 			else {
-				proxy_warning("Error while setting INIT CONNECT on %s:%d hg %d : %d, %s\n", myconn->parent->address, myconn->parent->port, current_hostgroup, myerr, mysql_error(myconn->pgsql));
+				proxy_warning("Error while setting INIT CONNECT on %s:%d hg %d : %d, %d\n", myconn->parent->address, myconn->parent->port, current_hostgroup, myerr, 9999);
 				// we won't go back to PROCESSING_QUERY
 				st = previous_status.top();
 				previous_status.pop();
 				char sqlstate[10];
-				sprintf(sqlstate, "%s", mysql_sqlstate(myconn->pgsql));
-				client_myds->myprot.generate_pkt_ERR(true, NULL, NULL, 1, mysql_errno(myconn->pgsql), sqlstate, mysql_error(myconn->pgsql));
+				sprintf(sqlstate, "%s", ""/* TODO: fix this mysql_sqlstate(myconn->pgsql)*/);
+				client_myds->myprot.generate_pkt_ERR(true, NULL, NULL, 1, 9999 /* TODO: fix this mysql_errno(myconn->pgsql)*/, sqlstate, "" /* TODO: fix this mysql_error(myconn->pgsql)*/);
 				myds->destroy_MySQL_Connection_From_Pool(true);
 				myds->fd = 0;
 				status = WAITING_CLIENT_DATA;
@@ -1813,7 +1814,7 @@ bool PgSQL_Session::handler_again___status_CONNECTING_SERVER(int* _rc) {
 				// associated with the socket opened by the library. To prevent this, we need to call
 				// `mysql_real_connect_cont` through `connect_cont`. This way we ensure a proper cleanup of
 				// all the resources when 'mysql_close' is later called. For more context see issue #3404.
-				mybe->server_myds->myconn->connect_cont(MYSQL_WAIT_TIMEOUT);
+				mybe->server_myds->myconn->connect_cont(PG_EVENT_NONE);
 				mybe->server_myds->destroy_MySQL_Connection_From_Pool(false);
 				if (mirror) {
 					PROXY_TRACE();
@@ -1905,16 +1906,18 @@ bool PgSQL_Session::handler_again___status_CONNECTING_SERVER(int* _rc) {
 			break;
 		case -1:
 		case -2:
-			PgHGM->p_update_pgsql_error_counter(p_pgsql_error_type::pgsql, myconn->parent->myhgc->hid, myconn->parent->address, myconn->parent->port, mysql_errno(myconn->pgsql));
+			PgHGM->p_update_pgsql_error_counter(
+				p_pgsql_error_type::pgsql, 
+				myconn->parent->myhgc->hid, 
+				myconn->parent->address, 
+				myconn->parent->port, 9999 /* TODO: fix this mysql_errno(myconn->pgsql)*/);
+
 			if (myds->connect_retries_on_failure > 0) {
 				myds->connect_retries_on_failure--;
-				int myerr = mysql_errno(myconn->pgsql);
-				switch (myerr) {
-				case 1226: // ER_USER_LIMIT_REACHED , User '%s' has exceeded the '%s' resource (current value: %ld)
+
+				if (myconn->is_error_present() && 
+					myconn->get_error_code() == PGSQL_ERROR_CODES::ERRCODE_TOO_MANY_CONNECTIONS) {
 					goto __exit_handler_again___status_CONNECTING_SERVER_with_err;
-					break;
-				default:
-					break;
 				}
 				if (mirror) {
 					PROXY_TRACE();
@@ -1968,6 +1971,7 @@ bool PgSQL_Session::handler_again___status_CONNECTING_SERVER(int* _rc) {
 	}
 	return false;
 }
+
 bool PgSQL_Session::handler_again___status_RESETTING_CONNECTION(int* _rc) {
 	assert(mybe->server_myds->myconn);
 	PgSQL_Data_Stream* myds = mybe->server_myds;
@@ -3244,118 +3248,6 @@ void PgSQL_Session::SetQueryTimeout() {
 
 // this function used to be inline.
 // now it returns:
-// true: NEXT_IMMEDIATE(st) needs to be called
-// false: continue
-bool PgSQL_Session::handler_rc0_PROCESSING_STMT_PREPARE(enum session_status& st, PgSQL_Data_Stream* myds, bool& prepared_stmt_with_no_params) {
-	thread->status_variables.stvar[st_var_backend_stmt_prepare]++;
-	GloMyStmt->wrlock();
-	uint32_t client_stmtid = 0;
-	uint64_t global_stmtid;
-	//bool is_new;
-	MySQL_STMT_Global_info* stmt_info = NULL;
-	stmt_info = GloMyStmt->add_prepared_statement(
-		(char*)client_myds->myconn->userinfo->username,
-		(char*)client_myds->myconn->userinfo->dbname,
-		(char*)CurrentQuery.QueryPointer,
-		CurrentQuery.QueryLength,
-		CurrentQuery.QueryParserArgs.first_comment,
-		CurrentQuery.mysql_stmt,
-		false);
-	if (CurrentQuery.QueryParserArgs.digest_text) {
-		if (stmt_info->digest_text == NULL) {
-			stmt_info->digest_text = strdup(CurrentQuery.QueryParserArgs.digest_text);
-			stmt_info->digest = CurrentQuery.QueryParserArgs.digest;	// copy digest
-			//stmt_info->MyComQueryCmd = CurrentQuery.PgQueryCmd; // copy MyComQueryCmd
-			stmt_info->calculate_mem_usage();
-		}
-	}
-	global_stmtid = stmt_info->statement_id;
-	myds->myconn->local_stmts->backend_insert(global_stmtid, CurrentQuery.mysql_stmt);
-	// We only perform the generation for a new 'client_stmt_id' when there is no previous status, this
-	// is, when 'PROCESSING_STMT_PREPARE' is reached directly without transitioning from a previous status
-	// like 'PROCESSING_STMT_EXECUTE'. The same condition needs to hold for setting 'stmt_client_id',
-	// otherwise we could be resetting it's current value from the previous state.
-	if (previous_status.size() == 0) {
-		client_stmtid = client_myds->myconn->local_stmts->generate_new_client_stmt_id(global_stmtid);
-		CurrentQuery.stmt_client_id = client_stmtid;
-	}
-	CurrentQuery.mysql_stmt = NULL;
-	st = status;
-	size_t sts = previous_status.size();
-	if (sts) {
-		myds->myconn->async_state_machine = ASYNC_IDLE;
-		myds->DSS = STATE_MARIADB_GENERIC;
-		st = previous_status.top();
-		previous_status.pop();
-		GloMyStmt->unlock();
-		return true;
-		//NEXT_IMMEDIATE(st);
-	}
-	else {
-		client_myds->myprot.generate_STMT_PREPARE_RESPONSE(client_myds->pkt_sid + 1, stmt_info, client_stmtid);
-		if (stmt_info->num_params == 0) {
-			prepared_stmt_with_no_params = true;
-		}
-		LogQuery(myds);
-		GloMyStmt->unlock();
-	}
-	return false;
-}
-
-
-// this function used to be inline
-void PgSQL_Session::handler_rc0_PROCESSING_STMT_EXECUTE(PgSQL_Data_Stream* myds) {
-	thread->status_variables.stvar[st_var_backend_stmt_execute]++;
-	PROXY_TRACE2();
-	if (CurrentQuery.mysql_stmt) {
-		// See issue #1574. Metadata needs to be updated in case of need also
-		// during STMT_EXECUTE, so a failure in the prepared statement
-		// metadata cache is only hit once. This way we ensure that the next
-		// 'PREPARE' will be answered with the properly updated metadata.
-		/********************************************************************/
-		// Lock the global statement manager
-		GloMyStmt->wrlock();
-		// Update the global prepared statement metadata
-		MySQL_STMT_Global_info* stmt_info = GloMyStmt->find_prepared_statement_by_stmt_id(CurrentQuery.stmt_global_id, false);
-		stmt_info->update_metadata(CurrentQuery.mysql_stmt);
-		// Unlock the global statement manager
-		GloMyStmt->unlock();
-		/********************************************************************/
-	}
-	//MySQL_Stmt_Result_to_MySQL_wire(CurrentQuery.mysql_stmt, myds->myconn);
-	LogQuery(myds);
-	if (CurrentQuery.stmt_meta) {
-		if (CurrentQuery.stmt_meta->pkt) {
-			uint32_t stmt_global_id = 0;
-			memcpy(&stmt_global_id, (char*)(CurrentQuery.stmt_meta->pkt) + 5, sizeof(uint32_t));
-			SLDH->reset(stmt_global_id);
-			free(CurrentQuery.stmt_meta->pkt);
-			CurrentQuery.stmt_meta->pkt = NULL;
-		}
-
-		// free for all the buffer types in which we allocate
-		for (int i = 0; i < CurrentQuery.stmt_meta->num_params; i++) {
-			enum enum_field_types buffer_type =
-				CurrentQuery.stmt_meta->binds[i].buffer_type;
-
-			if (
-				(buffer_type == MYSQL_TYPE_TIME) ||
-				(buffer_type == MYSQL_TYPE_DATE) ||
-				(buffer_type == MYSQL_TYPE_TIMESTAMP) ||
-				(buffer_type == MYSQL_TYPE_DATETIME)
-				) {
-				free(CurrentQuery.stmt_meta->binds[i].buffer);
-				// NOTE: This memory should be zeroed during initialization,
-				// but we also nullify it here for extra safety. See #3546.
-				CurrentQuery.stmt_meta->binds[i].buffer = NULL;
-			}
-		}
-	}
-	CurrentQuery.mysql_stmt = NULL;
-}
-
-// this function used to be inline.
-// now it returns:
 // true: NEXT_IMMEDIATE(CONNECTING_SERVER) needs to be called
 // false: continue
 bool PgSQL_Session::handler_minus1_ClientLibraryError(PgSQL_Data_Stream* myds) {
@@ -3395,9 +3287,9 @@ bool PgSQL_Session::handler_minus1_ClientLibraryError(PgSQL_Data_Stream* myds) {
 // this function was inline
 void PgSQL_Session::handler_minus1_LogErrorDuringQuery(PgSQL_Connection* myconn) {
 	if (pgsql_thread___verbose_query_error) {
-		proxy_warning("Error during query on (%d,%s,%d,%lu) , user \"%s@%s\" , dbname \"%s\" , %s . digest_text = \"%s\"\n", myconn->parent->myhgc->hid, myconn->parent->address, myconn->parent->port, myconn->get_mysql_thread_id(), client_myds->myconn->userinfo->username, (client_myds->addr.addr ? client_myds->addr.addr : (char*)"unknown"), client_myds->myconn->userinfo->dbname, myconn->get_error_code_with_message().c_str(), CurrentQuery.QueryParserArgs.digest_text);
+		proxy_warning("Error during query on (%d,%s,%d,%d) , user \"%s@%s\" , dbname \"%s\" , %s . digest_text = \"%s\"\n", myconn->parent->myhgc->hid, myconn->parent->address, myconn->parent->port, myconn->get_backend_pid(), client_myds->myconn->userinfo->username, (client_myds->addr.addr ? client_myds->addr.addr : (char*)"unknown"), client_myds->myconn->userinfo->dbname, myconn->get_error_code_with_message().c_str(), CurrentQuery.QueryParserArgs.digest_text);
 	} else {
-		proxy_warning("Error during query on (%d,%s,%d,%lu): %s\n", myconn->parent->myhgc->hid, myconn->parent->address, myconn->parent->port, myconn->get_mysql_thread_id(), myconn->get_error_code_with_message().c_str());
+		proxy_warning("Error during query on (%d,%s,%d,%d): %s\n", myconn->parent->myhgc->hid, myconn->parent->address, myconn->parent->port, myconn->get_backend_pid(), myconn->get_error_code_with_message().c_str());
 	}
 	PgHGM->add_pgsql_errors(myconn->parent->myhgc->hid, myconn->parent->address, myconn->parent->port, client_myds->myconn->userinfo->username, 
 		(client_myds->addr.addr ? client_myds->addr.addr : "unknown"), client_myds->myconn->userinfo->dbname, 
@@ -3451,7 +3343,7 @@ bool PgSQL_Session::handler_minus1_HandleErrorCodes(PgSQL_Data_Stream* myds, int
 		//return handler_ret;
 		break;
 	case PGSQL_ERROR_CODES::ERRCODE_OUT_OF_MEMORY:
-		proxy_warning("Error OUT_OF_MEMORY during query on (%d,%s,%d,%lu): %s\n", myconn->parent->myhgc->hid, myconn->parent->address, myconn->parent->port, myconn->get_mysql_thread_id(), myconn->get_error_code_with_message().c_str());
+		proxy_warning("Error OUT_OF_MEMORY during query on (%d,%s,%d,%d): %s\n", myconn->parent->myhgc->hid, myconn->parent->address, myconn->parent->port, myconn->get_backend_pid(), myconn->get_error_code_with_message().c_str());
 		break;
 	default:
 		break; // continue normally
@@ -3471,47 +3363,6 @@ void PgSQL_Session::handler_minus1_GenerateErrorMessage(PgSQL_Data_Stream* myds,
 			PgSQL_Result_to_PgSQL_wire(NULL, myds);
 		}
 		break;
-	case PROCESSING_STMT_PREPARE:
-	{
-		char sqlstate[10];
-		if (myconn && myconn->pgsql) {
-			sprintf(sqlstate, "%s", mysql_sqlstate(myconn->pgsql));
-			client_myds->myprot.generate_pkt_ERR(true, NULL, NULL, client_myds->pkt_sid + 1, mysql_errno(myconn->pgsql), sqlstate, (char*)mysql_stmt_error(myconn->query.stmt));
-			GloPgSQL_Logger->log_audit_entry(PROXYSQL_MYSQL_AUTH_CLOSE, this, NULL);
-		}
-		else {
-			client_myds->myprot.generate_pkt_ERR(true, NULL, NULL, client_myds->pkt_sid + 1, 2013, (char*)"HY000", (char*)"Lost connection to MySQL server during query");
-			GloPgSQL_Logger->log_audit_entry(PROXYSQL_MYSQL_AUTH_CLOSE, this, NULL);
-		}
-		client_myds->pkt_sid++;
-		if (previous_status.size()) {
-			// an STMT_PREPARE failed
-			// we have a previous status, probably STMT_EXECUTE,
-			//    but returning to that status is not safe after STMT_PREPARE failed
-			// for this reason we exit immediately
-			wrong_pass = true;
-		}
-	}
-	break;
-	case PROCESSING_STMT_EXECUTE:
-	{
-		char sqlstate[10];
-		if (myconn && myconn->pgsql) {
-			if (myconn->query_result) {
-				PROXY_TRACE2();
-				myds->sess->handler_rc0_PROCESSING_STMT_EXECUTE(myds);
-			}
-			else {
-				sprintf(sqlstate, "%s", mysql_sqlstate(myconn->pgsql));
-				client_myds->myprot.generate_pkt_ERR(true, NULL, NULL, client_myds->pkt_sid + 1, mysql_errno(myconn->pgsql), sqlstate, (char*)mysql_stmt_error(myconn->query.stmt));
-			}
-		}
-		else {
-			client_myds->myprot.generate_pkt_ERR(true, NULL, NULL, client_myds->pkt_sid + 1, 2013, (char*)"HY000", (char*)"Lost connection to MySQL server during query");
-		}
-		client_myds->pkt_sid++;
-	}
-	break;
 	default:
 		// LCOV_EXCL_START
 		assert(0);
@@ -3873,41 +3724,12 @@ handler_again:
 				case PROCESSING_QUERY:
 					PgSQL_Result_to_PgSQL_wire(myconn, myconn->myds);
 					break;
-				case PROCESSING_STMT_PREPARE:
-				{
-					enum session_status st;
-					if (handler_rc0_PROCESSING_STMT_PREPARE(st, myds, prepared_stmt_with_no_params)) {
-						NEXT_IMMEDIATE(st);
-					}
-				}
-				break;
-				case PROCESSING_STMT_EXECUTE:
-					handler_rc0_PROCESSING_STMT_EXECUTE(myds);
-					break;
 				default:
 					// LCOV_EXCL_START
 					assert(0);
 					break;
 					// LCOV_EXCL_STOP
 				}
-
-				if (mysql_thread___log_mysql_warnings_enabled) {
-					auto warn_no = mysql_warning_count(myconn->pgsql);
-					if (warn_no > 0) {
-						// Backup actual digest causing the warning before it's destroyed by finishing the request
-						const char* digest_text = CurrentQuery.get_digest_text();
-						CurrentQuery.show_warnings_prev_query_digest = digest_text == NULL ? "" : digest_text;
-
-						RequestEnd(myds);
-						writeout();
-
-						myconn->async_state_machine = ASYNC_IDLE;
-						myds->DSS = STATE_MARIADB_GENERIC;
-
-						NEXT_IMMEDIATE(SHOW_WARNINGS);
-					}
-				}
-
 				RequestEnd(myds);
 				finishQuery(myds, myconn, prepared_stmt_with_no_params);
 			}
@@ -4005,50 +3827,6 @@ handler_again:
 		}
 	}
 	break;
-
-	case SHOW_WARNINGS:
-		// Performs a 'SHOW WARNINGS' query over the current backend connection and returns the connection back
-		// to the connection pool when finished. Actual logging of received warnings is performed in
-		// 'PgSQL_Connection' while processing 'ASYNC_USE_RESULT_CONT'.
-	{
-		PgSQL_Data_Stream* myds = mybe->server_myds;
-		PgSQL_Connection* myconn = myds->myconn;
-
-		// Setting POLLOUT is required just in case this state has been reached when 'RunQuery' from
-		// 'PROCESSING_QUERY' state has immediately return. This is because in case 'mysql_real_query_start'
-		// immediately returns with '0' the session is never processed again by 'MySQL_Thread', and 'revents' is
-		// never updated with the result of polling through the 'MySQL_Thread::mypolls'.
-		myds->revents |= POLLOUT;
-
-		int rc = myconn->async_query(
-			mybe->server_myds->revents, (char*)"SHOW WARNINGS", strlen((char*)"SHOW WARNINGS")
-		);
-		if (rc == 0 || rc == -1) {
-			// Cleanup the connection resulset from 'SHOW WARNINGS' for the next query.
-			if (myconn->query_result != NULL) {
-				delete myconn->query_result;
-				myconn->query_result = NULL;
-			}
-
-			if (rc == -1) {
-				int myerr = mysql_errno(myconn->pgsql);
-				proxy_error(
-					"'SHOW WARNINGS' failed to be executed over backend connection with error: '%d'\n", myerr
-				);
-			}
-
-			RequestEnd(myds);
-			finishQuery(myds, myconn, prepared_stmt_with_no_params);
-
-			handler_ret = 0;
-			return handler_ret;
-		}
-		else {
-			goto handler_again;
-		}
-	}
-	break;
-
 	case CONNECTING_SERVER:
 	{
 		int rc = 0;
@@ -4107,8 +3885,9 @@ bool PgSQL_Session::handler_again___multiple_statuses(int* rc) {
 	case RESETTING_CONNECTION_V2:
 		ret = handler_again___status_RESETTING_CONNECTION(rc);
 		break;
-	case SETTING_INIT_CONNECT:
-		ret = handler_again___status_SETTING_INIT_CONNECT(rc);
+	// TODO: fix this
+	//case SETTING_INIT_CONNECT:
+	//	ret = handler_again___status_SETTING_INIT_CONNECT(rc);
 		break;
 	case SETTING_CHARSET:
 		ret = handler_again___status_CHANGING_CHARSET(rc);
@@ -4689,7 +4468,7 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 			tracking for MySQL 5.7+
 	*/
 	//bool exit_after_SetParse = true;
-	unsigned char command_type = *((unsigned char*)pkt->ptr + sizeof(mysql_hdr));
+	
 	if (qpo->new_query) {
 		handler_WCD_SS_MCQ_qpo_QueryRewrite(pkt);
 	}
@@ -4757,7 +4536,7 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 				*lock_hostgroup = true;
 				return false;
 			}
-			int rc;
+			
 			string nq = string((char*)CurrentQuery.QueryPointer, CurrentQuery.QueryLength);
 			RE2::GlobalReplace(&nq, (char*)"^/\\*!\\d\\d\\d\\d\\d SET(.*)\\*/", (char*)"SET\\1");
 			RE2::GlobalReplace(&nq, (char*)"(?U)/\\*.*\\*/", (char*)"");
@@ -5254,7 +5033,7 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 				*lock_hostgroup = true;
 				return false;
 			}
-			int rc;
+
 			string nq = string((char*)CurrentQuery.QueryPointer, CurrentQuery.QueryLength);
 
 			RE2::GlobalReplace(&nq, (char*)"(?U)/\\*.*\\*/", (char*)"");
@@ -5405,7 +5184,7 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 				if (_mybe) {
 					if (_mybe->server_myds) {
 						if (_mybe->server_myds->myconn) {
-							if (_mybe->server_myds->myconn->pgsql) { // we have an established connection
+							if (_mybe->server_myds->myconn->pgsql_conn) { // we have an established connection
 								// this seems to be the right backend
 								qpo->destination_hostgroup = last_HG_affected_rows;
 								current_hostgroup = qpo->destination_hostgroup;
@@ -6417,9 +6196,9 @@ void PgSQL_Session::detected_broken_connection(const char* file, unsigned int li
 	unsigned long long last_used = thread->curtime - myconn->last_time_used;
 	last_used /= 1000;
 	if (verbose) {
-		proxy_error_inline(file, line, func, "Detected a broken connection while %s on (%d,%s,%d,%lu) , FD (Conn:%d , MyDS:%d) , user %s , last_used %llums ago : %s, %s\n", action, myconn->parent->myhgc->hid, myconn->parent->address, myconn->parent->port, myconn->get_mysql_thread_id(), myconn->myds->fd, myconn->fd, myconn->userinfo->username, last_used, code, msg);
+		proxy_error_inline(file, line, func, "Detected a broken connection while %s on (%d,%s,%d,%d) , FD (Conn:%d , MyDS:%d) , user %s , last_used %llums ago : %s, %s\n", action, myconn->parent->myhgc->hid, myconn->parent->address, myconn->parent->port, myconn->get_backend_pid(), myconn->myds->fd, myconn->fd, myconn->userinfo->username, last_used, code, msg);
 	} else {
-		proxy_error_inline(file, line, func, "Detected a broken connection while %s on (%d,%s,%d,%lu) , user %s , last_used %llums ago : %s, %s\n", action, myconn->parent->myhgc->hid, myconn->parent->address, myconn->parent->port, myconn->get_mysql_thread_id(), myconn->userinfo->username, last_used, code, msg);
+		proxy_error_inline(file, line, func, "Detected a broken connection while %s on (%d,%s,%d,%d) , user %s , last_used %llums ago : %s, %s\n", action, myconn->parent->myhgc->hid, myconn->parent->address, myconn->parent->port, myconn->get_backend_pid(), myconn->userinfo->username, last_used, code, msg);
 	}
 }
 

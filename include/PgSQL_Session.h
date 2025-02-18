@@ -312,8 +312,6 @@ private:
 	// these functions have code that used to be inline, and split into functions for readibility
 	int handler_ProcessingQueryError_CheckBackendConnectionStatus(PgSQL_Data_Stream* myds);
 	void SetQueryTimeout();
-	bool handler_rc0_PROCESSING_STMT_PREPARE(enum session_status& st, PgSQL_Data_Stream* myds, bool& prepared_stmt_with_no_params);
-	void handler_rc0_PROCESSING_STMT_EXECUTE(PgSQL_Data_Stream* myds);
 	bool handler_minus1_ClientLibraryError(PgSQL_Data_Stream* myds);
 	void handler_minus1_LogErrorDuringQuery(PgSQL_Connection* myconn);
 	bool handler_minus1_HandleErrorCodes(PgSQL_Data_Stream* myds, int& handler_ret);
@@ -560,13 +558,13 @@ public:
 	char* password;
 	char* hostname;
 	unsigned int port;
-	unsigned long id;
+	int id;
 	int kill_type;
 	unsigned int hid;
 	int use_ssl;
 
-	PgSQL_KillArgs(char* u, char* p, char* h, unsigned int P, unsigned int _hid, unsigned long i, int kt, int _use_ssl, PgSQL_Thread* _mt);
-	PgSQL_KillArgs(char* u, char* p, char* h, unsigned int P, unsigned int _hid, unsigned long i, int kt, int _use_ssl, PgSQL_Thread* _mt, char* ip);
+	PgSQL_KillArgs(char* u, char* p, char* h, unsigned int P, unsigned int _hid, int i, int kt, int _use_ssl, PgSQL_Thread* _mt);
+	PgSQL_KillArgs(char* u, char* p, char* h, unsigned int P, unsigned int _hid, int i, int kt, int _use_ssl, PgSQL_Thread* _mt, char* ip);
 	~PgSQL_KillArgs();
 	const char* get_host_address() const;
 
