@@ -1117,6 +1117,7 @@ void ProxySQL_Admin::flush_logs() {
 		}
 		free(ssl_keylog_file);
 	}
+	proxy_debug(PROXY_DEBUG_ADMIN, 1, "Running PROXYSQL FLUSH LOGS\n");
 }
 
 
