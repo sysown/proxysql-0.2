@@ -240,48 +240,7 @@ bool PgSQL_Connection_userinfo::set_dbname(const char* db) {
 	return false;
 }
 
-PgSQL_Connection_Placeholder::PgSQL_Connection_Placeholder() {
-	
-	options.client_flag = 0;
-	options.server_capabilities = 0;
-	options.compression_min_length=0;
-	options.server_version=NULL;
-	options.last_set_autocommit=-1;	// -1 = never set
-	options.autocommit=true;
-	options.no_backslash_escapes=false;
-	options.init_connect=NULL;
-	options.init_connect_sent=false;
-	options.session_track_gtids = NULL;
-	options.session_track_gtids_sent = false;
-	options.ldap_user_variable=NULL;
-	options.ldap_user_variable_value=NULL;
-	options.ldap_user_variable_sent=false;
-	options.session_track_gtids_int=0;
-
-	
-};
-
-PgSQL_Connection_Placeholder::~PgSQL_Connection_Placeholder() {
-	proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 4, "Destroying PgSQL_Connection %p\n", this);
-	if (options.server_version) free(options.server_version);
-	if (options.init_connect) free(options.init_connect);
-	if (options.ldap_user_variable) free(options.ldap_user_variable);
-	if (options.ldap_user_variable_value) free(options.ldap_user_variable_value);
-	
-
-	if (options.session_track_gtids) {
-		free(options.session_track_gtids);
-		options.session_track_gtids=NULL;
-	}
-
-
-};
-
-
-
 void print_backtrace(void);
-
-
 
 #define NEXT_IMMEDIATE(new_st) do { async_state_machine = new_st; goto handler_again; } while (0)
 
@@ -313,6 +272,8 @@ PgSQL_Connection::PgSQL_Connection() {
 	auto_increment_delay_token = 0;
 	query.ptr = NULL;
 	query.length = 0;
+	options.init_connect = NULL;
+	options.init_connect_sent = false;
 	userinfo = new PgSQL_Connection_userinfo();
 
 	for (int i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
@@ -327,6 +288,7 @@ PgSQL_Connection::PgSQL_Connection() {
 }
 
 PgSQL_Connection::~PgSQL_Connection() {
+	proxy_debug(PROXY_DEBUG_MYSQL_CONNPOOL, 4, "Destroying PgSQL_Connection %p\n", this);
 	if (userinfo) {
 		delete userinfo;
 		userinfo = NULL;
@@ -366,6 +328,8 @@ PgSQL_Connection::~PgSQL_Connection() {
 		free(connected_host_details.ip);
 		connected_host_details.hostname = NULL;
 	}
+
+	if (options.init_connect) free(options.init_connect);
 }
 
 void PgSQL_Connection::next_event(PG_ASYNC_ST new_st) {
@@ -2056,7 +2020,6 @@ void PgSQL_Connection::reset() {
 	// reconfigure STATUS_MYSQL_CONNECTION_COMPRESSION
 	set_status(old_compress, STATUS_MYSQL_CONNECTION_COMPRESSION);
 	reusable = true;
-	options.last_set_autocommit = -1; // never sent
 	creation_time = monotonic_time();
 
 	for (int i = 0; i < PGSQL_NAME_LAST_HIGH_WM; i++) {
@@ -2074,21 +2037,7 @@ void PgSQL_Connection::reset() {
 		options.init_connect = NULL;
 		options.init_connect_sent = false;
 	}
-	auto_increment_delay_token = 0;
-	if (options.ldap_user_variable) {
-		if (options.ldap_user_variable_value) {
-			free(options.ldap_user_variable_value);
-			options.ldap_user_variable_value = NULL;
-		}
-		options.ldap_user_variable = NULL;
-		options.ldap_user_variable_sent = false;
-	}
-	options.session_track_gtids_int = 0;
-	if (options.session_track_gtids) {
-		free(options.session_track_gtids);
-		options.session_track_gtids = NULL;
-		options.session_track_gtids_sent = false;
-	}
+	auto_increment_delay_token = 0;	
 }
 
 /*

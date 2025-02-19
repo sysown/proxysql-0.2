@@ -299,40 +299,7 @@ class PgSQL_Connection_userinfo {
 	bool set_dbname(const char *);
 };
 
-class PgSQL_Connection_Placeholder {
-	public:
-	struct {
-		char *server_version;
-		uint32_t session_track_gtids_int;
-		uint32_t max_allowed_pkt;
-		uint32_t server_capabilities;
-		uint32_t client_flag;
-		unsigned int compression_min_length;
-		char *init_connect;
-		bool init_connect_sent;
-		char * session_track_gtids;
-		char *ldap_user_variable;
-		char *ldap_user_variable_value;
-		bool session_track_gtids_sent;
-		bool ldap_user_variable_sent;
-		uint8_t protocol_version;
-		int8_t last_set_autocommit;
-		bool autocommit;
-		bool no_backslash_escapes;
-	} options;
-
-
-
-	
-	PgSQL_Connection_Placeholder();
-	~PgSQL_Connection_Placeholder();
-
-	
-
-
-};
-
-class PgSQL_Connection : public PgSQL_Connection_Placeholder {
+class PgSQL_Connection {
 public:
 	PgSQL_Connection();
 	~PgSQL_Connection();
@@ -521,6 +488,11 @@ public:
 		unsigned long length;
 		char* ptr;
 	} query;
+
+	struct {
+		char* init_connect;
+		bool init_connect_sent;
+	} options;
 
 	struct {
 		char* hostname;

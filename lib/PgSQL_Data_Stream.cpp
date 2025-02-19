@@ -973,7 +973,7 @@ int PgSQL_Data_Stream::array2buffer() {
 					DSS = STATE_SLEEP;
 
 					//explicitly disable compression
-					myconn->options.compression_min_length = 0;
+					//myconn->options.compression_min_length = 0;
 					myconn->set_status(false, STATUS_MYSQL_CONNECTION_COMPRESSION);
 				}
 				

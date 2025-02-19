@@ -863,7 +863,7 @@ void PgSQL_Session::generate_proxysql_internal_session_json(json& j) {
 				//j["backends"][i]["conn"]["session_track_gtids"] = (_myconn->options.session_track_gtids ? _myconn->options.session_track_gtids : "");
 				j["backends"][i]["conn"]["init_connect"] = (_myconn->options.init_connect ? _myconn->options.init_connect : "");
 				j["backends"][i]["conn"]["init_connect_sent"] = _myds->myconn->options.init_connect_sent;
-				j["backends"][i]["conn"]["standard_conforming_strings"] = _myconn->options.no_backslash_escapes;
+				//j["backends"][i]["conn"]["standard_conforming_strings"] = _myconn->options.no_backslash_escapes;
 				//j["backends"][i]["conn"]["status"]["get_lock"] = _myconn->get_status(STATUS_MYSQL_CONNECTION_GET_LOCK);
 				//j["backends"][i]["conn"]["status"]["lock_tables"] = _myconn->get_status(STATUS_MYSQL_CONNECTION_LOCK_TABLES);
 				j["backends"][i]["conn"]["status"]["has_savepoint"] = _myconn->get_status(STATUS_MYSQL_CONNECTION_HAS_SAVEPOINT);
@@ -921,8 +921,6 @@ void PgSQL_Session::generate_proxysql_internal_session_json(json& j) {
 }
 
 bool PgSQL_Session::handler_special_queries(PtrSize_t* pkt, bool* lock_hostgroup) {
-	bool deprecate_eof_active = client_myds->myconn->options.client_flag & CLIENT_DEPRECATE_EOF;
-
 	// Unsupported Features:
 	// COPY
 	/*if (pkt->size > (5 + 5) && strncasecmp((char*)"COPY ", (char*)pkt->ptr + 5, 5) == 0) {
@@ -953,7 +951,7 @@ bool PgSQL_Session::handler_special_queries(PtrSize_t* pkt, bool* lock_hostgroup
 			return true;
 		}
 	}
-
+	/*
 	//handle 2564
 	if (pkt->size == SELECT_VERSION_COMMENT_LEN + 5 && *((char*)(pkt->ptr) + 4) == (char)0x03 && strncmp((char*)SELECT_VERSION_COMMENT, (char*)pkt->ptr + 5, pkt->size - 5) == 0) {
 		// FIXME: this doesn't return AUTOCOMMIT or IN_TRANS
@@ -1011,7 +1009,7 @@ bool PgSQL_Session::handler_special_queries(PtrSize_t* pkt, bool* lock_hostgroup
 		l_free(pkt->size, pkt->ptr);
 
 		return true;
-	}
+	}*/
 	if (locked_on_hostgroup >= 0 && 
 		(strncasecmp((char*)"SET ", (char*)pkt->ptr + 5, 4) == 0 || 
 		 strncasecmp((char*)"RESET ", (char*)pkt->ptr + 5, 6) == 0)) {
@@ -1089,45 +1087,6 @@ bool PgSQL_Session::handler_special_queries(PtrSize_t* pkt, bool* lock_hostgroup
 	}
 	*/
 
-	// if query digest is disabled, warnings in ProxySQL are also deactivated, 
-	// resulting in an empty response being sent to the client.
-	if ((pkt->size == 18) && (strncasecmp((char*)"SHOW WARNINGS", (char*)pkt->ptr + 5, 13) == 0) &&
-		CurrentQuery.QueryParserArgs.digest_text == nullptr) {
-		SQLite3_result* resultset = new SQLite3_result(3);
-		resultset->add_column_definition(SQLITE_TEXT, "Level");
-		resultset->add_column_definition(SQLITE_TEXT, "Code");
-		resultset->add_column_definition(SQLITE_TEXT, "Message");
-		SQLite3_to_MySQL(resultset, NULL, 0, &client_myds->myprot, false, deprecate_eof_active);
-		delete resultset;
-		if (mirror == false) {
-			RequestEnd(NULL);
-		}
-		else {
-			client_myds->DSS = STATE_SLEEP;
-			status = WAITING_CLIENT_DATA;
-		}
-		l_free(pkt->size, pkt->ptr);
-		return true;
-	}
-	// if query digest is disabled, warnings in ProxySQL are also deactivated, 
-	// resulting in zero warning count sent to the client.
-	if ((pkt->size == 27) && (strncasecmp((char*)"SHOW COUNT(*) WARNINGS", (char*)pkt->ptr + 5, 22) == 0) &&
-		CurrentQuery.QueryParserArgs.digest_text == nullptr) {
-		SQLite3_result* resultset = new SQLite3_result(1);
-		resultset->add_column_definition(SQLITE_TEXT, "@@session.warning_count");
-		char* pta[1];
-		pta[0] = (char*)"0";
-		resultset->add_row(pta);
-		SQLite3_to_MySQL(resultset, NULL, 0, &client_myds->myprot, false, deprecate_eof_active);
-		delete resultset;
-		client_myds->DSS = STATE_SLEEP;
-		status = WAITING_CLIENT_DATA;
-		if (mirror == false) {
-			RequestEnd(NULL);
-		}
-		l_free(pkt->size, pkt->ptr);
-		return true;
-	}
 	// 'LOAD DATA LOCAL INFILE' is unsupported. We report an specific error to inform clients about this fact. For more context see #833.
 	if ((pkt->size >= 22 + 5) && (strncasecmp((char*)"LOAD DATA LOCAL INFILE", (char*)pkt->ptr + 5, 22) == 0)) {
 		if (pgsql_thread___enable_load_data_local_infile == false) {
@@ -2182,7 +2141,7 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP_MULTI_PAC
 	return false;
 }
 
-
+#if 0
 // this function was inline inside PgSQL_Session::get_pkts_from_client
 // where:
 // status = WAITING_CLIENT_DATA
@@ -2225,7 +2184,7 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 	}
 	return true;
 }
-
+#endif
 
 // this function was inline inside PgSQL_Session::get_pkts_from_client
 // where:
@@ -2484,6 +2443,7 @@ __get_pkts_from_client:
 										(begint.tv_sec * 1000000000 + begint.tv_nsec);
 								}
 								assert(qpo);	// GloPgQPro->process_mysql_query() should always return a qpo
+#if 0
 								// This block was moved from 'handler_special_queries' to support
 								// handling of 'USE' statements which are preceded by a comment.
 								// For more context check issue: #3493.
@@ -2523,6 +2483,7 @@ __get_pkts_from_client:
 										}
 									}
 								}
+#endif
 								// ===================================================
 								if (qpo->max_lag_ms >= 0) {
 									thread->status_variables.stvar[st_var_queries_with_max_lag_ms]++;
@@ -2716,6 +2677,7 @@ __get_pkts_from_client:
 								(begint.tv_sec * 1000000000 + begint.tv_nsec);
 						}
 						assert(qpo);	// GloPgQPro->process_mysql_query() should always return a qpo
+#if 0
 						// This block was moved from 'handler_special_queries' to support
 						// handling of 'USE' statements which are preceded by a comment.
 						// For more context check issue: #3493.
@@ -2755,6 +2717,7 @@ __get_pkts_from_client:
 								}
 							}
 						}
+#endif
 						// ===================================================
 						if (qpo->max_lag_ms >= 0) {
 							thread->status_variables.stvar[st_var_queries_with_max_lag_ms]++;
@@ -2868,13 +2831,13 @@ __get_pkts_from_client:
 					// The not common commands are handled by "default" , that
 					// calls the following function
 					// handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM__various
-					if (handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM__various(&pkt, &wrong_pass) == false) {
+					//if (handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM__various(&pkt, &wrong_pass) == false) {
 						// If even this cannot find the command, we return an error to the client
 						proxy_error("RECEIVED AN UNKNOWN COMMAND: %d -- PLEASE REPORT A BUG\n", c);
 						l_free(pkt.size, pkt.ptr);
 						handler_ret = -1; // immediately drop the connection
 						return handler_ret;
-					}
+					//}
 					break;
 				}
 				break;
@@ -3996,6 +3959,7 @@ void PgSQL_Session::handler___status_CONNECTING_CLIENT___STATE_SERVER_HANDSHAKE(
 	}
 }
 
+#if 0
 // Note: as commented in issue #546 and #547 , some clients ignore the status of CLIENT_MULTI_STATEMENTS
 // therefore tracking it is not needed, unless in future this should become a security enhancement,
 // returning errors to all clients trying to send multi-statements .
@@ -4133,7 +4097,7 @@ void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 		client_myds->DSS = STATE_SLEEP;
 	}
 }
-
+#endif
 
 // this function as inline in handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_QUERY_qpo
 void PgSQL_Session::handler_WCD_SS_MCQ_qpo_QueryRewrite(PtrSize_t* pkt) {
@@ -4866,6 +4830,7 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 		return false;
 	}
 
+#if 0
 	// handle case #1797
 	// handle case #2564
 	if ((pkt->size == SELECT_CONNECTION_ID_LEN + 5 && *((char*)(pkt->ptr) + 4) == (char)0x03 && strncasecmp((char*)SELECT_CONNECTION_ID, (char*)pkt->ptr + 5, pkt->size - 5) == 0)) {
@@ -4911,7 +4876,7 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 		free(l);
 		return true;
 	}
-
+#endif
 	// handle case #1421 , about LAST_INSERT_ID
 	if (CurrentQuery.QueryParserArgs.digest_text) {
 		char* dig = CurrentQuery.QueryParserArgs.digest_text;
@@ -4933,6 +4898,7 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 					}
 				}
 			}
+#if 0 // TODO: fix this
 			// if we reached here, we don't know the right backend
 			// we try to determine if it is a simple "SELECT LAST_INSERT_ID()" or "SELECT @@IDENTITY" and we return pgsql->last_insert_id
 
@@ -4993,7 +4959,7 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 				free(l);
 				return true;
 			}
-
+#endif
 			// if we reached here, we don't know the right backend and we cannot answer the query directly
 			// We continue the normal way
 
@@ -5062,6 +5028,7 @@ __exit_set_destination_hostgroup:
 	return false;
 }
 
+#if 0
 void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STATISTICS(PtrSize_t* pkt) {
 	proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "Got COM_STATISTICS packet\n");
 	l_free(pkt->size, pkt->ptr);
@@ -5198,7 +5165,7 @@ void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 		status = WAITING_CLIENT_DATA;
 	}
 }
-
+#endif
 void PgSQL_Session::handler___client_DSS_QUERY_SENT___server_DSS_NOT_INITIALIZED__get_connection() {
 	// Get a MySQL Connection
 
