@@ -14,7 +14,7 @@ on:
         type: string
 
 env:
-  TESTTREE: ${{ inputs.testtree || 'main' }}
+  TESTTREE: ${{ inputs.testtree || inputs.trigger.event.inputs.testtree || 'main' }}
   TESTNAME: django-framework
   TESTDIST: debian12
   SHA: ${{ inputs.trigger && fromJson(inputs.trigger).event.workflow_run.head_sha || github.sha }}
