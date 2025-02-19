@@ -32,6 +32,10 @@ jobs:
         sleep 5
 
     - name: Trigger workflow_run[completed]
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
+        echo "Cleanup skipped ..."
+        gh -R ${{ github.repository }} run list -s skipped -L 100 --json databaseId  -q '.[].databaseId' | xargs -n1 gh -R ${{ github.repository }} run delete
         echo "Triggered workflow_run[completed]: '${{ github.ref_name }} ${{ github.workflow }} ${{ github.sha }}'"
         
