@@ -81,7 +81,7 @@ public:
 	PgParsePacket *ParsePacket = NULL;
 
 	int QueryLength;
-	enum MYSQL_COM_QUERY_command MyComQueryCmd;
+	enum PGSQL_QUERY_command PgQueryCmd;
 	bool bool_is_select_NOT_for_update;
 	bool bool_is_select_NOT_for_update_computed;
 	bool have_affected_rows; // if affected rows is set, last_insert_id is set too
@@ -93,12 +93,12 @@ public:
 
 	PgSQL_Query_Info();
 	~PgSQL_Query_Info();
-	void init(unsigned char* _p, int len, bool mysql_header = false);
+	void init(unsigned char* _p, int len, bool header = false);
 	void query_parser_init();
-	enum MYSQL_COM_QUERY_command query_parser_command_type();
+	enum PGSQL_QUERY_command query_parser_command_type();
 	void query_parser_free();
 	unsigned long long query_parser_update_counters();
-	void begin(unsigned char* _p, int len, bool mysql_header = false);
+	void begin(unsigned char* _p, int len, bool header = false);
 	void end();
 	char* get_digest_text();
 	bool is_select_NOT_for_update();
@@ -191,24 +191,31 @@ private:
 	void handler_again___new_thread_to_kill_connection();
 
 	bool handler_again___verify_init_connect();
+#if 0
 	bool handler_again___verify_ldap_user_variable();
-	//bool handler_again___verify_backend_autocommit();
+
 	bool handler_again___verify_backend_multi_statement();
+#endif // 0
 	bool handler_again___verify_backend_user_db();
 	bool handler_again___status_SETTING_INIT_CONNECT(int*);
+#if 0
 	bool handler_again___status_SETTING_LDAP_USER_VARIABLE(int*);
 	bool handler_again___status_SETTING_SQL_MODE(int*);
 	bool handler_again___status_CHANGING_CHARSET(int* _rc);
+#if 0
 	bool handler_again___status_CHANGING_SCHEMA(int*);
+#endif // 0
 	bool handler_again___status_CONNECTING_SERVER(int*);
 	bool handler_again___status_RESETTING_CONNECTION(int*);
 	//bool handler_again___status_CHANGING_AUTOCOMMIT(int*);
+#if 0
 	bool handler_again___status_SETTING_MULTI_STMT(int* _rc);
+#endif // 0
 	bool handler_again___multiple_statuses(int* rc);
 	//void init();
 	void reset();
-	void add_ldap_comment_to_pkt(PtrSize_t*);
 #if 0
+	void add_ldap_comment_to_pkt(PtrSize_t*);
 	/**
 	 * @brief Performs the required housekeeping operations over the session and its connections before
 	 *  performing any processing on received client packets.
@@ -216,14 +223,7 @@ private:
 	void housekeeping_before_pkts();
 #endif // 0
 	int get_pkts_from_client(bool&, PtrSize_t&);
-	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_RESET(PtrSize_t&);
-	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_CLOSE(PtrSize_t&);
-	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_SEND_LONG_DATA(PtrSize_t&);
-	//bool is_valid_PGSQL_PARSE_pkt(PtrSize_t& pkt); // deprecated
-	//bool is_valid_PGSQL_BIND_pkt(PtrSize_t& pkt);  // deprecated
-	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_PARSE(PtrSize_t& pkt);
-	void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_BIND(PtrSize_t& pkt);
-	//void handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_EXECUTE(PtrSize_t& pkt);
+
 
 	// these functions have code that used to be inline, and split into functions for readibility
 	int handler_ProcessingQueryError_CheckBackendConnectionStatus(PgSQL_Data_Stream* myds);
@@ -250,9 +250,34 @@ private:
 	void handler_WCD_SS_MCQ_qpo_error_msg(PtrSize_t* pkt);
 	void handler_WCD_SS_MCQ_qpo_LargePacket(PtrSize_t* pkt);
 
+	/**
+	 * @brief Switches session from normal mode to fast forward mode.
+	 *
+	 * This method transitions the session to fast forward mode based on session type.
+	 * (Currently only supports SESSION_FORWARD_TYPE_TEMPORARY and extended types)
+	 *
+	 * @param pkt Used solely to push the packet back to client_myds PSarrayIN,
+	 *			allowing it to be forwarded to the backend via the fast forward session
+	 * @param command Command that causes the session to switch to fast forward mode.
+	 * @param session_type SESSION_FORWARD_TYPE indicating the type of session.
+	 *
+	 * @return void.
+	 */
+	void switch_normal_to_fast_forward_mode(PtrSize_t& pkt, std::string_view command, SESSION_FORWARD_TYPE session_type);
+
+	/**
+	 * @brief Switches session from fast forward mode to normal mode.
+	 *
+	 * This method is used to revert session from fast forward mode back to normal mode.
+	 * 
+	 */
+	void switch_fast_forward_to_normal_mode();
+
 public:
 	bool handler_again___status_SETTING_GENERIC_VARIABLE(int* _rc, const char* var_name, const char* var_value, bool no_quote = false, bool set_transaction = false);
+#if 0
 	bool handler_again___status_SETTING_SQL_LOG_BIN(int*);
+#endif // 0
 	std::stack<enum session_status> previous_status;
 
 	PgSQL_Query_Info CurrentQuery;
@@ -270,7 +295,7 @@ public:
 	// pointers
 	PgSQL_Thread* thread;
 #endif // 0
-	Query_Processor_Output* qpo;
+	PgSQL_Query_Processor_Output* qpo;
 	StatCounters* command_counters;
 #if 0
 	PgSQL_Backend* mybe;
@@ -333,7 +358,7 @@ public:
 	bool schema_locked;
 	bool transaction_persistent;
 	bool session_fast_forward;
-	bool started_sending_data_to_client; // this status variable tracks if some result set was sent to the client, or if proxysql is still buffering everything
+	//bool started_sending_data_to_client; // this status variable tracks if some result set was sent to the client, or if proxysql is still buffering everything
 	bool use_ssl;
 #endif // 0
 	/**
@@ -351,6 +376,7 @@ public:
 //	StmtLongDataHandler* SLDH;
 
 	Session_Regex** match_regexes;
+	CopyCmdMatcher* copy_cmd_matcher;
 
 	ProxySQL_Node_Address* proxysql_node_address; // this is used ONLY for Admin, and only if the other party is another proxysql instance part of a cluster
 	bool use_ldap_auth;

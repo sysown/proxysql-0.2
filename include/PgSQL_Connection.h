@@ -69,6 +69,10 @@ enum PgSQL_Param_Name {
 	PG_SERVICE,  // Service name to use for additional parameters
 	PG_TARGET_SESSION_ATTRS,  // Determines whether the session must have certain properties to be acceptable
 	PG_LOAD_BALANCE_HOSTS,  // Controls the order in which the client tries to connect to the available hosts and addresses
+	// Environment Options
+	PG_DATESTYLE,  // Sets the value of the DateStyle parameter
+	PG_TIMEZONE,  // Sets the value of the TimeZone parameter
+	PG_GEQO,  // Enables or disables the use of the GEQO query optimizer
 
 	PG_PARAM_SIZE
 };
@@ -114,7 +118,11 @@ static const char* PgSQL_Param_Name_Str[] = {
 	"gssdelegation",
 	"service",
 	"target_session_attrs",
-	"load_balance_hosts"
+	"load_balance_hosts",
+	// Environment Options
+	"datestyle",
+	"timezone",
+	"geqo"
 };
 
 struct Param_Name_Validation {
@@ -172,7 +180,10 @@ static const Param_Name_Validation* PgSQL_Param_Name_Accepted_Values[PG_PARAM_SI
 	nullptr,
 	nullptr,
 	&target_session_attrs,
-	&load_balance_hosts
+	&load_balance_hosts,
+	nullptr,
+	nullptr,
+	nullptr
 };
 
 #define PG_EVENT_NONE	 0x00
@@ -211,6 +222,7 @@ public:
 	}
 
 	bool set_value(PgSQL_Param_Name key, const char* val) {
+		if (key == -1) return false;
 		if (validate(key, val)) {
 			if (param_value[key]) {
 				free(param_value[key]);
@@ -249,8 +261,9 @@ public:
 				break;
 			}
 		}
-
-		assert(key != -1);
+		if (key == -1) {
+			proxy_warning("Unrecognized connection option. Please report this as a bug for future enhancements:%s\n", name);
+		}
 		return key;
 	}
 
@@ -395,21 +408,25 @@ class PgSQL_Connection_Placeholder {
 	unsigned int set_charset(unsigned int, enum pgsql_charset_action);
 
 	void set_status(bool set, uint32_t status_flag);
-	void set_status_sql_log_bin0(bool);
 	bool get_status(uint32_t status_flag);
+#if 0
+	void set_status_sql_log_bin0(bool);
 	bool get_status_sql_log_bin0();
 	void set_autocommit_start();
 	void set_autocommit_cont(short event);
+#endif // 0
 	void set_names_start();
 	void set_names_cont(short event);
 #ifndef PROXYSQL_USE_RESULT
 	void store_result_start();
 	void store_result_cont(short event);
 #endif // PROXYSQL_USE_RESULT
+#if 0
 	void initdb_start();
 	void initdb_cont(short event);
 	void set_option_start();
 	void set_option_cont(short event);
+#endif // 0
 	void set_query(char *stmt, unsigned long length);
 	
 	int async_set_autocommit(short event, bool);
@@ -423,6 +440,7 @@ class PgSQL_Connection_Placeholder {
 	void stmt_execute_store_result_start();
 	void stmt_execute_store_result_cont(short event);
 
+#if 0
 	/**
 	 * @brief Process the rows returned by 'async_stmt_execute_store_result'. Extracts all the received
 	 *   rows from 'query.stmt->result.data' but the last one, adds them to 'MyRS', frees the buffer
@@ -432,6 +450,7 @@ class PgSQL_Connection_Placeholder {
 	 *   that are being read and added to 'MyRS'.
 	 */
 	void process_rows_in_ASYNC_STMT_EXECUTE_STORE_RESULT_CONT(unsigned long long& processed_bytes);
+#endif // 0
 
 	void async_free_result();
 
@@ -440,7 +459,6 @@ class PgSQL_Connection_Placeholder {
 	bool AutocommitFalse_AndSavepoint();
 	bool MultiplexDisabled(bool check_delay_token = true);
 	bool IsKeepMultiplexEnabledVariables(char *query_digest_text);
-	void ProcessQueryAndSetStatusFlags(char *query_digest_text);
 	void optimize();
 	void close_mysql();
 
@@ -465,6 +483,7 @@ class PgSQL_Connection_Placeholder {
 	bool IsKnownActiveTransaction() { assert(0); return false; }
 	bool IsActiveTransaction() { assert(0); return false; }
 	PG_ASYNC_ST handler(short event) { assert(0); return ASYNC_IDLE; }
+	void ProcessQueryAndSetStatusFlags(char* query_digest_text);
 	/********* End of remove ******************/
 };
 
@@ -484,7 +503,9 @@ public:
 	void reset_session_cont(short event);
 	
 	int  async_connect(short event);
+#if 0
 	int  async_set_autocommit(short event, bool ac);
+#endif // 0
 	int  async_query(short event, char* stmt, unsigned long length, MYSQL_STMT** _stmt = NULL, stmt_execute_metadata_t* _stmt_meta = NULL);
 	int  async_ping(short event);
 	int  async_reset_session(short event);
@@ -594,6 +615,7 @@ public:
 	void optimize() {}
 	void update_bytes_recv(uint64_t bytes_recv);
 	void update_bytes_sent(uint64_t bytes_sent);
+	void ProcessQueryAndSetStatusFlags(char* query_digest_text);
 
 	inline const PGconn* get_pg_connection() const { return pgsql_conn; }
 	inline int get_pg_server_version() { return PQserverVersion(pgsql_conn); }
@@ -617,10 +639,10 @@ public:
 	inline int get_pg_is_nonblocking() { return PQisnonblocking(pgsql_conn); }
 	inline int get_pg_is_threadsafe() { return PQisthreadsafe(); }
 	inline const char* get_pg_error_message() { return PQerrorMessage(pgsql_conn); }
+	inline SSL* get_pg_ssl_object() { return (SSL*)PQsslStruct(pgsql_conn, "OpenSSL"); }
 	const char* get_pg_server_version_str(char* buff, int buff_size);
 	const char* get_pg_connection_status_str();
 	const char* get_pg_transaction_status_str();
-
 	unsigned int get_memory_usage() const;
 
 	//PgSQL_Conn_Param conn_params;
@@ -632,10 +654,18 @@ public:
 	PgSQL_Query_Result* query_result;
 	PgSQL_Query_Result* query_result_reuse;
 	bool new_result;
+	bool is_copy_out;
 	//PgSQL_SrvC* parent;
 	//PgSQL_Connection_userinfo* userinfo;
 	//PgSQL_Data_Stream* myds;
 	//int fd;
+
+private:
+	// Handles the COPY OUT response from the server.
+	// Returns true if it consumes all buffer data, or false if the threshold for result size is reached
+	bool handle_copy_out(const PGresult* result, uint64_t* processed_bytes);
+	static void notice_handler_cb(void* arg, const PGresult* result);
+	static void unhandled_notice_cb(void* arg, const PGresult* result);
 };
 
 #endif /* __CLASS_PGSQL_CONNECTION_H */

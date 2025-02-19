@@ -452,6 +452,7 @@ class MySQL_Threads_Handler
 		char *server_version;
 		char *keep_multiplexing_variables;
 		char *default_authentication_plugin;
+		char *proxy_protocol_networks;
 		//unsigned int default_charset; // removed in 2.0.13 . Obsoleted previously using MySQL_Variables instead
 		int handle_unknown_charset;
 		int default_authentication_plugin_int;
@@ -469,6 +470,7 @@ class MySQL_Threads_Handler
 		bool parse_failure_logs_digest;
 		bool default_reconnect;
 		bool have_compress;
+		int protocol_compression_level;
 		bool have_ssl;
 		bool multiplexing;
 //		bool stmt_multiplexing;

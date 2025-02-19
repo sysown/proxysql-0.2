@@ -20,6 +20,7 @@
 
 using namespace std;
 
+#define MULTI_STATEMENTS_USE "Unable to parse multi-statements command with USE statement"
 
 static void remove_quotes(string& v) {
 	if (v.length() > 2) {
@@ -69,8 +70,6 @@ void SetParser::set_query(const std::string& nq) {
 
 #define SESSION_P1 "(?:|SESSION +|@@|@@session.|@@local.)"
 #define VAR_P1 "`?(@\\w+|\\w+)`?"
-//#define VAR_VALUE "((?:[\\w/\\d:\\+\\-]|,)+)"
-//#define VAR_VALUE "((?:CONCAT\\((?:(REPLACE|CONCAT)\\()+@@sql_mode,(?:(?:'|\\w|,| |\"|\\))+(?:\\)))|(?:[@\\w/\\d:\\+\\-]|,)+|(?:)))"
 
 // added (?:[\\w]+=(?:on|off)|,)+ for optimizer_switch
 #define VAR_VALUE_P1_1 "(?:\\()*(?:SELECT)*(?: )*(?:CONCAT\\()*(?:(?:(?: )*REPLACE|IFNULL|CONCAT)\\()+(?: )*(?:NULL|@OLD_SQL_MODE|@@SQL_MODE),(?:(?:'|\\w|,| |\"|\\))+(?:\\))*)(?:\\))"
@@ -127,7 +126,10 @@ VALGRIND_ENABLE_ERROR_REPORTING;
 			} else if (strcasecmp("transaction_read_only", value4.c_str()) == 0) {
 				value4 = "tx_read_only";
 			}
-			value5.erase(value5.find_last_not_of(" \n\r\t,")+1);
+			size_t pos = value5.find_last_not_of(" \n\r\t,");
+			if (pos != value5.npos) {
+				value5.erase(pos+1);
+			}
 			key = value4;
 			if (value5 == "''" || value5 == "\"\"") {
 				op.push_back("");
@@ -145,17 +147,6 @@ VALGRIND_ENABLE_ERROR_REPORTING;
 	delete opt2;
 	return result;
 }
-
-/*
-#define VAR_VALUE_P1_1 "(?:\\()*(?:SELECT)*(?: )*(?:CONCAT\\()*(?:(?:(?: )*REPLACE|IFNULL|CONCAT)\\()+(?: )*(?:NULL|@OLD_SQL_MODE|@@SQL_MODE),(?:(?:'|\\w|,| |\"|\\))+(?:\\))*)(?:\\))"
-#define VAR_VALUE_P1_2 "|(?:NULL)"
-#define VAR_VALUE_P1_3 "|(?:[\\w]+=(?:on|off)|,)+"
-#define VAR_VALUE_P1_4 "|(?:[@\\w/\\d:\\+\\-]|,)+"
-#define VAR_VALUE_P1_5 "|(?:(?:'{1}|\"{1})(?:)(?:'{1}|\"{1}))"
-#define VAR_VALUE_P1_6 "|(?: )+"
-#define VAR_VALUE_P1 "(" VAR_VALUE_P1_1 VAR_VALUE_P1_2 VAR_VALUE_P1_3 VAR_VALUE_P1_4 VAR_VALUE_P1_5 VAR_VALUE_P1_6 ")"
-*/
-
 
 void SetParser::generateRE_parse1v2() {
 	vector<string> quote_symbol = {"\"", "'", "`"};
@@ -194,19 +185,9 @@ void SetParser::generateRE_parse1v2() {
 
 	string vp = "NULL"; // NULL
 	var_patterns.push_back(vp);
-	//vp = "\\w+"; // single word
-	//var_patterns.push_back(vp);
+
 	{
 		string vp0 = "(?:\\w|\\d)+"; // single word with letters and digits , for example utf8mb4 and latin1
-	//var_patterns.push_back(vp);
-/*
-		string vp1 = "(?:" + vp0 + "(?:," + vp0 + ")*)"; // multiple words (letters and digits) separated by commas WITHOUT any spaces between words . Used also for sql_mode , example: ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO
-		//var_patterns.push_back(vp1); // do NOT add without quote
-		for (auto it = quote_symbol.begin(); it != quote_symbol.end(); it++) {
-			string s = *it + vp1 + *it;
-			var_patterns.push_back(s); // add with quote
-		}
-*/
 		string vp2 = "(?:" + vp0 + "(?:-" + vp0 + ")*)"; // multiple words (letters and digits) separated by dash, WITHOUT any spaces between words . Used also for transaction isolation
 		var_patterns.push_back(vp2);
 		for (auto it = quote_symbol.begin(); it != quote_symbol.end(); it++) {
@@ -214,12 +195,6 @@ void SetParser::generateRE_parse1v2() {
 			var_patterns.push_back(s); // add with quote
 		}
 	}
-	//vp = "(?:\\w|\\d)+(?:-|\\w|\\d+)*"; // multiple words (letters and digits) separated by dash, WITHOUT any spaces between words . Used ialso for transaction isolation
-	//var_patterns.push_back(vp);
-//	for (auto it = quote_symbol.begin(); it != quote_symbol.end(); it++) {
-//		string s = *it + vp + *it;
-//		var_patterns.push_back(s); // add with quote
-//	}
 
 	vp = "\\w+(?:,\\w+)+"; // multiple words separated by commas, WITHOUT any spaces between words
 	// NOTE: we do not use multiple words without quotes
@@ -264,7 +239,6 @@ void SetParser::generateRE_parse1v2() {
 	vp = "(?:| *(?:\\+|\\-) *)\\d+(?:|\\.\\d+)"; // a signed or unsigned integer or decimal , N7 = merge of N3 and N6
 	var_patterns.push_back(vp);
 
-
 	{
 		// time_zone in numeric format:
 		// - +/- sign
@@ -293,8 +267,6 @@ void SetParser::generateRE_parse1v2() {
 		var_patterns.push_back(s); // add with quote
 	}
 
-
-
 	string var_value = "(";
 	for (auto it = var_patterns.begin(); it != var_patterns.end(); it++) {
 		string s = "(?:" + *it + ")";
@@ -313,9 +285,6 @@ void SetParser::generateRE_parse1v2() {
 	parse1v2_opt2->set_case_sensitive(false);
 	parse1v2_opt2->set_longest_match(false);
 
-
-
-
 	string var_1_0 = "(?:@\\w+|\\w+)"; // @name|name
 	string var_1 = "(" + var_1_0 + "|`" + var_1_0 + "`)"; // var_1_0|`var_1_0`
 	var_1 = SESSION_P1 + var_1;
@@ -324,9 +293,6 @@ void SetParser::generateRE_parse1v2() {
 	string name_value = "(";
 	for (auto it = quote_symbol.begin(); it != quote_symbol.end(); it++) {
 		string s = "(?:" + *it + charset_name + *it + ")";
-		//auto it2 = it;
-		//it2++;
-		//if (it2 != quote_symbol.end())
 		s += "|";
 		name_value += s;
 	}
@@ -340,22 +306,7 @@ void SetParser::generateRE_parse1v2() {
 	}
 #endif
 
-#ifdef PARSERDEBUG
-//	delete opt2;
-//	return result;
-#endif
-	
-/*
-#define QUOTES "(?:'|\"|`)?"
-#define SPACES " *"
-#define NAMES "(NAMES)"
-#define NAME_VALUE "((?:\\w|\\d)+)"
-*/
-
-	
-	//const std::string pattern="(?:" NAMES SPACES QUOTES NAME_VALUE QUOTES "(?: +COLLATE +" QUOTES NAME_VALUE QUOTES "|)" "|" SESSION_P1 VAR_P1 SPACES "(?:|:)=" SPACES QUOTES VAR_VALUE_P1 QUOTES ") *,? *";
 	const std::string pattern="(?:" NAMES SPACES + name_value + "(?: +COLLATE +" + name_value + "|)" "|" + var_1 + SPACES "(?:|:)=" SPACES + var_value + ") *,? *";
-	//const std::string pattern=var_1 + SPACES "(?:|:)=" SPACES + var_value;
 #ifdef DEBUG
 VALGRIND_DISABLE_ERROR_REPORTING;
 #endif // DEBUG
@@ -364,7 +315,6 @@ VALGRIND_DISABLE_ERROR_REPORTING;
 		cout << pattern << endl;
 	}
 #endif
-	//re2::RE2 re(pattern, *opt2);
 	parse1v2_pattern = pattern;
 	parse1v2_re = new re2::RE2(parse1v2_pattern, *parse1v2_opt2);
 	parse1v2_init = true;
@@ -413,7 +363,10 @@ VALGRIND_ENABLE_ERROR_REPORTING;
 			} else if (strcasecmp("transaction_read_only", value4.c_str()) == 0) {
 				value4 = "tx_read_only";
 			}
-			value5.erase(value5.find_last_not_of(" \n\r\t,")+1);
+			size_t pos = value5.find_last_not_of(" \n\r\t,");
+			if (pos != value5.npos) {
+				value5.erase(pos+1);
+			}
 			key = value4;
 			if (value5 == "''" || value5 == "\"\"") {
 				op.push_back("");
@@ -453,16 +406,8 @@ std::map<std::string,std::vector<std::string>> SetParser::parse2() {
 
 	std::map<std::string,std::vector<std::string>> result;
 
-// regex used:
-// SET(?: +)(|SESSION +)TRANSACTION(?: +)(?:(?:(ISOLATION(?: +)LEVEL)(?: +)(REPEATABLE(?: +)READ|READ(?: +)COMMITTED|READ(?: +)UNCOMMITTED|SERIALIZABLE))|(?:(READ)(?: +)(WRITE|ONLY)))
-/*
-#define SESSION_P2 "(|SESSION)"
-#define VAR_P2 "(ISOLATION LEVEL|READ)"
-//#define VAR_VALUE "((?:[\\w/\\d:\\+\\-]|,)+)"
-//#define VAR_VALUE "((?:CONCAT\\((?:(REPLACE|CONCAT)\\()+@@sql_mode,(?:(?:'|\\w|,| |\"|\\))+(?:\\)))|(?:[@\\w/\\d:\\+\\-]|,)+|(?:)))"
-#define VAR_VALUE_P2 "(((?:CONCAT\\()*(?:((?: )*REPLACE|IFNULL|CONCAT)\\()+(?: )*(?:NULL|@OLD_SQL_MODE|@@sql_mode),(?:(?:'|\\w|,| |\"|\\))+(?:\\))*)|(?:[@\\w/\\d:\\+\\-]|,)+|(?:)))"
-*/
-	//const std::string pattern="(?:" NAMES SPACES QUOTES NAME_VALUE QUOTES "(?: +COLLATE +" QUOTES NAME_VALUE QUOTES "|)" "|" SESSION_P1 VAR_P1 SPACES "(?:|:)=" SPACES QUOTES VAR_VALUE_P1 QUOTES ") *,? *";
+	// Regex used:
+	// SET(?: +)(|SESSION +)TRANSACTION(?: +)(?:(?:(ISOLATION(?: +)LEVEL)(?: +)(REPEATABLE(?: +)READ|READ(?: +)COMMITTED|READ(?: +)UNCOMMITTED|SERIALIZABLE))|(?:(READ)(?: +)(WRITE|ONLY)))
 	const std::string pattern="(|SESSION) *TRANSACTION(?: +)(?:(?:(ISOLATION(?: +)LEVEL)(?: +)(REPEATABLE(?: +)READ|READ(?: +)COMMITTED|READ(?: +)UNCOMMITTED|SERIALIZABLE))|(?:(READ)(?: +)(WRITE|ONLY)))";
 	re2::RE2 re(pattern, *opt2);
 	std::string var;
@@ -517,7 +462,7 @@ std::string SetParser::parse_character_set() {
 	return value4;
 }
 
-std::string SetParser::parse_USE_query() {
+std::string SetParser::parse_USE_query(std::string& errmsg) {
 #ifdef DEBUG
 	proxy_debug(PROXY_DEBUG_MYSQL_QUERY_PROCESSOR, 4, "Parsing query %s\n", query.c_str());
 #endif // DEBUG
@@ -527,6 +472,10 @@ std::string SetParser::parse_USE_query() {
 	opt2.set_longest_match(false);
 
 	std::string dbname = remove_comments(query);
+	size_t pos = dbname.find_last_not_of(" ;");
+	if (pos != dbname.npos) {
+		dbname.erase(pos + 1); // remove trailing spaces and semicolumns
+	}
 	re2::RE2 re0("^\\s*", opt2);
 	re2::RE2::Replace(&dbname, re0, "");
 	if (dbname.size() >= 4) {
@@ -546,18 +495,22 @@ std::string SetParser::parse_USE_query() {
 						dbname.erase(0, 1);
 						// Remove the last character
 						dbname.erase(dbname.length() - 1);
-						return dbname;
 					}
 				}
-			} else {
-				return dbname;
 			}
+		} else {
+			dbname = "";
 		}
 	} else {
-		return "";
+		dbname = "";
 	}
 
-	return "";
+	if (dbname.find_first_of(';') != std::string::npos) {
+		errmsg = MULTI_STATEMENTS_USE;
+		dbname = "";
+	}
+
+	return dbname;
 }
 
 
@@ -647,18 +600,24 @@ void SetParser::test_parse_USE_query() {
 		{"USE/*+ placeholder_comment */`test_use_comment-5`",       "test_use_comment-5"},
 		{"/* comment */USE`test_use_comment-6`",                    "test_use_comment-6"},
 		{"USE`test_use_comment-7`",                                 "test_use_comment-7"},
+		{"USE test_use_comment-7 ;",                                "test_use_comment-7"},
+		{"USE`test_use_comment-2` ;  ",                             "test_use_comment-2"},
+		{"USE`test_use_comment-2` ; -- comment",                    "test_use_comment-2"},
+		{"USE test_use_comment-7 /* comment */ ; ",                 "test_use_comment-7"},
+		{"USE     /* comment */     test_use_comment-7  ; ",        "test_use_comment-7"},
+		{"USE dbame ; SELECT 1",                                    ""},
 	};
 
 	// Run tests for each pair
 	for (const auto& p : testCases) {
 		set_query(p.first);
-		std::string dbname = parse_USE_query();
+		std::string errmsg = "";
+		std::string dbname = parse_USE_query(errmsg);
 		if (dbname != p.second) {
 			// we call parse_USE_query() again just to make it easier to create a breakpoint
-			std::string s = parse_USE_query();
+			std::string s = parse_USE_query(errmsg);
 			assert(s == p.second);
 		}
 	}
-
 }
 #endif // DEBUG

@@ -20,6 +20,14 @@ class StmtLongDataHandler;
 class MySQL_Session;
 class PgSQL_Session;
 
+enum SESSION_FORWARD_TYPE : uint8_t {
+	SESSION_FORWARD_TYPE_NONE			   = 0x00,
+	SESSION_FORWARD_TYPE_PERMANENT		   = 0x01,
+	SESSION_FORWARD_TYPE_TEMPORARY		   = 0x02,
+	SESSION_FORWARD_TYPE_COPY_STDIN		   = 0x04 | SESSION_FORWARD_TYPE_TEMPORARY,
+	SESSION_FORWARD_TYPE_START_REPLICATION = 0x08 | SESSION_FORWARD_TYPE_TEMPORARY,
+};
+
 template<typename S, typename DS, typename B, typename T>
 class Base_Session {
 	public:
@@ -89,8 +97,8 @@ class Base_Session {
 	//bool stats;
 	bool schema_locked;
 	bool transaction_persistent;
-	bool session_fast_forward;
-	bool started_sending_data_to_client; // this status variable tracks if some result set was sent to the client, or if proxysql is still buffering everything
+	SESSION_FORWARD_TYPE session_fast_forward;
+	//bool started_sending_data_to_client; // this status variable tracks if some result set was sent to the client, or if proxysql is still buffering everything
 	bool use_ssl;
 	MySQL_STMTs_meta *sess_STMTs_meta;
 	StmtLongDataHandler *SLDH;

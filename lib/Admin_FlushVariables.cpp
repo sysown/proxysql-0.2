@@ -31,7 +31,8 @@ using json = nlohmann::json;
 
 #include "MySQL_Data_Stream.h"
 #include "PgSQL_Data_Stream.h"
-#include "query_processor.h"
+#include "MySQL_Query_Processor.h"
+#include "PgSQL_Query_Processor.h"
 #include "ProxySQL_HTTP_Server.hpp" // HTTP server
 #include "MySQL_Authentication.hpp"
 #include "PgSQL_Authentication.h"
@@ -111,6 +112,7 @@ extern struct MHD_Daemon *Admin_HTTP_Server;
 
 extern ProxySQL_Statistics *GloProxyStats;
 
+template<enum SERVER_TYPE>
 int ProxySQL_Test___PurgeDigestTable(bool async_purge, bool parallel, char **msg);
 
 extern char *ssl_key_fp;
@@ -123,12 +125,13 @@ extern char * proxysql_version;
 
 #include "proxysql_find_charset.h"
 
-extern Query_Cache *GloQC;
+//extern MySQL_Query_Cache *GloMyQC;
 extern MySQL_Authentication *GloMyAuth;
 extern PgSQL_Authentication *GloPgAuth;
 extern MySQL_LDAP_Authentication *GloMyLdapAuth;
 extern ProxySQL_Admin *GloAdmin;
-extern Query_Processor *GloQPro;
+extern MySQL_Query_Processor* GloMyQPro;
+extern PgSQL_Query_Processor* GloPgQPro;
 extern MySQL_Threads_Handler *GloMTH;
 extern MySQL_Logger *GloMyLogger;
 extern PgSQL_Logger* GloPgSQL_Logger;

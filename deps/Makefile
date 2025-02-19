@@ -1,15 +1,22 @@
 #!/bin/make -f
 
 
-SYS_KERN := $(shell uname -s)
-SYS_ARCH := $(shell uname -m)
+GIT_VERSION ?= $(shell git describe --long --abbrev=7)
+ifndef GIT_VERSION
+    $(error GIT_VERSION is not set)
+endif
+
+UNAME_S := $(shell uname -s)
+UNAME_M := $(shell uname -m)
+
+DISTRO := $(shell grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
 
 CENTOSVER := Unknown
 ifneq (,$(wildcard /etc/system-release))
 	CENTOSVER := $(shell rpm --eval %rhel)
 endif
 
-IS_ARM := $(if $(findstring aarch64, $(SYS_ARCH)),true,false)
+IS_ARM := $(if $(findstring aarch64, $(UNAME_M)),true,false)
 IS_CENTOS := $(if $(findstring Unknown, $(CENTOSVER)),false,true)
 
 # to compile libmariadb_client with support for valgrind enabled, run:
@@ -38,8 +45,8 @@ endif
 STDCPP := -std=c++$(shell echo $(CPLUSPLUS) | cut -c3-4) -DCXX$(shell echo $(CPLUSPLUS) | cut -c3-4)
 
 
-targets := libconfig libdaemon jemalloc mariadb_client re2 sqlite3 pcre lz4 cityhash microhttpd curl ev libssl libhttpserver libinjection prometheus-cpp postgresql libusual libscram
-ifeq ($(SYS_KERN),Linux)
+targets := check_openssl_version libconfig libdaemon jemalloc mariadb_client re2 sqlite3 pcre lz4 cityhash microhttpd curl ev libhttpserver libinjection prometheus-cpp postgresql libusual libscram
+ifeq ($(UNAME_S),Linux)
 	targets += coredumper
 endif
 ifeq ($(PROXYSQLCLICKHOUSE),1)
@@ -60,7 +67,7 @@ ifneq ($(CENTOSVER),6)
 	cd libinjection/libinjection && patch -p1 < ../update-build-py3.diff
 	cd libinjection/libinjection && patch -p1 < ../libinjection_sqli.c.patch
 endif
-ifeq ($(SYS_KERN),Darwin)
+ifeq ($(UNAME_S),Darwin)
 	sed -i '' 's/CC=/CC?=/' libinjection/libinjection/src/Makefile
 else
 	sed -i -e 's/CC=/CC?=/' libinjection/libinjection/src/Makefile
@@ -69,19 +76,8 @@ endif
 
 libinjection: libinjection/libinjection/src/libinjection.a
 
-
-libssl/openssl/libssl.a:
-	cd libssl && rm -rf openssl-openssl-*/ openssl-3*/ || true
-	cd libssl && tar -zxf openssl-*.tar.gz
-	cd libssl && ./verify-bio_st-match.sh
-#	cd libssl/openssl && patch crypto/ec/curve448/curve448.c < ../curve448.c-multiplication-overflow.patch
-#	cd libssl/openssl && patch crypto/asn1/a_time.c < ../a_time.c-multiplication-overflow.patch
-	cd libssl/openssl && ./config no-ssl3 no-tests
-	cd libssl/openssl && CC=${CC} CXX=${CXX} ${MAKE}
-	cd libssl/openssl && ln -fs ./ lib # curl wants this path
-
-libssl: libssl/openssl/libssl.a
-
+include ../common_mk/openssl_flags.mk
+include ../common_mk/openssl_version_check.mk
 
 libhttpserver/libhttpserver/build/src/.libs/libhttpserver.a: libmicrohttpd/libmicrohttpd/src/microhttpd/.libs/libmicrohttpd.a re2/re2/obj/libre2.a
 	cd libhttpserver && rm -rf libhttpserver-*/ || true
@@ -120,16 +116,16 @@ coredumper/coredumper/src/libcoredumper.a:
 	cd coredumper/coredumper && CC=${CC} CXX=${CXX} ${MAKE}
 coredumper: coredumper/coredumper/src/libcoredumper.a
 
-curl/curl/lib/.libs/libcurl.a: libssl/openssl/libssl.a
+curl/curl/lib/.libs/libcurl.a:
 	cd curl && rm -rf curl-*/ || true
 	cd curl && tar -zxf curl-*.tar.gz
 #	cd curl/curl && ./configure --disable-debug --disable-ftp --disable-ldap --disable-ldaps --disable-rtsp --disable-proxy --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smb --disable-smtp --disable-gopher --disable-manual --disable-ipv6 --disable-sspi --disable-crypto-auth --disable-ntlm-wb --disable-tls-srp --without-nghttp2 --without-libidn2 --without-libssh2 --without-brotli --with-ssl=$(shell pwd)/../../libssl/openssl/ && CC=${CC} CXX=${CXX} ${MAKE}
 	cd curl/curl && autoreconf -fi
-ifeq ($(SYS_KERN),Darwin)
+ifeq ($(UNAME_S),Darwin)
 	cd curl/curl && patch configure < ../configure.patch
 endif
-	cd curl/curl && ./configure --disable-debug --disable-ftp --disable-ldap --disable-ldaps --disable-rtsp --disable-proxy --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smb --disable-smtp --disable-gopher --disable-manual --disable-ipv6 --disable-sspi --disable-ntlm-wb --disable-tls-srp --without-nghttp2 --without-libidn2 --without-libssh2 --without-brotli --without-librtmp --without-libpsl --without-zstd --with-ssl=$(shell pwd)/libssl/openssl/ --enable-shared=yes
-	cd curl/curl && LD_LIBRARY_PATH=$(shell pwd)/libssl/openssl CFLAGS=-fPIC CC=${CC} CXX=${CXX} ${MAKE}
+	cd curl/curl && CPPFLAGS="-I$(SSL_IDIR)" LDFLAGS="$(LIB_SSL_PATH) $(LIB_CRYPTO_PATH)" ./configure --disable-debug --disable-ftp --disable-ldap --disable-ldaps --disable-rtsp --disable-proxy --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smb --disable-smtp --disable-gopher --disable-manual --disable-ipv6 --disable-sspi --disable-ntlm-wb --disable-tls-srp --without-nghttp2 --without-libidn2 --without-libssh2 --without-brotli --without-librtmp --without-libpsl --without-zstd --with-ssl --enable-shared=yes
+	cd curl/curl && CFLAGS=-fPIC CC=${CC} CXX=${CXX} ${MAKE}
 
 curl: curl/curl/lib/.libs/libcurl.a
 
@@ -145,7 +141,7 @@ microhttpd: libmicrohttpd/libmicrohttpd/src/microhttpd/.libs/libmicrohttpd.a
 
 cityhash/cityhash/src/.libs/libcityhash.a:
 	cd cityhash && rm -rf cityhash-*/ || true
-	cd cityhash && tar -zxf cityhash-*.tar.gz && sync
+	cd cityhash && tar -zxf cityhash-*.tar.gz
 	cd cityhash/cityhash && cp ../config.guess . && chmod +x config.guess && cp ../config.sub . && chmod +x config.sub
 	cd cityhash/cityhash && ./configure && CC=${CC} CXX=${CXX} ${MAKE}
 
@@ -162,7 +158,7 @@ lz4: lz4/lz4/lib/liblz4.a
 
 clickhouse-cpp/clickhouse-cpp/clickhouse/libclickhouse-cpp-lib-static.a:
 	cd clickhouse-cpp && rm -rf clickhouse-cpp-*/ || true
-	cd clickhouse-cpp && tar -zxf v2.3.0.tar.gz && sync
+	cd clickhouse-cpp && tar -zxf v2.3.0.tar.gz
 	cd clickhouse-cpp && ln -fs clickhouse-cpp-*/ clickhouse-cpp
 	cd clickhouse-cpp/clickhouse-cpp && patch clickhouse/base/wire_format.h < ../wire_format.patch
 	cd clickhouse-cpp/clickhouse-cpp && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo .
@@ -194,11 +190,11 @@ jemalloc/jemalloc/lib/libjemalloc.a:
 jemalloc: jemalloc/jemalloc/lib/libjemalloc.a
 
 
-mariadb-client-library/mariadb_client/libmariadb/libmariadbclient.a: libssl/openssl/libssl.a
+mariadb-client-library/mariadb_client/libmariadb/libmariadbclient.a:
 	cd mariadb-client-library && rm -rf mariadb-connector-c-*/ || true
 	cd mariadb-client-library && tar -zxf mariadb-connector-c-3.3.8-src.tar.gz
 	cd mariadb-client-library/mariadb_client && patch -p0 < ../plugin_auth_CMakeLists.txt.patch
-	cd mariadb-client-library/mariadb_client && cmake . -Wno-dev -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOPENSSL_ROOT_DIR=$(shell pwd)/libssl/openssl/ -DOPENSSL_LIBRARIES=$(shell pwd)/libssl/openssl/ -DICONV_LIBRARIES=$(brew --prefix libiconv)/lib -DICONV_INCLUDE=$(brew --prefix libiconv)/include .
+	cd mariadb-client-library/mariadb_client && cmake . -Wno-dev -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOPENSSL_ROOT_DIR=$(SSL_IDIR) -DOPENSSL_LIBRARIES=$(SSL_LDIR) -DICONV_LIBRARIES=$(brew --prefix libiconv)/lib -DICONV_INCLUDE=$(brew --prefix libiconv)/include .
 ifeq ($(PROXYDEBUG),1)
 	cd mariadb-client-library/mariadb_client && patch -p0 < ../ma_context.h.patch
 else ifeq ($(USEVALGRIND),1)
@@ -237,6 +233,7 @@ endif
 	# patches for replication testing
 	cd mariadb-client-library/mariadb_client && patch -p0 < ../mariadb_rpl.patch
 	cd mariadb-client-library/mariadb_client && patch -p0 < ../cmakelists.txt.patch
+	cd mariadb-client-library/mariadb_client && patch -p0 < ../mariadb_lib.c.metadata_column_check.patch
 	cd mariadb-client-library/mariadb_client && CC=${CC} CXX=${CXX} ${MAKE} mariadbclient
 #	cd mariadb-client-library/mariadb_client/include && make my_config.h
 
@@ -283,7 +280,7 @@ re2/re2/obj/libre2.a:
 #	cd re2/re2 && sed -i -e 's/-O3 -g /-O3 -fPIC /' Makefile
 #	cd re2/re2 && patch util/mutex.h < ../mutex.h.patch
 	cd re2/re2 && patch re2/onepass.cc < ../onepass.cc-multiplication-overflow.patch
-ifeq ($(SYS_KERN),Darwin)
+ifeq ($(UNAME_S),Darwin)
 	cd re2/re2 && sed -i '' -e 's/-O3 -g/-O3 -g -${STDCPP} -fPIC -DMEMORY_SANITIZER -DRE2_ON_VALGRIND /' Makefile
 #	cd re2/re2 && sed -i '' -e 's/RE2_CXXFLAGS?=-std=c++11 /RE2_CXXFLAGS?=-std=c++11 -fPIC /' Makefile
 else
@@ -304,7 +301,7 @@ pcre/pcre/.libs/libpcre.a:
 
 pcre: pcre/pcre/.libs/libpcre.a
 
-postgresql/postgresql/src/interfaces/libpq/libpq.a : libssl/openssl/libssl.a
+postgresql/postgresql/src/interfaces/libpq/libpq.a:
 	cd postgresql && rm -rf postgresql-*/ || true
 	cd postgresql && tar -zxf postgresql-*.tar.gz
 	cd postgresql/postgresql && patch -p0 < ../get_result_from_pgconn.patch
@@ -312,24 +309,24 @@ postgresql/postgresql/src/interfaces/libpq/libpq.a : libssl/openssl/libssl.a
 	cd postgresql/postgresql/src/include && patch -p0 < ../../../c.h.patch
 	cd postgresql/postgresql/src/include && patch -p0 < ../../../port.h.patch
 	#cd postgresql/postgresql && LD_LIBRARY_PATH="$(shell pwd)/libssl/openssl" ./configure --with-ssl=openssl --with-includes="$(shell pwd)/libssl/openssl/include/" --with-libraries="$(shell pwd)/libssl/openssl/" --without-readline --enable-debug  CFLAGS="-ggdb -O0 -fno-omit-frame-pointer" CPPFLAGS="-g -O0"
-	cd postgresql/postgresql && LD_LIBRARY_PATH="$(shell pwd)/libssl/openssl" ./configure --with-ssl=openssl --with-includes="$(shell pwd)/libssl/openssl/include/" --with-libraries="$(shell pwd)/libssl/openssl/" --without-readline
+	cd postgresql/postgresql && LD_LIBRARY_PATH="$(SSL_LDIR)" ./configure --with-ssl=openssl --with-includes="$(SSL_IDIR)" --with-libraries="$(SSL_LDIR)" --without-readline
 	cd postgresql/postgresql/src/interfaces/libpq && CC=${CC} CXX=${CXX} ${MAKE} MAKELEVEL=0
 	#cd postgresql/postgresql && CC=${CC} CXX=${CXX} ${MAKE} -f src/interfaces/libpq/Makefile all
 
 postgresql: postgresql/postgresql/src/interfaces/libpq/libpq.a
 
-libusual/libusual/.libs/libusual.a: libssl/openssl/libssl.a
+libusual/libusual/.libs/libusual.a:
 	cd libusual && rm -rf libusual-*/ || true
 	cd libusual && tar -zxf libusual-*.tar.gz
 	cd libusual/libusual && ./autogen.sh
-	cd libusual/libusual && ./configure --with-openssl="$(shell pwd)/libssl/openssl/" --disable-shared
+	cd libusual/libusual &&  CPPFLAGS="-I$(SSL_IDIR)" LDFLAGS="$(LIB_SSL_PATH) $(LIB_CRYPTO_PATH)" ./configure --with-openssl="$(SSL_LDIR)" --disable-shared
 	cd libusual/libusual && CC=${CC} CXX=${CXX} ${MAKE}
 
 libusual: libusual/libusual/.libs/libusual.a
 
-libscram/lib/libscram.a: libssl/openssl/libssl.a postgresql/postgresql/src/interfaces/libpq/libpq.a 
+libscram/lib/libscram.a:postgresql/postgresql/src/interfaces/libpq/libpq.a 
 	cd libscram && rm -rf lib/* || true
-	cd libscram && CC=${CC} CXX=${CXX} ${MAKE} LIBOPENSSL_DIR="$(shell pwd)/libssl/openssl" POSTGRESQL_DIR="$(shell pwd)/postgresql/postgresql/"
+	cd libscram && CC=${CC} CXX=${CXX} ${MAKE} LIBOPENSSL_DIR="$(SSL_IDIR)" POSTGRESQL_DIR="$(shell pwd)/postgresql/postgresql/"
 
 libscram: libscram/lib/libscram.a
 
@@ -357,7 +354,6 @@ cleanall:
 	cd libmicrohttpd && rm -rf libmicrohttpd-*/ || true
 	cd curl && rm -rf curl-*/ || true
 	cd libev && rm -rf libev-*/ || true
-	cd libssl && rm -rf openssl-openssl-*/ openssl-3*/ || true
 	cd libconfig && rm -rf libconfig-*/ || true
 	cd prometheus-cpp && rm -rf prometheus-cpp-*/ || true
 	cd cityhash && rm -rf cityhash-*/ || true

@@ -31,7 +31,8 @@ using json = nlohmann::json;
 
 #include "MySQL_Data_Stream.h"
 #include "PgSQL_Data_Stream.h"
-#include "query_processor.h"
+#include "MySQL_Query_Processor.h"
+#include "PgSQL_Query_Processor.h"
 #include "ProxySQL_HTTP_Server.hpp" // HTTP server
 #include "MySQL_Authentication.hpp"
 #include "PgSQL_Authentication.h"
@@ -111,6 +112,7 @@ extern struct MHD_Daemon *Admin_HTTP_Server;
 
 extern ProxySQL_Statistics *GloProxyStats;
 
+template<enum SERVER_TYPE>
 int ProxySQL_Test___PurgeDigestTable(bool async_purge, bool parallel, char **msg);
 
 extern char *ssl_key_fp;
@@ -146,12 +148,13 @@ struct cpu_timer
 extern int admin_load_main_;
 extern bool admin_nostart_;
 
-extern Query_Cache *GloQC;
+//extern MySQL_Query_Cache *GloMyQC;
 extern MySQL_Authentication *GloMyAuth;
 extern PgSQL_Authentication *GloPgAuth;
 extern MySQL_LDAP_Authentication *GloMyLdapAuth;
 extern ProxySQL_Admin *GloAdmin;
-extern Query_Processor *GloQPro;
+extern MySQL_Query_Processor* GloMyQPro;
+extern PgSQL_Query_Processor* GloPgQPro;
 extern MySQL_Threads_Handler *GloMTH;
 extern MySQL_Logger *GloMyLogger;
 extern PgSQL_Logger* GloPgSQL_Logger;
@@ -682,6 +685,10 @@ bool ProxySQL_Admin::init(const bootstrap_info_t& bootstrap_info) {
 	insert_into_tables_defs(tables_defs_stats,"stats_pgsql_errors_reset", STATS_SQLITE_TABLE_PGSQL_ERRORS_RESET);
 	insert_into_tables_defs(tables_defs_stats,"stats_pgsql_client_host_cache", STATS_SQLITE_TABLE_PGSQL_CLIENT_HOST_CACHE);
 	insert_into_tables_defs(tables_defs_stats,"stats_pgsql_client_host_cache_reset", STATS_SQLITE_TABLE_PGSQL_CLIENT_HOST_CACHE_RESET);
+	insert_into_tables_defs(tables_defs_stats,"stats_pgsql_query_rules", STATS_SQLITE_TABLE_PGSQL_QUERY_RULES);
+	insert_into_tables_defs(tables_defs_stats,"stats_pgsql_commands_counters", STATS_SQLITE_TABLE_PGSQL_COMMANDS_COUNTERS);
+	insert_into_tables_defs(tables_defs_stats,"stats_pgsql_query_digest", STATS_SQLITE_TABLE_PGSQL_QUERY_DIGEST);
+	insert_into_tables_defs(tables_defs_stats,"stats_pgsql_query_digest_reset", STATS_SQLITE_TABLE_PGSQL_QUERY_DIGEST_RESET);
 
 	// ProxySQL Cluster
 	insert_into_tables_defs(tables_defs_admin,"proxysql_servers", ADMIN_SQLITE_TABLE_PROXYSQL_SERVERS);

@@ -28,6 +28,7 @@ class PgSQL_Event {
 	char *extra_info;
 	bool have_affected_rows;
 	bool have_rows_sent;
+
 	uint64_t affected_rows;
 	uint64_t last_insert_id;
 	uint64_t rows_sent;

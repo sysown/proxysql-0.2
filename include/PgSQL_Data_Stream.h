@@ -73,7 +73,6 @@ class PgSQL_Data_Stream
 private:
 	int array2buffer();
 	int buffer2array();
-	void generate_compressed_packet();
 	enum pgsql_sslstatus do_ssl_handshake();
 	void queue_encrypted_bytes(const char* buf, size_t len);
 public:
@@ -116,8 +115,8 @@ public:
 	FixedSizeQueue data_packets_history_IN;
 	FixedSizeQueue data_packets_history_OUT;
 	//PtrSizeArray *PSarrayOUTpending;
-	PtrSizeArray* resultset;
-	unsigned int resultset_length;
+	//PtrSizeArray* resultset;
+	//unsigned int resultset_length;
 
 	ProxySQL_Poll<PgSQL_Data_Stream>* mypolls;
 	//int listener;
@@ -144,7 +143,7 @@ public:
 	AUTHENTICATION_METHOD auth_method = AUTHENTICATION_METHOD::NO_PASSWORD;
 	uint32_t auth_next_pkt_type = 0;
 	bool auth_received_startup = false;
-	
+	unsigned char tmp_login_salt[4];
 	ScramState* scram_state;
 
 	unsigned int connect_tries;
@@ -209,8 +208,9 @@ public:
 	void check_data_flow();
 	int assign_fd_from_mysql_conn();
 
-	unsigned char* resultset2buffer(bool);
-	void buffer2resultset(unsigned char*, unsigned int);
+	static unsigned char* copy_array_to_buffer(PtrSizeArray* resultset, size_t resultset_length, bool del);
+	static void copy_buffer_to_resultset(PtrSizeArray* resultset, unsigned char* ptr, uint64_t size, 
+		char current_transaction_state);
 
 	// safe way to attach a PgSQL Connection
 	void attach_connection(PgSQL_Connection* mc) {
@@ -224,31 +224,29 @@ public:
 		//
 		// we have a similar code in MySQL_Connection
 		// in case of ASYNC_CONNECT_SUCCESSFUL
-		if (sess != NULL && sess->session_fast_forward == true) {
+		if (sess != NULL && sess->session_fast_forward) {
 			// if frontend and backend connection use SSL we will set
 			// encrypted = true and we will start using the SSL structure
-			// directly from P_MARIADB_TLS structure.
+			// directly from PGconn SSL structure.
 			//
 			// For futher details:
 			// - without ssl: we use the file descriptor from pgsql connection
 			// - with ssl: we use the SSL structure from pgsql connection
-			if (myconn->pgsql && myconn->ret_mysql) {
-				if (myconn->pgsql->options.use_ssl == 1) {
+			if (myconn->is_connected() && myconn->get_pg_ssl_in_use()) {
+				if (ssl == NULL) {
 					encrypted = true;
-					if (ssl == NULL) {
-						// check the definition of P_MARIADB_TLS
-//						P_MARIADB_TLS* matls = (P_MARIADB_TLS*)myconn->pgsql->net.pvio->ctls;
-//						ssl = (SSL*)matls->ssl;
-//						rbio_ssl = BIO_new(BIO_s_mem());
-//						wbio_ssl = BIO_new(BIO_s_mem());
-//						SSL_set_bio(ssl, rbio_ssl, wbio_ssl);
-					}
+					SSL* ssl_obj = myconn->get_pg_ssl_object();
+					if (ssl_obj == NULL) assert(0); // Should not be null
+					ssl = ssl_obj;
+					rbio_ssl = BIO_new(BIO_s_mem());
+					wbio_ssl = BIO_new(BIO_s_mem());
+					SSL_set_bio(ssl, rbio_ssl, wbio_ssl);
 				}
 			}
 		}
 	}
 
-	// safe way to detach a MySQL Connection
+	// safe way to detach a PgSQL Connection
 	void detach_connection() {
 		assert(myconn);
 		myconn->statuses.pgconnpoll_put++;
@@ -256,7 +254,7 @@ public:
 		myconn->myds = NULL;
 		myconn = NULL;
 		if (encrypted == true) {
-			if (sess != NULL && sess->session_fast_forward == true) {
+			if (sess != NULL && sess->session_fast_forward) {
 				// it seems we are a connection with SSL on a fast_forward session.
 				// See attach_connection() for more details .
 				// We now disable SSL metadata from the Data Stream

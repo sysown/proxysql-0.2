@@ -47,6 +47,7 @@ extern MySQL_Authentication* GloMyAuth;
 void * ProxySQL_Cluster_Monitor_thread(void *args) {
 	pthread_attr_t thread_attr;
 	size_t tmp_stack_size=0;
+	set_thread_name("ClusterMonitor", GloVars.set_thread_name);
 	if (!pthread_attr_init(&thread_attr)) {
 		if (!pthread_attr_getstacksize(&thread_attr , &tmp_stack_size )) {
 			__sync_fetch_and_add(&GloVars.statuses.stack_memory_cluster_threads,tmp_stack_size);
@@ -868,7 +869,7 @@ void ProxySQL_Node_Entry::set_checksums(MYSQL_RES *_r) {
 		mysql_servers_sync_algorithm mysql_server_sync_algo = (mysql_servers_sync_algorithm)__sync_fetch_and_add(&GloProxyCluster->cluster_mysql_servers_sync_algorithm, 0);
 
 		if (mysql_server_sync_algo == mysql_servers_sync_algorithm::auto_select) {
-			mysql_server_sync_algo = (GloVars.global.monitor == false) ? 
+			mysql_server_sync_algo = (GloVars.global.my_monitor == false) ?
 				mysql_servers_sync_algorithm::runtime_mysql_servers_and_mysql_servers_v2 : mysql_servers_sync_algorithm::mysql_servers_v2;
 		}
 

@@ -50,9 +50,7 @@ MICROHTTPD_DIR := $(DEPS_PATH)/libmicrohttpd/libmicrohttpd/src
 MICROHTTPD_IDIR := $(MICROHTTPD_DIR)/include
 MICROHTTPD_LDIR := $(MICROHTTPD_DIR)/microhttpd/.libs
 
-SSL_DIR := $(DEPS_PATH)/libssl/openssl/
-SSL_IDIR := $(SSL_DIR)/include
-SSL_LDIR := $(SSL_DIR)
+include ../../../../common_mk/openssl_flags.mk
 
 EV_DIR := $(DEPS_PATH)/libev/libev/
 EV_IDIR := $(EV_DIR)
@@ -119,10 +117,10 @@ OPT := $(STDCPP) -O2 -ggdb -Wl,--no-as-needed -Wl,-rpath,"../../tap" $(WGCOV) $(
 
 IDIRS := -I$(TAP_IDIR) -I$(RE2_IDIR) -I$(PROXYSQL_IDIR) -I$(JEMALLOC_IDIR) -I$(LIBCONFIG_IDIR)\
 		 -I$(MICROHTTPD_IDIR) -I$(LIBHTTPSERVER_IDIR) -I$(CURL_IDIR) -I$(EV_IDIR) -I$(PROMETHEUS_IDIR)\
-		 -I$(DOTENV_DYN_IDIR) -I$(SSL_IDIR) -I$(SQLITE3_IDIR) -I$(JSON_IDIR) -I$(POSTGRESQL_IDIR)
+		 -I$(SQLITE3_IDIR) -I$(JSON_IDIR) -I$(POSTGRESQL_IDIR) -I$(SSL_IDIR) 
 LDIRS := -L$(TAP_LDIR) -L$(RE2_LDIR) -L$(PROXYSQL_LDIR) -L$(JEMALLOC_LDIR) -L$(LIBCONFIG_LDIR)\
 		 -L$(MICROHTTPD_LDIR) -L$(LIBHTTPSERVER_LDIR) -L$(CURL_LDIR) -L$(EV_LDIR) -L$(PROMETHEUS_LDIR)\
-		 -L$(DOTENV_DYN_LDIR) -L$(SSL_LDIR) -L$(SQLITE3_LDIR) -L$(PCRE_LDIR) -L$(POSTGRESQL_LDIR)
+		 -L$(SQLITE3_LDIR) -L$(PCRE_LDIR) -L$(POSTGRESQL_LDIR) -L$(SSL_LDIR) 
 
 ### main targets
 
@@ -165,33 +163,33 @@ tests:
 COMMONARGS = $(OPT) -Wl,-Bdynamic -ltap -lcpp_dotenv -lcurl -lre2 -lssl -lcrypto -lz -ldl -lpthread -DGITVERSION=\"$(GIT_VERSION)\"
 
 ok_packet_mixed_queries-t: eof_packet_mixed_queries-t.cpp
-	$(CXX) $< $(IDIRS) $(LDIRS) -I$(MARIADB_IDIR) -L$(MARIADB_LDIR) -lmariadbclient $(COMMONARGS) -o $@
+	$(CXX) $< -I$(MARIADB_IDIR) $(IDIRS) -L$(MARIADB_LDIR) $(LDIRS) -lmariadbclient $(COMMONARGS) -o $@
 
 eof_packet_mixed_queries-t: eof_packet_mixed_queries-t.cpp
-	$(CXX) -DNON_EOF_SUPPORT $< $(IDIRS) $(LDIRS) -I$(TEST_MARIADB_IDIR) -L$(TEST_MARIADB_LDIR) -lmariadbclient $(COMMONARGS) -o $@
+	$(CXX) -DNON_EOF_SUPPORT $< -I$(TEST_MARIADB_IDIR) $(IDIRS) -L$(TEST_MARIADB_LDIR) $(LDIRS) -lmariadbclient $(COMMONARGS) -o $@
 
 fwd_eof_query: fwd_eof_query.cpp
-	$(CXX) -DNON_EOF_SUPPORT $< $(IDIRS) $(LDIRS) -I$(TEST_MARIADB_IDIR) -L$(TEST_MARIADB_LDIR) -lmariadbclient $(COMMONARGS) -o $@
+	$(CXX) -DNON_EOF_SUPPORT $< -I$(TEST_MARIADB_IDIR) $(IDIRS) -L$(TEST_MARIADB_LDIR) $(LDIRS) -lmariadbclient $(COMMONARGS) -o $@
 
 # NOTE: Compilation with 'libmysql' instead of 'libmariadb' client to confirm packet sequence id isn't check by 'libmariadb'
 fwd_eof_ok_query: fwd_eof_query.cpp
-	$(CXX) $< $(IDIRS) $(LDIRS) -I$(TEST_MARIADB_IDIR) -I$(TEST_MYSQL_IDIR) -I$(TEST_MYSQL_EDIR) -L$(TEST_MYSQL_LDIR) -lmysqlclient $(COMMONARGS) -o $@
+	$(CXX) $< -I$(TEST_MARIADB_IDIR) -I$(TEST_MYSQL_IDIR) -I$(TEST_MYSQL_EDIR) $(IDIRS) -L$(TEST_MYSQL_LDIR) $(LDIRS) -lmysqlclient $(COMMONARGS) -o $@
 # NOTE end
 
 deprecate_eof_cache-t: deprecate_eof_cache-t.cpp
-	$(CXX) $< $(IDIRS) $(LDIRS) $(PROXYSQL_LDIR)/proxysql_utils.cpp  -I$(TEST_MARIADB_IDIR) -L$(TEST_MARIADB_LDIR) -lmariadbclient $(COMMONARGS) -o $@
+	$(CXX) $< -I$(TEST_MARIADB_IDIR) $(IDIRS) -L$(TEST_MARIADB_LDIR) $(LDIRS) $(PROXYSQL_LDIR)/proxysql_utils.cpp -lmariadbclient $(COMMONARGS) -o $@
 
 eof_cache_mixed_flags-t: eof_cache_mixed_flags-t.cpp
-	$(CXX) $< $(IDIRS) $(LDIRS) -I$(TEST_MARIADB_IDIR) -L$(TEST_MARIADB_LDIR) -lmariadbclient $(COMMONARGS) -o $@
+	$(CXX) $< -I$(TEST_MARIADB_IDIR) $(IDIRS) -L$(TEST_MARIADB_LDIR) $(LDIRS) -lmariadbclient $(COMMONARGS) -o $@
 
 eof_mixed_flags_queries-t: eof_mixed_flags_queries-t.cpp
-	$(CXX) $< $(IDIRS) $(LDIRS) -I$(TEST_MARIADB_IDIR) -L$(TEST_MARIADB_LDIR) -lmariadbclient $(COMMONARGS) -o $@
+	$(CXX) $< -I$(TEST_MARIADB_IDIR) $(IDIRS) -L$(TEST_MARIADB_LDIR) $(LDIRS) -lmariadbclient $(COMMONARGS) -o $@
 
 eof_conn_options_check-t: eof_conn_options_check-t.cpp
-	$(CXX) $< $(IDIRS) $(LDIRS) -I$(MARIADB_IDIR) -L$(MARIADB_LDIR) -lmariadbclient $(COMMONARGS) -o $@
+	$(CXX) $< -I$(MARIADB_IDIR) $(IDIRS) -L$(MARIADB_LDIR) $(LDIRS) -lmariadbclient $(COMMONARGS) -o $@
 
 eof_fast_forward-t: eof_fast_forward-t.cpp
-	$(CXX) $< $(IDIRS) $(LDIRS) -I$(MARIADB_IDIR) -L$(MARIADB_LDIR) -lmariadbclient $(COMMONARGS) -o $@
+	$(CXX) $< -I$(MARIADB_IDIR) $(IDIRS) -L$(MARIADB_LDIR) $(LDIRS) -lmariadbclient $(COMMONARGS) -o $@
 
 
 ### clean targets

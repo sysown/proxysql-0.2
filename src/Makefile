@@ -6,10 +6,18 @@ ifndef GIT_VERSION
     $(error GIT_VERSION is not set)
 endif
 
+UNAME_S := $(shell uname -s)
+UNAME_M := $(shell uname -m)
+
+DISTRO := $(shell grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
+
 CENTOSVER := Unknown
 ifneq (,$(wildcard /etc/system-release))
 	CENTOSVER := $(shell rpm --eval %rhel)
 endif
+
+IS_ARM := $(if $(findstring aarch64, $(UNAME_M)),true,false)
+IS_CENTOS := $(if $(findstring Unknown, $(CENTOSVER)),false,true)
 
 
 PROXYSQL_PATH := ..
@@ -81,9 +89,7 @@ CURL_PATH := $(DEPS_PATH)/curl/curl
 CURL_IDIR := $(CURL_PATH)/include
 CURL_LDIR := $(CURL_PATH)/lib/.libs
 
-SSL_PATH := $(DEPS_PATH)/libssl/openssl/
-SSL_IDIR := $(SSL_PATH)/include
-SSL_LDIR := $(SSL_PATH)
+include ../common_mk/openssl_flags.mk
 
 EV_PATH := $(DEPS_PATH)/libev/libev/
 EV_IDIR := $(EV_PATH)
@@ -101,11 +107,10 @@ LIBSCRAM_PATH=$(DEPS_PATH)/libscram/
 LIBSCRAM_IDIR=$(LIBSCRAM_PATH)/include/
 LIBSCRAM_LDIR=$(LIBSCRAM_PATH)/lib/
 
-IDIRS := -I$(PROXYSQL_IDIR) -I$(JEMALLOC_IDIR) -I$(MARIADB_IDIR) -I$(LIBCONFIG_IDIR) -I$(LIBDAEMON_IDIR) -I$(RE2_IDIR) -L$(PCRE_IDIR) -I$(MICROHTTPD_IDIR) -I$(LIBHTTPSERVER_IDIR) -I$(LIBINJECTION_IDIR) -I$(CURL_IDIR) -I$(EV_IDIR) -I$(SSL_IDIR) -I$(PROMETHEUS_IDIR) -I$(POSTGRESQL_IDIR) -I$(LIBSCRAM_IDIR) -I$(SQLITE3_IDIR) -I$(CLICKHOUSE_CPP_IDIR) -I$(CLICKHOUSE_CPP_CDIR) -I$(0)
-LDIRS := -L$(PROXYSQL_LDIR) -L$(JEMALLOC_LDIR) -L$(MARIADB_LDIR) -L$(LIBCONFIG_LDIR) -L$(LIBDAEMON_LDIR) -L$(RE2_LDIR) -L$(PCRE_LDIR) -L$(MICROHTTPD_LDIR) -L$(LIBHTTPSERVER_LDIR) -L$(LIBINJECTION_LDIR) -L$(CURL_LDIR) -L$(EV_LDIR) -L$(SSL_LDIR) -L$(PROMETHEUS_LDIR) -L$(POSTGRESQL_LDIR) -L$(LIBUSUAL_LDIR) -L$(LIBSCRAM_LDIR)
+IDIRS := -I$(PROXYSQL_IDIR) -I$(JEMALLOC_IDIR) -I$(MARIADB_IDIR) -I$(LIBCONFIG_IDIR) -I$(LIBDAEMON_IDIR) -I$(RE2_IDIR) -L$(PCRE_IDIR) -I$(MICROHTTPD_IDIR) -I$(LIBHTTPSERVER_IDIR) -I$(LIBINJECTION_IDIR) -I$(CURL_IDIR) -I$(EV_IDIR) -I$(PROMETHEUS_IDIR) -I$(POSTGRESQL_IDIR) -I$(LIBSCRAM_IDIR) -I$(SQLITE3_IDIR) -I$(CLICKHOUSE_CPP_IDIR) -I$(CLICKHOUSE_CPP_CDIR) -I$(SSL_IDIR) -I$(0)
+LDIRS := -L$(PROXYSQL_LDIR) -L$(JEMALLOC_LDIR) -L$(MARIADB_LDIR) -L$(LIBCONFIG_LDIR) -L$(LIBDAEMON_LDIR) -L$(RE2_LDIR) -L$(PCRE_LDIR) -L$(MICROHTTPD_LDIR) -L$(LIBHTTPSERVER_LDIR) -L$(LIBINJECTION_LDIR) -L$(CURL_LDIR) -L$(EV_LDIR) -L$(PROMETHEUS_LDIR) -L$(POSTGRESQL_LDIR) -L$(LIBUSUAL_LDIR) -L$(LIBSCRAM_LDIR) -L$(SSL_LDIR)
 
 
-UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
 	LDIRS += -L$(COREDUMPER_LDIR)
 endif
@@ -129,11 +134,11 @@ STDCPP := -std=c++$(shell echo $(CPLUSPLUS) | cut -c3-4) -DCXX$(shell echo $(CPL
 ### handle clang issue https://bugs.llvm.org/show_bug.cgi?id=16404
 CLANGFIX :=
 ifeq ($(CXX),clang++)
-  CLANG_VERSION := $(shell clang -dumpversion | tr '.' ' ' | awk '{ printf("%04d.%04d.%04d", $$1, $$2, $$3) }')
-  CLANG_MIN_VER := $(shell echo 14.0 | tr '.' ' ' | awk '{ printf("%04d.%04d.%04d", $$1, $$2, $$3) }')
-ifneq ($(CLANG_MIN_VER),$(firstword $(sort $(CLANG_VERSION) $(CLANG_MIN_VER))))
-  CLANGFIX := --rtlib=compiler-rt --unwindlib=libgcc
-endif
+#    CLANG_VERSION := $(shell clang -dumpversion | tr '.' ' ' | awk '{ printf("%04d.%04d.%04d", $$1, $$2, $$3) }')
+#    CLANG_MIN_VER := $(shell echo 14.0 | tr '.' ' ' | awk '{ printf("%04d.%04d.%04d", $$1, $$2, $$3) }')
+#ifneq ($(CLANG_MIN_VER),$(firstword $(sort $(CLANG_VERSION) $(CLANG_MIN_VER))))
+    CLANGFIX := --rtlib=compiler-rt --unwindlib=libgcc
+#endif
 endif
 
 PSQLCH :=
@@ -174,7 +179,7 @@ endif
 MYCXXFLAGS += $(IDIRS) $(OPTZ) $(DEBUG) $(PSQLCH) -DGITVERSION=\"$(GIT_VERSION)\" $(NOJEM) $(WGCOV) $(WASAN)
 
 
-STATICMYLIBS := -Wl,-Bstatic -lconfig -lproxysql -ldaemon -lconfig++ -lre2 -lpcrecpp -lpcre -lmariadbclient -lhttpserver -lmicrohttpd -linjection -lcurl -lssl -lcrypto -lev -lscram -lusual -lpq -lpgcommon -lpgport
+STATICMYLIBS := -Wl,-Bstatic -lconfig -lproxysql -ldaemon -lconfig++ -lre2 -lpcrecpp -lpcre -lmariadbclient -lhttpserver -lmicrohttpd -linjection -lcurl -lev -lscram -lusual -lpq -lpgcommon -lpgport
 ifneq ($(NOJEMALLOC),1)
 	STATICMYLIBS += -ljemalloc
 endif
@@ -182,7 +187,13 @@ ifeq ($(UNAME_S),Linux)
 	STATICMYLIBS += -lcoredumper
 endif
 
-MYLIBS := -Wl,--export-dynamic $(STATICMYLIBS) -Wl,-Bdynamic -lgnutls -lpthread -lm -lz -lrt -lprometheus-cpp-pull -lprometheus-cpp-core -luuid $(EXTRALINK)
+MYLIBS := -Wl,--export-dynamic $(STATICMYLIBS) -Wl,-Bdynamic -lgnutls -lpthread -lssl -lcrypto -lm -lz -lrt -lprometheus-cpp-pull -lprometheus-cpp-core -luuid $(EXTRALINK)
+ifeq ($(DISTRO),almalinux)
+ifeq ($(CENTOSVER),8)
+	MYLIBS := -Wl,--export-dynamic $(STATICMYLIBS) -Wl,-Bdynamic -lgnutls -lpthread $(LIB_SSL_PATH) $(LIB_CRYPTO_PATH) -lm -lz -lrt -lprometheus-cpp-pull -lprometheus-cpp-core -luuid $(EXTRALINK)
+endif
+endif
+
 ifeq ($(UNAME_S),Darwin)
 	MYLIBS :=-lre2 -lmariadbclient -lpq -lpthread -lm -lz -liconv -lgnutls -lprometheus-cpp-pull -lprometheus-cpp-core -luuid
 else
@@ -215,8 +226,6 @@ ifeq ($(UNAME_S),Darwin)
 	LIBPROXYSQLAR += $(LIBINJECTION_LDIR)/libinjection.a
 	LIBPROXYSQLAR += $(EV_LDIR)/libev.a
 endif
-LIBPROXYSQLAR += $(SSL_LDIR)/libssl.a
-LIBPROXYSQLAR += $(SSL_LDIR)/libcrypto.a
 LIBPROXYSQLAR += $(CITYHASH_LDIR)/libcityhash.a
 
 ODIR := obj

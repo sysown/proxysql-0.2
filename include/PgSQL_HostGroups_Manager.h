@@ -585,7 +585,7 @@ class PgSQL_HostGroups_Manager : public Base_HostGroups_Manager<PgSQL_HGC> {
 	/**
 	 * @brief Mutex used to guard 'pgsql_servers_to_monitor' resulset.
 	 */
-	std::mutex pgsql_servers_to_monitor_mutex;
+	std::mutex pgsql_servers_to_monitor_mutex {};
 	/**
 	 * @brief Resulset containing the latest 'pgsql_servers' present in 'mydb'.
 	 * @details This resulset should be updated via 'update_table_pgsql_servers_for_monitor' each time actions
@@ -838,7 +838,7 @@ class PgSQL_HostGroups_Manager : public Base_HostGroups_Manager<PgSQL_HGC> {
 	void replication_lag_action_inner(PgSQL_HGC *, const char*, unsigned int, int);
 	void replication_lag_action(const std::list<replication_lag_server_t>& pgsql_servers);
 	void read_only_action(char *hostname, int port, int read_only);
-	void read_only_action_v2(const std::list<read_only_server_t>& pgsql_servers);
+	void read_only_action_v2(const std::list<read_only_server_t>& pgsql_servers, bool writer_is_also_reader);
 	unsigned int get_servers_table_version();
 	void wait_servers_table_version(unsigned, unsigned);
 	bool shun_and_killall(char *hostname, int port);

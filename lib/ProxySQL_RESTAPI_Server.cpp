@@ -333,6 +333,7 @@ public:
 };
 
 void * restapi_server_thread(void *arg) {
+	set_thread_name("RESTAPI_Server", GloVars.set_thread_name);
 	httpserver::webserver * ws = (httpserver::webserver *)arg;
     ws->start(true);
 	return NULL;

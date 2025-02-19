@@ -1,26 +1,36 @@
 name: CI-3p-php-pdo-mysql
+run-name: '${{ github.event.workflow_run && github.event.workflow_run.head_branch || github.ref_name }} ${{ github.workflow }} ${{ github.event.workflow_run && github.event.workflow_run.head_sha || github.sha }}'
 
 on:
-  push:
-    branches: [ "v2.x" ]
-    paths-ignore:
-    - '.github/**'
-    - '**.md'
-  pull_request:
-    branches: [ "v2.x" ]
-    paths-ignore:
-    - '.github/**'
-    - '**.md'
-#  schedule:
-#    - cron: '15 13 * * 3'
   workflow_dispatch:
+    inputs:
+      testtree:
+        description: 'proxysql_3p_testing treeish/branch/tag/hash'
+        default: main
+        type: string
+  workflow_run:
+    workflows: [ CI-trigger ]
+    types: [ completed ]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref_name }}
+  group: ${{ github.workflow }}-${{ github.event.workflow_run && github.event.workflow_run.head_branch || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
-  run:
+  run-mysql:
+    if: ${{ github.event.workflow_run && github.event.workflow_run.conclusion == 'success' || ! github.event.workflow_run }}
     uses: sysown/proxysql/.github/workflows/ci-3p-php-pdo-mysql.yml@GH-Actions
     secrets: inherit
-    
+    with:
+      trigger: ${{ toJson(github) }}
+      infradb: ${{ vars.MATRIX_3P_PHP_PDO_MYSQL_infradb_mysql }}
+      connector: ${{ vars.MATRIX_3P_PHP_PDO_MYSQL_connector_mysql }}
+
+  run-mariadb:
+    if: ${{ github.event.workflow_run && github.event.workflow_run.conclusion == 'success' || ! github.event.workflow_run }}
+    uses: sysown/proxysql/.github/workflows/ci-3p-php-pdo-mysql.yml@GH-Actions
+    secrets: inherit
+    with:
+      trigger: ${{ toJson(github) }}
+      infradb: ${{ vars.MATRIX_3P_PHP_PDO_MYSQL_infradb_mariadb }}
+      connector: ${{ vars.MATRIX_3P_PHP_PDO_MYSQL_connector_mariadb }}

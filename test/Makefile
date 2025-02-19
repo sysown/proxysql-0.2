@@ -43,8 +43,7 @@ MICROHTTPD_IDIR := $(MICROHTTPD_PATH)/src/include
 CURL_PATH := $(DEPS_PATH)/curl/curl
 CURL_IDIR := -I$(CURL_PATH)/include
 
-SSL_PATH := $(DEPS_PATH)/libssl/openssl/
-SSL_IDIR := $(SSL_PATH)/include
+include ../common_mk/openssl_flags.mk
 
 EV_PATH := $(DEPS_PATH)/libev/libev/
 EV_IDIR := $(EV_PATH)

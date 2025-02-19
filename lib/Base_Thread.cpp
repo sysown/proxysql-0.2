@@ -42,6 +42,10 @@ void Base_Thread::register_session(T thr, S _sess, bool up_start) {
 //		assert(0);
 //	}
 	_sess->match_regexes=match_regexes;
+	if constexpr (std::is_same_v<T, PgSQL_Thread*>) {
+		_sess->copy_cmd_matcher = (static_cast<PgSQL_Thread*>(this))->copy_cmd_matcher;
+	}
+
 	if (up_start)
 		_sess->start_time=curtime;
 	proxy_debug(PROXY_DEBUG_NET,1,"Thread=%p, Session=%p -- Registered new session\n", _sess->thread, _sess);
@@ -377,10 +381,8 @@ bool Base_Thread::set_backend_to_be_skipped_if_frontend_is_slow(DS * myds, unsig
 		// but assuming that client isn't completely blocked, we will stop checking for data
 		// only at mysql_thread___threshold_resultset_size * 4
 		if constexpr (std::is_same_v<T, PgSQL_Thread>) {
-			unsigned int buffered_data = 0;
-			buffered_data = myds->sess->client_myds->PSarrayOUT->len * PGSQL_RESULTSET_BUFLEN;
-			buffered_data += myds->sess->client_myds->resultset->len * PGSQL_RESULTSET_BUFLEN;
-			if (buffered_data > (unsigned int)pgsql_thread___threshold_resultset_size * 4) {
+			const unsigned int buffered_data = myds->sess->client_myds->PSarrayOUT->len * PGSQL_RESULTSET_BUFLEN;
+			if (buffered_data > overflow_safe_multiply<4,unsigned int>(pgsql_thread___threshold_resultset_size)) {
 				thr->mypolls.fds[n].events = 0;
 				return true;
 			}
@@ -388,7 +390,7 @@ bool Base_Thread::set_backend_to_be_skipped_if_frontend_is_slow(DS * myds, unsig
 			unsigned int buffered_data = 0;
 			buffered_data = myds->sess->client_myds->PSarrayOUT->len * RESULTSET_BUFLEN;
 			buffered_data += myds->sess->client_myds->resultset->len * RESULTSET_BUFLEN;
-			if (buffered_data > (unsigned int)mysql_thread___threshold_resultset_size * 4) {
+			if (buffered_data > overflow_safe_multiply<4,unsigned int>(mysql_thread___threshold_resultset_size)) {
 				thr->mypolls.fds[n].events = 0;
 				return true;
 			}

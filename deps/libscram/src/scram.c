@@ -43,7 +43,7 @@ void scram_reset_error() {
 	errorBuffer[0] = '\0';
 }
 
-size_t strlcat(char* dst, const char* src, size_t siz)
+static size_t my_strlcat(char* dst, const char* src, size_t siz)
 {
 	char* d = dst;
 	const char* s = src;
@@ -434,7 +434,7 @@ char *build_client_final_message(ScramState *scram_state,
 				    client_proof))
 		goto failed;
 
-	len = strlcat(buf, ",p=", sizeof(buf));
+	len = my_strlcat(buf, ",p=", sizeof(buf));
 	enclen = pg_b64_enc_len(sizeof(client_proof));
 	enclen = pg_b64_encode((char *) client_proof,
 			       SCRAM_KEY_LEN,
@@ -597,7 +597,7 @@ static bool calculate_client_proof(ScramState *scram_state,
 								 &errstr) < 0 ||
 			scram_ClientKey(scram_state->SaltedPassword, PG_SHA256, SCRAM_KEY_LEN, ClientKey, 
 						    &errstr) < 0) {
-			snprintf(errorBuffer, MAX_ERROR_LENGTH, "could not compute client key: %s", *errstr);
+			snprintf(errorBuffer, MAX_ERROR_LENGTH, "could not compute client key: %s", (const char*) errstr);
 			goto failed;
 		}
 	}
@@ -605,7 +605,7 @@ static bool calculate_client_proof(ScramState *scram_state,
 	/* Hash it one more time, and compare with StoredKey */
 	if (scram_H(ClientKey, PG_SHA256, SCRAM_KEY_LEN,
 		StoredKey, &errstr) < 0) {
-		snprintf(errorBuffer, MAX_ERROR_LENGTH, "could not hash stored key: %s", *errstr);
+		snprintf(errorBuffer, MAX_ERROR_LENGTH, "could not hash stored key: %s", (const char*) errstr);
 		goto failed;
 	}
 	/*
@@ -656,7 +656,7 @@ bool verify_server_signature(ScramState *scram_state, const PgCredentials *crede
 		memcpy(ServerKey, credentials->scram_ServerKey, SCRAM_KEY_LEN);
 	else {
 		if (scram_ServerKey(scram_state->SaltedPassword, PG_SHA256, SCRAM_KEY_LEN, ServerKey, &errstr) < 0) {
-			snprintf(errorBuffer, MAX_ERROR_LENGTH, "could not compute server key: %s", *errstr);
+			snprintf(errorBuffer, MAX_ERROR_LENGTH, "could not compute server key: %s", (const char*) errstr);
 			goto failed;
 		}
 	}
@@ -907,17 +907,17 @@ static bool build_adhoc_scram_secret(const char *plain_password, ScramState *scr
 			     scram_state->iterations,
 			     salted_password, &errstr) < 0 ||
 		scram_ClientKey(salted_password, PG_SHA256, SCRAM_KEY_LEN, scram_state->StoredKey, &errstr) < 0) {
-		snprintf(errorBuffer, MAX_ERROR_LENGTH, "could not compute server key: %s", *errstr);
+		snprintf(errorBuffer, MAX_ERROR_LENGTH, "could not compute server key: %s", (const char*) errstr);
 		goto failed;
 	}
 
 	if (scram_H(scram_state->StoredKey, PG_SHA256, SCRAM_KEY_LEN, scram_state->StoredKey, &errstr) < 0) {
-		snprintf(errorBuffer, MAX_ERROR_LENGTH, "could not hash stored key: %s", *errstr);
+		snprintf(errorBuffer, MAX_ERROR_LENGTH, "could not hash stored key: %s", (const char*) errstr);
 		goto failed;
 	}
 
 	if (scram_ServerKey(salted_password, PG_SHA256, SCRAM_KEY_LEN, scram_state->ServerKey, &errstr) < 0) {
-		snprintf(errorBuffer, MAX_ERROR_LENGTH, "could not calculate server key: %s", *errstr);
+		snprintf(errorBuffer, MAX_ERROR_LENGTH, "could not calculate server key: %s", (const char*) errstr);
 		goto failed;
 	}
 
@@ -1148,6 +1148,7 @@ char *build_server_final_message(ScramState *scram_state)
 	if (!result) 
 		goto failed;
 	snprintf(result, len, "v=%s", server_signature);
+	free(server_signature);
 	return result;
 
 failed:
@@ -1208,7 +1209,7 @@ bool verify_client_proof(ScramState *state, const char *ClientProof)
 
 	/* Hash it one more time, and compare with StoredKey */
 	if (scram_H(state->ClientKey, PG_SHA256, SCRAM_KEY_LEN, client_StoredKey, &errstr) < 0) {
-		snprintf(errorBuffer, MAX_ERROR_LENGTH, "could not hash stored key: %s", *errstr);
+		snprintf(errorBuffer, MAX_ERROR_LENGTH, "could not hash stored key: %s", (const char*) errstr);
 		goto failed;
 	}
 
@@ -1270,7 +1271,7 @@ bool scram_verify_plain_password(const char *username, const char *password,
 	/* Compute Server Key based on the user-supplied plaintext password */
 	if (scram_SaltedPassword(password, PG_SHA256, SCRAM_KEY_LEN, salt, saltlen, iterations, salted_password, &errstr) < 0 ||
 		scram_ServerKey(salted_password, PG_SHA256, SCRAM_KEY_LEN, computed_key, &errstr) < 0) {
-		snprintf(errorBuffer, MAX_ERROR_LENGTH, "could not compute server key: %s", *errstr);
+		snprintf(errorBuffer, MAX_ERROR_LENGTH, "could not compute server key: %s", (const char*) errstr);
 		goto failed;
 	}
 

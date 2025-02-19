@@ -2,7 +2,6 @@
 #define PGSQL_VARIABLES_H
 
 #include "proxysql.h"
-#include "cpp.h"
 
 #include <cstdint>
 #include <vector>
@@ -19,7 +18,9 @@ bool validate_charset(PgSQL_Session* session, int idx, int &_rc);
 bool update_server_variable(PgSQL_Session* session, int idx, int &_rc);
 bool verify_server_variable(PgSQL_Session* session, int idx, uint32_t client_hash, uint32_t server_hash);
 bool verify_set_names(PgSQL_Session* session);
+#if 0
 bool logbin_update_server_variable(PgSQL_Session* session, int idx, int &_rc);
+#endif // 0
 
 class PgSQL_Variables {
 	static pgsql_verify_var verifiers[SQL_NAME_LAST_HIGH_WM];

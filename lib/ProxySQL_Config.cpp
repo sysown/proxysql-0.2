@@ -975,6 +975,42 @@ int ProxySQL_Config::Write_MySQL_Servers_to_configfile(std::string& data) {
 	if (sqlite_resultset)
 		delete sqlite_resultset;
 
+	query = (char *)"SELECT * FROM mysql_hostgroup_attributes";
+	admindb->execute_statement(query, &error, &cols, &affected_rows, &sqlite_resultset);
+	if (error) {
+		proxy_error("Error on read from mysql_hostgroup_attributes: %s\n", error);
+		return -1;
+	} else {
+		if (sqlite_resultset) {
+			data += "mysql_hostgroup_attributes:\n(\n";
+			bool isNext = false;
+			for (auto r : sqlite_resultset->rows) {
+				if (isNext)
+					data += ",\n";
+				data += "\t{\n";
+				addField(data, "hostgroup_id", r->fields[0], "");
+				addField(data, "max_num_online_servers", r->fields[1], "");
+				addField(data, "autocommit", r->fields[2], "");
+				addField(data, "free_connections_pct", r->fields[3], "");
+				addField(data, "init_connect", r->fields[4]);
+				addField(data, "multiplex", r->fields[5], "");
+				addField(data, "connection_warming", r->fields[6], "");
+				addField(data, "throttle_connections_per_sec", r->fields[7], "");
+				addField(data, "ignore_session_variables", r->fields[8]);
+				addField(data, "hostgroup_settings", r->fields[9]);
+				addField(data, "servers_defaults", r->fields[10]);
+				addField(data, "comment", r->fields[11]);
+
+				data += "\t}";
+				isNext = true;
+			}
+			data += "\n)\n";
+		}
+	}
+
+	if (sqlite_resultset)
+		delete sqlite_resultset;
+
 	return 0;
 }
 
@@ -1289,6 +1325,97 @@ int ProxySQL_Config::Read_MySQL_Servers_from_configfile() {
                     rows++;
             }
     }
+	if (root.exists("mysql_hostgroup_attributes") == true) {
+		const Setting &mysql_hostgroup_attributes = root["mysql_hostgroup_attributes"];
+		int count = mysql_hostgroup_attributes.getLength();
+
+		for (i = 0; i < count; i++) {
+			const Setting &hostgroup_attributes = mysql_hostgroup_attributes[i];
+			bool is_first_field = true;
+			int integer_val = 0;
+			std::string string_val = "";
+			std::string fields = "";
+			std::string values = "";
+
+			auto process_field = [&](const std::string &field_name, const std::string &field_value, int is_int) {
+				if (!is_first_field) {
+					fields += ", ";
+					values += ", ";
+				}
+				else {
+					is_first_field = false;
+				}
+				fields += field_name;
+
+				if (is_int) {
+					values += field_value;
+				}
+				else {
+					char *cs = strdup(field_value.c_str());
+					char *ecs = escape_string_single_quotes(cs, false);
+					values +=  std::string("'") + ecs + "'";
+					if (cs != ecs) free(cs);
+					free(ecs);
+				}
+			};
+
+			// Only inserting/updating fields which are in configuration file.
+			// Fields default will be from table schema.
+
+			// Parsing integer field
+			if (hostgroup_attributes.lookupValue("hostgroup_id", integer_val) ) {
+				process_field("hostgroup_id", to_string(integer_val), true);
+			}
+			else {
+				proxy_error("Admin: detected a mysql_hostgroup_attributes in config file without a mandatory hostgroup_id.\n");
+				continue;
+			}
+			if (hostgroup_attributes.lookupValue("max_num_online_servers", integer_val)) {
+				process_field("max_num_online_servers", to_string(integer_val), true);
+			}
+			if (hostgroup_attributes.lookupValue("autocommit", integer_val)) {
+				process_field("autocommit", to_string(integer_val), true);
+			}
+			if (hostgroup_attributes.lookupValue("free_connections_pct", integer_val)) {
+				process_field("free_connections_pct", to_string(integer_val), true);
+			}
+			if (hostgroup_attributes.lookupValue("multiplex", integer_val)) {
+				process_field("multiplex", to_string(integer_val), true);
+			}
+			if (hostgroup_attributes.lookupValue("connection_warming", integer_val)) {
+				process_field("connection_warming", to_string(integer_val), true);
+			}
+			if (hostgroup_attributes.lookupValue("throttle_connections_per_sec", integer_val)) {
+				process_field("throttle_connections_per_sec", to_string(integer_val), true);
+			}
+			// Parsing string field
+			if (hostgroup_attributes.lookupValue("init_connect", string_val)) {
+				process_field("init_connect", string_val, false);
+			}
+			if (hostgroup_attributes.lookupValue("ignore_session_variables", string_val)) {
+				process_field("ignore_session_variables", string_val, false);
+			}
+			if (hostgroup_attributes.lookupValue("hostgroup_settings", string_val)) {
+				process_field("hostgroup_settings", string_val, false);
+			}
+			if (hostgroup_attributes.lookupValue("servers_defaults", string_val)) {
+				process_field("servers_defaults", string_val, false);
+			}
+			if (hostgroup_attributes.lookupValue("comment", string_val)) {
+				process_field("comment", string_val, false);
+			}
+
+			std::string s_query = "INSERT OR REPLACE INTO mysql_hostgroup_attributes (";
+			s_query  += fields + ") VALUES (" + values + ")";
+
+			//fprintf(stderr, "%s\n", s_query.c_str());
+			if (admindb->execute(s_query.c_str()) == false) {
+				proxy_error("Admin: detected a mysql_hostgroup_attributes invalid value. Failed to insert in the table.\n");
+				continue;
+			}
+			rows++;
+		}
+	}
 	admindb->execute("PRAGMA foreign_keys = ON");
 	return rows;
 }
@@ -1724,7 +1851,7 @@ int ProxySQL_Config::Write_PgSQL_Query_Rules_to_configfile(std::string& data) {
 				addField(data, "rule_id", r->fields[0], "");
 				addField(data, "active", r->fields[1], "");
 				addField(data, "username", r->fields[2]);
-				addField(data, "schemaname", r->fields[3]);
+				addField(data, "database", r->fields[3]);
 				addField(data, "flagIN", r->fields[4], "");
 				addField(data, "client_addr", r->fields[5]);
 				addField(data, "proxy_addr", r->fields[6]);
@@ -1751,11 +1878,10 @@ int ProxySQL_Config::Write_PgSQL_Query_Rules_to_configfile(std::string& data) {
 				addField(data, "OK_msg", r->fields[27]);
 				addField(data, "sticky_conn", r->fields[28], "");
 				addField(data, "multiplex", r->fields[29], "");
-				addField(data, "gtid_from_hostgroup", r->fields[30], "");
-				addField(data, "log", r->fields[31], "");
-				addField(data, "apply", r->fields[32], "");
-				addField(data, "attributes", r->fields[33]);
-				addField(data, "comment", r->fields[34]);
+				addField(data, "log", r->fields[30], "");
+				addField(data, "apply", r->fields[31], "");
+				addField(data, "attributes", r->fields[32]);
+				addField(data, "comment", r->fields[33]);
 
 				data += "\t}";
 				isNext = true;
@@ -1780,15 +1906,15 @@ int ProxySQL_Config::Read_PgSQL_Query_Rules_from_configfile() {
 	int i;
 	int rows = 0;
 	admindb->execute("PRAGMA foreign_keys = OFF");
-	char* q = (char*)"INSERT OR REPLACE INTO pgsql_query_rules (rule_id, active, username, schemaname, flagIN, client_addr, proxy_addr, proxy_port, digest, match_digest, match_pattern, negate_match_pattern, re_modifiers, flagOUT, replace_pattern, destination_hostgroup, cache_ttl, cache_empty_result, cache_timeout, reconnect, timeout, retries, delay, next_query_flagIN, mirror_flagOUT, mirror_hostgroup, error_msg, ok_msg, sticky_conn, multiplex, gtid_from_hostgroup, log, apply, attributes, comment) VALUES (%d, %d, %s, %s, %s, %s, %s, %s, %s, %s, %s, %d, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %d, %s, %s)";
+	char* q = (char*)"INSERT OR REPLACE INTO pgsql_query_rules (rule_id, active, username, database, flagIN, client_addr, proxy_addr, proxy_port, digest, match_digest, match_pattern, negate_match_pattern, re_modifiers, flagOUT, replace_pattern, destination_hostgroup, cache_ttl, cache_empty_result, cache_timeout, reconnect, timeout, retries, delay, next_query_flagIN, mirror_flagOUT, mirror_hostgroup, error_msg, ok_msg, sticky_conn, multiplex, log, apply, attributes, comment) VALUES (%d, %d, %s, %s, %s, %s, %s, %s, %s, %s, %s, %d, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %d, %s, %s)";
 	for (i = 0; i < count; i++) {
 		const Setting& rule = pgsql_query_rules[i];
 		int rule_id;
 		int active = 1;
 		bool username_exists = false;
 		std::string username;
-		bool schemaname_exists = false;
-		std::string schemaname;
+		bool database_exists = false;
+		std::string database;
 		int flagIN = 0;
 
 		// variables for parsing client_addr
@@ -1837,7 +1963,6 @@ int ProxySQL_Config::Read_PgSQL_Query_Rules_from_configfile() {
 
 		int sticky_conn = -1;
 		int multiplex = -1;
-		int gtid_from_hostgroup = -1;
 
 		// variable for parsing log
 		int log = -1;
@@ -1858,7 +1983,7 @@ int ProxySQL_Config::Read_PgSQL_Query_Rules_from_configfile() {
 		}
 		rule.lookupValue("active", active);
 		if (rule.lookupValue("username", username)) username_exists = true;
-		if (rule.lookupValue("schemaname", schemaname)) schemaname_exists = true;
+		if (rule.lookupValue("database", database)) database_exists = true;
 		rule.lookupValue("flagIN", flagIN);
 
 		if (rule.lookupValue("client_addr", client_addr)) client_addr_exists = true;
@@ -1894,7 +2019,6 @@ int ProxySQL_Config::Read_PgSQL_Query_Rules_from_configfile() {
 
 		rule.lookupValue("sticky_conn", sticky_conn);
 		rule.lookupValue("multiplex", multiplex);
-		rule.lookupValue("gtid_from_hostgroup", gtid_from_hostgroup);
 
 		rule.lookupValue("log", log);
 
@@ -1909,7 +2033,7 @@ int ProxySQL_Config::Read_PgSQL_Query_Rules_from_configfile() {
 			strlen(std::to_string(rule_id).c_str()) +
 			strlen(std::to_string(active).c_str()) +
 			(username_exists ? strlen(username.c_str()) : 0) + 4 +
-			(schemaname_exists ? strlen(schemaname.c_str()) : 0) + 4 +
+			(database_exists ? strlen(database.c_str()) : 0) + 4 +
 			strlen(std::to_string(flagIN).c_str()) + 4 +
 
 			(client_addr_exists ? strlen(client_addr.c_str()) : 0) + 4 +
@@ -1937,7 +2061,6 @@ int ProxySQL_Config::Read_PgSQL_Query_Rules_from_configfile() {
 			(OK_msg_exists ? strlen(OK_msg.c_str()) : 0) + 4 +
 			strlen(std::to_string(sticky_conn).c_str()) + 4 +
 			strlen(std::to_string(multiplex).c_str()) + 4 +
-			strlen(std::to_string(gtid_from_hostgroup).c_str()) + 4 +
 			strlen(std::to_string(log).c_str()) + 4 +
 			strlen(std::to_string(apply).c_str()) + 4 +
 			(attributes_exists ? strlen(attributes.c_str()) : 0) + 4 +
@@ -1948,10 +2071,10 @@ int ProxySQL_Config::Read_PgSQL_Query_Rules_from_configfile() {
 			username = "\"" + username + "\"";
 		else
 			username = "NULL";
-		if (schemaname_exists)
-			schemaname = "\"" + schemaname + "\"";
+		if (database_exists)
+			database = "\"" + database + "\"";
 		else
-			schemaname = "NULL";
+			database = "NULL";
 
 		if (client_addr_exists)
 			client_addr = "\"" + client_addr + "\"";
@@ -2003,7 +2126,7 @@ int ProxySQL_Config::Read_PgSQL_Query_Rules_from_configfile() {
 		sprintf(query, q,
 			rule_id, active,
 			username.c_str(),
-			schemaname.c_str(),
+			database.c_str(),
 			(flagIN >= 0 ? std::to_string(flagIN).c_str() : "NULL"),
 			client_addr.c_str(),
 			proxy_addr.c_str(),
@@ -2030,7 +2153,6 @@ int ProxySQL_Config::Read_PgSQL_Query_Rules_from_configfile() {
 			OK_msg.c_str(),
 			(sticky_conn >= 0 ? std::to_string(sticky_conn).c_str() : "NULL"),
 			(multiplex >= 0 ? std::to_string(multiplex).c_str() : "NULL"),
-			(gtid_from_hostgroup >= 0 ? std::to_string(gtid_from_hostgroup).c_str() : "NULL"),
 			(log >= 0 ? std::to_string(log).c_str() : "NULL"),
 			(apply == 0 ? 0 : 1),
 			attributes.c_str(),

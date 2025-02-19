@@ -19,7 +19,7 @@ using json = nlohmann::json;
 #include "re2/regexp.h"
 
 #include "MySQL_Data_Stream.h"
-#include "query_processor.h"
+#include "MySQL_Query_Processor.h"
 #include "StatCounters.h"
 #include "MySQL_PreparedStatement.h"
 #include "MySQL_Logger.hpp"
@@ -106,7 +106,7 @@ static MySQL_Session *sess_stopat;
 		mysql_thread___ ## name =       GloMTH->get_variable_string((char *)STRINGIFY(name)); \
 	} while (0)
 
-extern Query_Processor *GloQPro;
+extern MySQL_Query_Processor* GloMyQPro;
 extern MySQL_Authentication *GloMyAuth;
 extern MySQL_Threads_Handler *GloMTH;
 extern MySQL_Monitor *GloMyMon;
@@ -503,6 +503,8 @@ static char * mysql_thread_variables_names[]= {
 	(char *)"data_packets_history_size",
 	(char *)"handle_warnings",
 	(char *)"evaluate_replication_lag_on_servers_load",
+	(char *)"proxy_protocol_networks",
+	(char *)"protocol_compression_level",
 	NULL
 };
 
@@ -1123,6 +1125,7 @@ MySQL_Threads_Handler::MySQL_Threads_Handler() {
 	variables.ssl_p2s_crl=NULL;
 	variables.ssl_p2s_crlpath=NULL;
 	variables.keep_multiplexing_variables=strdup((char *)"tx_isolation,transaction_isolation,version");
+	variables.proxy_protocol_networks = strdup((char *)"");
 	variables.default_authentication_plugin=strdup((char *)"mysql_native_password");
 	variables.default_authentication_plugin_int = 0; // mysql_native_password
 #ifdef DEBUG
@@ -1135,6 +1138,7 @@ MySQL_Threads_Handler::MySQL_Threads_Handler() {
 	variables.enable_load_data_local_infile=false;
 	variables.log_mysql_warnings_enabled=false;
 	variables.data_packets_history_size=0;
+	variables.protocol_compression_level=3;
 	// status variables
 	status_variables.mirror_sessions_current=0;
 	__global_MySQL_Thread_Variables_version=1;
@@ -1202,7 +1206,11 @@ int MySQL_Threads_Handler::listener_del(const char *iface) {
 		}
 		for (i=0;i<num_threads;i++) {
 			MySQL_Thread *thr=(MySQL_Thread *)mysql_threads[i].worker;
-			while(__sync_fetch_and_add(&thr->mypolls.pending_listener_del,0));
+			while(__sync_fetch_and_add(&thr->mypolls.pending_listener_del,0)) {
+				// Since 'listeners_stop' is performed in 'maintenance_loops' by the
+				// workers this active-wait is likely to take some time.
+				usleep(std::min(std::max(mysql_thread___poll_timeout/20, 10000), 40000));
+			}
 		}
 		MLM->del(idx);
 #ifdef SO_REUSEPORT
@@ -1354,6 +1362,7 @@ char * MySQL_Threads_Handler::get_variable_string(char *name) {
 	if (!strcmp(name,"interfaces")) return strdup(variables.interfaces);
 	if (!strcmp(name,"keep_multiplexing_variables")) return strdup(variables.keep_multiplexing_variables);
 	if (!strcmp(name,"default_authentication_plugin")) return strdup(variables.default_authentication_plugin);
+	if (!strcmp(name,"proxy_protocol_networks")) return strdup(variables.proxy_protocol_networks);
 	// LCOV_EXCL_START
 	proxy_error("Not existing variable: %s\n", name); assert(0);
 	return NULL;
@@ -1509,6 +1518,7 @@ char * MySQL_Threads_Handler::get_variable(char *name) {	// this is the public f
 	if (!strcasecmp(name,"default_schema")) return strdup(variables.default_schema);
 	if (!strcasecmp(name,"keep_multiplexing_variables")) return strdup(variables.keep_multiplexing_variables);
 	if (!strcasecmp(name,"default_authentication_plugin")) return strdup(variables.default_authentication_plugin);
+	if (!strcasecmp(name,"proxy_protocol_networks")) return strdup(variables.proxy_protocol_networks);
 	if (!strcasecmp(name,"interfaces")) return strdup(variables.interfaces);
 	if (!strcasecmp(name,"server_capabilities")) {
 		// FIXME : make it human readable
@@ -1619,12 +1629,12 @@ bool MySQL_Threads_Handler::set_variable(char *name, const char *value) {	// thi
 				}
 			}
 			if (nameS == "query_rules_fast_routing_algorithm") {
-				if (GloQPro) {
+				if (GloMyQPro) {
 					int intv = atoi(value);
 					if (intv >= std::get<1>(it->second) && intv <= std::get<2>(it->second)) {
-						GloQPro->wrlock();
-						GloQPro->query_rules_fast_routing_algorithm = intv;
-						GloQPro->wrunlock();
+						GloMyQPro->wrlock();
+						GloMyQPro->query_rules_fast_routing_algorithm = intv;
+						GloMyQPro->wrunlock();
 					}
 				}
 			}
@@ -1880,6 +1890,28 @@ bool MySQL_Threads_Handler::set_variable(char *name, const char *value) {	// thi
 			return true;
 		} else {
 			return false;
+		}
+	}
+	if (!strcasecmp(name,"proxy_protocol_networks")) {
+		bool ret = false;
+		if (vallen == 0) {
+			// accept empty string
+			ret = true;
+		} else if ( (vallen == 1) && strcmp(value,"*")==0) {
+			// accept `*`
+			ret = true;
+		} else {
+			ProxyProtocolInfo ppi;
+			if (ppi.is_valid_subnet_list(value) == true) {
+				ret = true;
+			}
+		}
+		if (ret == true) {
+			free(variables.proxy_protocol_networks);
+			variables.proxy_protocol_networks=strdup(value);
+			return true;
+		} else {
+			return true;
 		}
 	}
 	// SSL proxy to server variables
@@ -2238,6 +2270,7 @@ char ** MySQL_Threads_Handler::get_variables_list() {
 		VariablesPointers_int["client_host_error_counts"]      = make_tuple(&variables.client_host_error_counts,      0,      1024*1024, false);
 		VariablesPointers_int["handle_warnings"]			   = make_tuple(&variables.handle_warnings,				  0,			  1, false);
 		VariablesPointers_int["evaluate_replication_lag_on_servers_load"] = make_tuple(&variables.evaluate_replication_lag_on_servers_load, 0, 1, false);
+		VariablesPointers_int["protocol_compression_level"]    = make_tuple(&variables.protocol_compression_level,   -1,              9, false);
 
 		// logs
 		VariablesPointers_int["auditlog_filesize"]     = make_tuple(&variables.auditlog_filesize,    1024*1024, 1*1024*1024*1024, false);
@@ -2395,6 +2428,13 @@ proxysql_mysql_thread_t * MySQL_Threads_Handler::create_thread(unsigned int tn, 
 			assert(0);
 			// LCOV_EXCL_STOP
 		}
+#if defined(__linux__) || defined(__FreeBSD__)
+		if (GloVars.set_thread_name == true) {
+			char thr_name[16];
+			snprintf(thr_name, sizeof(thr_name), "MySQLWorker%d", tn);
+			pthread_setname_np(mysql_threads[tn].thread_id, thr_name);
+		}
+#endif // defined(__linux__) || defined(__FreeBSD__)
 #ifdef IDLE_THREADS
 	} else {
 		if (GloVars.global.idle_threads) {
@@ -2404,7 +2444,14 @@ proxysql_mysql_thread_t * MySQL_Threads_Handler::create_thread(unsigned int tn, 
 				assert(0);
 				// LCOV_EXCL_STOP
 			}
+#if defined(__linux__) || defined(__FreeBSD__)
+			if (GloVars.set_thread_name == true) {
+				char thr_name[16];
+				snprintf(thr_name, sizeof(thr_name), "MySQLIdle%d", tn);
+				pthread_setname_np(mysql_threads[tn].thread_id, thr_name);
+			}
 		}
+#endif // defined(__linux__) || defined(__FreeBSD__)
 #endif // IDLE_THREADS
 	}
 	return NULL;
@@ -2705,6 +2752,7 @@ MySQL_Threads_Handler::~MySQL_Threads_Handler() {
 	if (variables.server_version) free(variables.server_version);
 	if (variables.keep_multiplexing_variables) free(variables.keep_multiplexing_variables);
 	if (variables.default_authentication_plugin) free(variables.default_authentication_plugin);
+	if (variables.proxy_protocol_networks) free(variables.proxy_protocol_networks);
 	if (variables.firewall_whitelist_errormsg) free(variables.firewall_whitelist_errormsg);
 	if (variables.init_connect) free(variables.init_connect);
 	if (variables.ldap_user_variable) free(variables.ldap_user_variable);
@@ -2752,7 +2800,7 @@ MySQL_Thread::~MySQL_Thread() {
 			}
 		delete mysql_sessions;
 		mysql_sessions=NULL;
-		GloQPro->end_thread(); // only for real threads
+		GloMyQPro->end_thread(); // only for real threads
 	}
 
 	if (mirror_queue_mysql_sessions) {
@@ -2836,6 +2884,7 @@ MySQL_Thread::~MySQL_Thread() {
 	if (mysql_thread___server_version) { free(mysql_thread___server_version); mysql_thread___server_version=NULL; }
 	if (mysql_thread___keep_multiplexing_variables) { free(mysql_thread___keep_multiplexing_variables); mysql_thread___keep_multiplexing_variables=NULL; }
 	if (mysql_thread___default_authentication_plugin) { free(mysql_thread___default_authentication_plugin); mysql_thread___default_authentication_plugin=NULL; }
+	if (mysql_thread___proxy_protocol_networks) { free(mysql_thread___proxy_protocol_networks); mysql_thread___proxy_protocol_networks=NULL; }
 	if (mysql_thread___firewall_whitelist_errormsg) { free(mysql_thread___firewall_whitelist_errormsg); mysql_thread___firewall_whitelist_errormsg=NULL; }
 	if (mysql_thread___init_connect) { free(mysql_thread___init_connect); mysql_thread___init_connect=NULL; }
 	if (mysql_thread___ldap_user_variable) { free(mysql_thread___ldap_user_variable); mysql_thread___ldap_user_variable=NULL; }
@@ -2907,7 +2956,7 @@ bool MySQL_Thread::init() {
 	shutdown=0;
 	my_idle_conns=(MySQL_Connection **)malloc(sizeof(MySQL_Connection *)*SESSIONS_FOR_CONNECTIONS_HANDLER);
 	memset(my_idle_conns,0,sizeof(MySQL_Connection *)*SESSIONS_FOR_CONNECTIONS_HANDLER);
-	GloQPro->init_thread();
+	GloMyQPro->init_thread();
 	refresh_variables();
 	i=pipe(pipefd);
 	ioctl_FIONBIO(pipefd[0],1);
@@ -3095,15 +3144,11 @@ void MySQL_Thread::run_BootstrapListener() {
 		if (n) {
 			poll_listener_add(n);
 			assert(__sync_bool_compare_and_swap(&mypolls.pending_listener_add,n,0));
-		} else {
-			if (GloMTH->bootstrapping_listeners == false) {
-				// we stop looping
-				mypolls.bootstrapping_listeners = false;
-			}
 		}
-#ifdef DEBUG
-		usleep(5+rand()%10);
-#endif
+		// The delay for the active-wait is a fraction of 'poll_timeout'. Since other
+		// threads may be waiting on poll for further operations, checks are meaningless
+		// until that timeout expires (other workers make progress).
+		usleep(std::min(std::max(mysql_thread___poll_timeout/20, 10000), 40000) + (rand() % 2000));
 	}
 }
 
@@ -3206,9 +3251,7 @@ __run_skip_1:
 #endif // IDLE_THREADS
 
 		pthread_mutex_unlock(&thread_mutex);
-		if (unlikely(mypolls.bootstrapping_listeners == true)) {
-			run_BootstrapListener();
-		}
+		run_BootstrapListener();
 
 		// flush mysql log file
 		GloMyLogger->flush();
@@ -3285,7 +3328,7 @@ __run_skip_1:
 		) {
 			// house keeping
 			run___cleanup_mirror_queue();
-			GloQPro->update_query_processor_stats();
+			GloMyQPro->update_query_processor_stats();
 		}
 
 			if (rc == -1 && errno == EINTR)
@@ -3840,7 +3883,7 @@ void MySQL_Thread::ProcessAllSessions_Healthy0(MySQL_Session *sess, unsigned int
 	char _buf[1024];
 	if (sess->client_myds) {
 		if (mysql_thread___log_unhealthy_connections) {
-			if (sess->session_fast_forward == false) {
+			if (sess->session_fast_forward == SESSION_FORWARD_TYPE_NONE) {
 				proxy_warning(
 					"Closing unhealthy client connection %s:%d\n", sess->client_myds->addr.addr,
 					sess->client_myds->addr.port
@@ -4140,6 +4183,7 @@ void MySQL_Thread::refresh_variables() {
 	GloMyLogger->audit_set_base_filename(); // both filename and filesize are set here
 	REFRESH_VARIABLE_CHAR(default_schema);
 	REFRESH_VARIABLE_CHAR(keep_multiplexing_variables);
+	REFRESH_VARIABLE_CHAR(proxy_protocol_networks);
 	REFRESH_VARIABLE_CHAR(default_authentication_plugin);
 	mysql_thread___default_authentication_plugin_int = GloMTH->variables.default_authentication_plugin_int;
 	mysql_thread___server_capabilities=GloMTH->get_variable_uint16((char *)"server_capabilities");
@@ -4147,6 +4191,7 @@ void MySQL_Thread::refresh_variables() {
 	REFRESH_VARIABLE_INT(poll_timeout);
 	REFRESH_VARIABLE_INT(poll_timeout_on_failure);
 	REFRESH_VARIABLE_BOOL(have_compress);
+	REFRESH_VARIABLE_INT(protocol_compression_level);
 	REFRESH_VARIABLE_BOOL(have_ssl);
 	REFRESH_VARIABLE_BOOL(multiplexing);
 	REFRESH_VARIABLE_BOOL(log_unhealthy_connections);
@@ -4230,6 +4275,8 @@ MySQL_Thread::MySQL_Thread() {
 	mysql_thread___ssl_p2s_cipher=NULL;
 	mysql_thread___ssl_p2s_crl=NULL;
 	mysql_thread___ssl_p2s_crlpath=NULL;
+
+	mysql_thread___protocol_compression_level=3;
 
 	last_maintenance_time=0;
 	last_move_to_idle_thread_time=0;
@@ -4864,30 +4911,40 @@ SQLite3_result * MySQL_Threads_Handler::SQL3_Processlist() {
 					}
 				}
 
-                                if (sess->mirror==false) {
-                                        switch (sess->client_myds->client_addr->sa_family) {
-                                        case AF_INET: {
-                                                struct sockaddr_in *ipv4 = (struct sockaddr_in *)sess->client_myds->client_addr;
-                                                inet_ntop(sess->client_myds->client_addr->sa_family, &ipv4->sin_addr, buf, INET_ADDRSTRLEN);
-                                                pta[4] = strdup(buf);
-                                                sprintf(port, "%d", ntohs(ipv4->sin_port));
-                                                pta[5] = strdup(port);
-                                                break;
-                                                }
-                                        case AF_INET6: {
-                                                struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *)sess->client_myds->client_addr;
-                                                inet_ntop(sess->client_myds->client_addr->sa_family, &ipv6->sin6_addr, buf, INET6_ADDRSTRLEN);
-                                                pta[4] = strdup(buf);
-                                                sprintf(port, "%d", ntohs(ipv6->sin6_port));
-                                                pta[5] = strdup(port);
-                                                break;
-                                                }
-                                        default:
-                                                pta[4] = strdup("localhost");
-                                                pta[5] = NULL;
-                                                break;
-                                        }
-                                } else {
+				if (sess->mirror==false) {
+					switch (sess->client_myds->client_addr->sa_family) {
+						case AF_INET:
+							if (sess->client_myds->addr.addr != NULL) {
+								pta[4] = strdup(sess->client_myds->addr.addr);
+								sprintf(port, "%d", sess->client_myds->addr.port);
+								pta[5] = strdup(port);
+							} else {
+								struct sockaddr_in *ipv4 = (struct sockaddr_in *)sess->client_myds->client_addr;
+								inet_ntop(sess->client_myds->client_addr->sa_family, &ipv4->sin_addr, buf, INET_ADDRSTRLEN);
+								pta[4] = strdup(buf);
+								sprintf(port, "%d", ntohs(ipv4->sin_port));
+								pta[5] = strdup(port);
+							}
+							break;
+						case AF_INET6:
+							if (sess->client_myds->addr.addr != NULL) {
+								pta[4] = strdup(sess->client_myds->addr.addr);
+								sprintf(port, "%d", sess->client_myds->addr.port);
+								pta[5] = strdup(port);
+							} else {
+								struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *)sess->client_myds->client_addr;
+								inet_ntop(sess->client_myds->client_addr->sa_family, &ipv6->sin6_addr, buf, INET6_ADDRSTRLEN);
+								pta[4] = strdup(buf);
+								sprintf(port, "%d", ntohs(ipv6->sin6_port));
+								pta[5] = strdup(port);
+							}
+							break;
+						default:
+							pta[4] = strdup("localhost");
+							pta[5] = NULL;
+							break;
+					}
+				} else {
 					pta[4] = strdup("mirror_internal");
 					pta[5] = NULL;
 				}
@@ -4903,28 +4960,28 @@ SQLite3_result * MySQL_Threads_Handler::SQL3_Processlist() {
 					int rc;
 					rc=getsockname(mc->fd, &addr, &addr_len);
 					if (rc==0) {
-                                        switch (addr.sa_family) { 
-                                                case AF_INET: {
-                                                        struct sockaddr_in *ipv4 = (struct sockaddr_in *)&addr;
-                                                        inet_ntop(addr.sa_family, &ipv4->sin_addr, buf, INET_ADDRSTRLEN);
-                                                        pta[7] = strdup(buf);
-                                                        sprintf(port, "%d", ntohs(ipv4->sin_port));
-                                                        pta[8] = strdup(port);
-                                                        break;
-                                                        }
-                                                case AF_INET6: {
-                                                        struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *)&addr;
-                                                        inet_ntop(addr.sa_family, &ipv6->sin6_addr, buf, INET6_ADDRSTRLEN);
-                                                        pta[7] = strdup(buf);
-                                                        sprintf(port, "%d", ntohs(ipv6->sin6_port));
-                                                        pta[8] = strdup(port);
-                                                        break;
-                                                        }
-                                                default:
-                                                        pta[7] = strdup("localhost");
-                                                        pta[8] = NULL;
-                                                        break;
-                                                }
+						switch (addr.sa_family) {
+							case AF_INET: {
+								struct sockaddr_in *ipv4 = (struct sockaddr_in *)&addr;
+								inet_ntop(addr.sa_family, &ipv4->sin_addr, buf, INET_ADDRSTRLEN);
+								pta[7] = strdup(buf);
+								sprintf(port, "%d", ntohs(ipv4->sin_port));
+								pta[8] = strdup(port);
+								break;
+								}
+							case AF_INET6: {
+								struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *)&addr;
+								inet_ntop(addr.sa_family, &ipv6->sin6_addr, buf, INET6_ADDRSTRLEN);
+								pta[7] = strdup(buf);
+								sprintf(port, "%d", ntohs(ipv6->sin6_port));
+								pta[8] = strdup(port);
+								break;
+								}
+							default:
+								pta[7] = strdup("localhost");
+								pta[8] = NULL;
+								break;
+						}
 					} else {
 						pta[7]=NULL;
 						pta[8]=NULL;

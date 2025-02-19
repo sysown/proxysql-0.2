@@ -18,6 +18,7 @@ using json = nlohmann::json;
 #include <thread>
 #include <future>
 #include <sstream>
+#include <random>
 #include "prometheus/counter.h"
 #include "MySQL_Protocol.h"
 #include "MySQL_HostGroups_Manager.h"
@@ -77,11 +78,18 @@ template<typename T, bool check_monitor_enabled_flag = true>
 class ConsumerThread : public Thread {
 	wqueue<WorkItem<T>*>& m_queue;
 	int thrn;
+	char thr_name[16];
 	public:
-	ConsumerThread(wqueue<WorkItem<T>*>& queue, int _n) : m_queue(queue) {
+	ConsumerThread(wqueue<WorkItem<T>*>& queue, int _n, char thread_name[16]=NULL) : m_queue(queue) {
 		thrn=_n;
+		if (thread_name && thread_name[0]) {
+			snprintf(thr_name, sizeof(thr_name), "%.16s", thread_name);
+		} else {
+			snprintf(thr_name, sizeof(thr_name), "%.12s%03d", typeid(T).name(), thrn);
+		}
 	}
 	void* run() {
+		set_thread_name(thr_name, GloVars.set_thread_name);
 		// Remove 1 item at a time and process it. Blocks if no items are
 		// available to process.
 		for (int i = 0; (thrn ? i < thrn : 1); i++) {
@@ -95,7 +103,7 @@ class ConsumerThread : public Thread {
 					m_queue.add(item);
 				}
 				// this is intentional to EXIT immediately
-				return NULL;
+				goto cleanup;
 			}
 
 
@@ -115,6 +123,9 @@ class ConsumerThread : public Thread {
 			delete item->data;
 			delete item;
 		}
+cleanup:
+		// De-initializes per-thread structures. Required in all auxiliary threads using MySQL and SSL.
+		mysql_thread_end();
 		return NULL;
 	}
 };
@@ -743,6 +754,7 @@ void * monitor_connect_pthread(void *arg) {
 	bool cache=false;
 	mallctl("thread.tcache.enabled", NULL, NULL, &cache, sizeof(bool));
 #endif
+	set_thread_name("MonitorConnect", GloVars.set_thread_name);
 	while (GloMTH==NULL) {
 		usleep(50000);
 	}
@@ -756,6 +768,7 @@ void * monitor_ping_pthread(void *arg) {
 	bool cache=false;
 	mallctl("thread.tcache.enabled", NULL, NULL, &cache, sizeof(bool));
 #endif
+	set_thread_name("MonitorPing", GloVars.set_thread_name);
 	while (GloMTH==NULL) {
 		usleep(50000);
 	}
@@ -769,6 +782,7 @@ void * monitor_read_only_pthread(void *arg) {
 	bool cache=false;
 	mallctl("thread.tcache.enabled", NULL, NULL, &cache, sizeof(bool));
 #endif
+	set_thread_name("MonitorReadOnly", GloVars.set_thread_name);
 	while (GloMTH==NULL) {
 		usleep(50000);
 	}
@@ -782,6 +796,7 @@ void * monitor_group_replication_pthread(void *arg) {
 	bool cache=false;
 	mallctl("thread.tcache.enabled", NULL, NULL, &cache, sizeof(bool));
 #endif
+	set_thread_name("MonitorGR", GloVars.set_thread_name);
 	while (GloMTH==NULL) {
 		usleep(50000);
 	}
@@ -796,6 +811,7 @@ void * monitor_galera_pthread(void *arg) {
 	bool cache=false;
 	mallctl("thread.tcache.enabled", NULL, NULL, &cache, sizeof(bool));
 #endif
+	set_thread_name("MonitorGalera", GloVars.set_thread_name);
 	while (GloMTH==NULL) {
 		usleep(50000);
 	}
@@ -809,6 +825,7 @@ void * monitor_aws_aurora_pthread(void *arg) {
 //	bool cache=false;
 //	mallctl("thread.tcache.enabled", NULL, NULL, &cache, sizeof(bool));
 //#endif
+	set_thread_name("MonitorAurora", GloVars.set_thread_name);
 	while (GloMTH==NULL) {
 		usleep(50000);
 	}
@@ -822,6 +839,7 @@ void * monitor_replication_lag_pthread(void *arg) {
 	bool cache=false;
 	mallctl("thread.tcache.enabled", NULL, NULL, &cache, sizeof(bool));
 #endif
+	set_thread_name("MonitReplicLag", GloVars.set_thread_name);
 	while (GloMTH==NULL) {
 		usleep(50000);
 	}
@@ -835,6 +853,7 @@ void* monitor_dns_cache_pthread(void* arg) {
 	bool cache = false;
 	mallctl("thread.tcache.enabled", NULL, NULL, &cache, sizeof(bool));
 #endif
+	set_thread_name("MonitorDNSCache", GloVars.set_thread_name);
 	while (GloMTH == NULL) {
 		usleep(50000);
 	}
@@ -1545,10 +1564,12 @@ __exit_set_wait_timeout:
 bool MySQL_Monitor_State_Data::create_new_connection() {
 		mysql=mysql_init(NULL);
 		assert(mysql);
-		MySQLServers_SslParams * ssl_params = NULL;
+		std::unique_ptr<MySQLServers_SslParams> ssl_params { nullptr };
 		if (use_ssl && port) {
-			ssl_params = MyHGM->get_Server_SSL_Params(hostname, port, mysql_thread___monitor_username);
-			MySQL_Connection::set_ssl_params(mysql,ssl_params);
+			ssl_params = std::unique_ptr<MySQLServers_SslParams>(
+				MyHGM->get_Server_SSL_Params(hostname, port, mysql_thread___monitor_username)
+			);
+			MySQL_Connection::set_ssl_params(mysql, ssl_params.get());
 			mysql_options(mysql, MARIADB_OPT_SSL_KEYLOG_CALLBACK, (void*)proxysql_keylog_write_line_callback);
 		}
 		unsigned int timeout=mysql_thread___monitor_connect_timeout/1000;
@@ -4041,6 +4062,7 @@ struct mon_thread_info_t {
 
 void* monitor_GR_thread_HG(void *arg) {
 	uint32_t wr_hg = *(static_cast<uint32_t*>(arg));
+	set_thread_name("MonitorGRwrHG", GloVars.set_thread_name);
 	proxy_info("Started Monitor thread for Group Replication writer HG %u\n", wr_hg);
 
 	// Quick exit during shutdown/restart
@@ -4662,6 +4684,13 @@ void* monitor_dns_resolver_thread(void* args) {
 		if (!ips.empty()) {
 
 			bool to_update_cache = false;
+			int cache_ttl = dns_resolve_data->ttl;
+			if (dns_resolve_data->ttl > dns_resolve_data->refresh_intv) {
+				thread_local std::mt19937 gen(std::random_device{}());
+				const int jitter = static_cast<int>(dns_resolve_data->ttl * 0.025);
+				std::uniform_int_distribution<int> dis(-jitter, jitter);
+				cache_ttl += dis(gen);
+			}
 
 			if (!dns_resolve_data->cached_ips.empty()) {
 
@@ -4680,14 +4709,14 @@ void* monitor_dns_resolver_thread(void* args) {
 				// only update dns_records_bookkeeping
 				if (!to_update_cache) {
 					proxy_debug(PROXY_DEBUG_MYSQL_CONNECTION, 5, "DNS cache record already up-to-date. (Hostname:[%s] IP:[%s])\n", dns_resolve_data->hostname.c_str(), debug_iplisttostring(ips).c_str());
-					dns_resolve_data->result.set_value(std::make_tuple<>(true, DNS_Cache_Record(dns_resolve_data->hostname, std::move(dns_resolve_data->cached_ips), monotonic_time() + (1000 * dns_resolve_data->ttl))));
+					dns_resolve_data->result.set_value(std::make_tuple<>(true, DNS_Cache_Record(dns_resolve_data->hostname, std::move(dns_resolve_data->cached_ips), monotonic_time() + (1000 * cache_ttl))));
 				}
 			}
 			else
 				to_update_cache = true;
 
 			if (to_update_cache) {
-				dns_resolve_data->result.set_value(std::make_tuple<>(true, DNS_Cache_Record(dns_resolve_data->hostname, ips, monotonic_time() + (1000 * dns_resolve_data->ttl))));
+				dns_resolve_data->result.set_value(std::make_tuple<>(true, DNS_Cache_Record(dns_resolve_data->hostname, ips, monotonic_time() + (1000 * cache_ttl))));
 				dns_resolve_data->dns_cache->add(dns_resolve_data->hostname, std::move(ips));
 			}
 
@@ -4835,6 +4864,16 @@ void* MySQL_Monitor::monitor_dns_cache() {
 
 			std::list<std::future<std::tuple<bool, DNS_Cache_Record>>> dns_resolve_result;
 
+			int delay_us = 100;
+			if (hostnames.empty() == false) {
+				delay_us = mysql_thread___monitor_local_dns_cache_refresh_interval / 2 / hostnames.size();
+				delay_us *= 40;
+				if (delay_us > 1000000 || delay_us <= 0) {
+					delay_us = 10000;
+				}
+				delay_us = delay_us + rand() % delay_us;
+			}
+
 			if (dns_records_bookkeeping.empty() == false) {
 				unsigned long long current_time = monotonic_time();
 
@@ -4855,12 +4894,14 @@ void* MySQL_Monitor::monitor_dns_cache() {
 							dns_resolve_data->hostname = std::move(itr->hostname_);
 							dns_resolve_data->cached_ips = std::move(itr->ips_);
 							dns_resolve_data->ttl = mysql_thread___monitor_local_dns_cache_ttl;
+							dns_resolve_data->refresh_intv = mysql_thread___monitor_local_dns_cache_refresh_interval;
 							dns_resolve_data->dns_cache = dns_cache;
 							dns_resolve_result.emplace_back(dns_resolve_data->result.get_future());
 
 							proxy_debug(PROXY_DEBUG_MYSQL_CONNECTION, 5, "Removing expired DNS record from bookkeeper. (Hostname:[%s] IP:[%s])\n", itr->hostname_.c_str(), debug_iplisttostring(dns_resolve_data->cached_ips).c_str());
 							dns_resolver_queue.add(new WorkItem<DNS_Resolve_Data>(dns_resolve_data.release(), monitor_dns_resolver_thread));
 							itr = dns_records_bookkeeping.erase(itr);
+							usleep(delay_us);
 							continue;
 						}
 
@@ -4905,9 +4946,11 @@ void* MySQL_Monitor::monitor_dns_cache() {
 					std::unique_ptr<DNS_Resolve_Data> dns_resolve_data(new DNS_Resolve_Data());
 					dns_resolve_data->hostname = hostname;
 					dns_resolve_data->ttl = mysql_thread___monitor_local_dns_cache_ttl;
+					dns_resolve_data->refresh_intv = mysql_thread___monitor_local_dns_cache_refresh_interval;
 					dns_resolve_data->dns_cache = dns_cache;
 					dns_resolve_result.emplace_back(dns_resolve_data->result.get_future());
 					dns_resolver_queue.add(new WorkItem<DNS_Resolve_Data>(dns_resolve_data.release(), monitor_dns_resolver_thread));
+					usleep(delay_us);
 				}
 			}
 
@@ -5027,7 +5070,7 @@ __monitor_run:
 	}
 	ConsumerThread<MySQL_Monitor_State_Data> **threads= (ConsumerThread<MySQL_Monitor_State_Data> **)malloc(sizeof(ConsumerThread<MySQL_Monitor_State_Data> *)*num_threads);
 	for (unsigned int i=0;i<num_threads; i++) {
-		threads[i] = new ConsumerThread<MySQL_Monitor_State_Data>(*queue, 0);
+		threads[i] = new ConsumerThread<MySQL_Monitor_State_Data>(*queue, 0, "MyMonStateData");
 		threads[i]->start(2048,false);
 	}
 	started_threads += num_threads;
@@ -5097,7 +5140,7 @@ __monitor_run:
 					threads= (ConsumerThread<MySQL_Monitor_State_Data> **)realloc(threads, sizeof(ConsumerThread<MySQL_Monitor_State_Data> *)*num_threads);
 					started_threads += (num_threads - old_num_threads);
 					for (unsigned int i = old_num_threads ; i < num_threads ; i++) {
-						threads[i] = new ConsumerThread<MySQL_Monitor_State_Data>(*queue, 0);
+						threads[i] = new ConsumerThread<MySQL_Monitor_State_Data>(*queue, 0, "MyMonStateData");
 						threads[i]->start(2048,false);
 					}
 				}
@@ -5126,7 +5169,7 @@ __monitor_run:
 					threads= (ConsumerThread<MySQL_Monitor_State_Data> **)realloc(threads, sizeof(ConsumerThread<MySQL_Monitor_State_Data> *)*num_threads);
 					started_threads += new_threads;
 					for (unsigned int i = old_num_threads ; i < num_threads ; i++) {
-						threads[i] = new ConsumerThread<MySQL_Monitor_State_Data>(*queue, 0);
+						threads[i] = new ConsumerThread<MySQL_Monitor_State_Data>(*queue, 0, "MyMonStateData");
 						threads[i]->start(2048,false);
 					}
 				}
@@ -5146,7 +5189,7 @@ __monitor_run:
 					aux_threads = qsize;
 					started_threads += aux_threads;
 					for (unsigned int i=0; i<qsize; i++) {
-						threads_aux[i] = new ConsumerThread<MySQL_Monitor_State_Data>(*queue, 245);
+						threads_aux[i] = new ConsumerThread<MySQL_Monitor_State_Data>(*queue, 245, "MyMonStateData");
 						threads_aux[i]->start(2048,false);
 					}
 					for (unsigned int i=0; i<qsize; i++) {
@@ -5899,6 +5942,7 @@ void * monitor_AWS_Aurora_thread_HG(void *arg) {
 	unsigned int min_lag_ms = 0;
 	unsigned int lag_num_checks = 1;
 	//unsigned int i = 0;
+	set_thread_name("MonitorAuroraHG", GloVars.set_thread_name);
 	proxy_info("Started Monitor thread for AWS Aurora writer HG %u\n", wHG);
 
 	unsigned int MySQL_Monitor__thread_MySQL_Thread_Variables_version;

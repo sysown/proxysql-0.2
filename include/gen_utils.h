@@ -314,6 +314,18 @@ inline unsigned long long realtime_time() {
   return (((unsigned long long) ts.tv_sec) * 1000000) + (ts.tv_nsec / 1000);
 }
 
+template<int FACTOR, typename T>
+inline T overflow_safe_multiply(T val) {
+	static_assert(std::is_integral<T>::value, "T must be an integer type.");
+	static_assert(std::is_unsigned_v<T>, "T must be an unsigned integer type.");
+	static_assert(FACTOR > 0, "Negative factors are not supported.");
+
+	if constexpr (FACTOR == 0) return 0;
+	if (val == 0)  return 0;
+	if (val > std::numeric_limits<T>::max() / FACTOR) return std::numeric_limits<T>::max();
+	return (val * FACTOR);
+}
+
 #endif /* __GEN_FUNCTIONS */
 
 bool Proxy_file_exists(const char *);
@@ -325,6 +337,7 @@ char *trim_spaces_in_place(char *str);
 char *trim_spaces_and_quotes_in_place(char *str);
 bool mywildcmp(const char *p, const char *str);
 std::string trim(const std::string& s);
+char* escape_string_single_quotes_and_backslashes(char* input, bool free_it);
 
 /**
  * @brief Helper function that converts a MYSQL_RES into a 'SQLite3_result'.

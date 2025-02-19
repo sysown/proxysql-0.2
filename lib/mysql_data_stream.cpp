@@ -14,93 +14,6 @@ using json = nlohmann::json;
 
 #include "openssl/x509v3.h"
 
-
-/**
- * @brief This is the 'bio_st' struct definition from libssl. NOTE: This is an internal struct from
- *   OpenSSL library, currently it's used for performing checks on the reads/writes performed on the BIO objects.
- *   It's extremely important to keep this struct up to date with each OpenSSL dependency update.
- */
-typedef int CRYPTO_REF_COUNT;
-
-#if (OPENSSL_VERSION_NUMBER & 0xFFFF0000) == 0x10100000
-#pragma message "libssl 1.1.x detected"
-struct bio_st {
-    const BIO_METHOD *method;
-    /* bio, mode, argp, argi, argl, ret */
-    BIO_callback_fn callback;
-    BIO_callback_fn_ex callback_ex;
-    char *cb_arg;               /* first argument for the callback */
-    int init;
-    int shutdown;
-    int flags;                  /* extra storage */
-    int retry_reason;
-    int num;
-    void *ptr;
-    struct bio_st *next_bio;    /* used by filter BIOs */
-    struct bio_st *prev_bio;    /* used by filter BIOs */
-    CRYPTO_REF_COUNT references;
-    uint64_t num_read;
-    uint64_t num_write;
-    CRYPTO_EX_DATA ex_data;
-    CRYPTO_RWLOCK *lock;
-};
-
-#elif (OPENSSL_VERSION_NUMBER & 0xFFFF0000) == 0x30000000 || (OPENSSL_VERSION_NUMBER & 0xFFFF0000) == 0x30100000
-#pragma message "libssl 3.0.x / 3.1.x detected"
-struct bio_st {
-    OSSL_LIB_CTX *libctx;
-    const BIO_METHOD *method;
-    /* bio, mode, argp, argi, argl, ret */
-#ifndef OPENSSL_NO_DEPRECATED_3_0
-    BIO_callback_fn callback;
-#endif
-    BIO_callback_fn_ex callback_ex;
-    char *cb_arg;               /* first argument for the callback */
-    int init;
-    int shutdown;
-    int flags;                  /* extra storage */
-    int retry_reason;
-    int num;
-    void *ptr;
-    struct bio_st *next_bio;    /* used by filter BIOs */
-    struct bio_st *prev_bio;    /* used by filter BIOs */
-    CRYPTO_REF_COUNT references;
-    uint64_t num_read;
-    uint64_t num_write;
-    CRYPTO_EX_DATA ex_data;
-    CRYPTO_RWLOCK *lock;
-};
-
-#elif (OPENSSL_VERSION_NUMBER & 0xFFFF0000) == 0x30200000 || (OPENSSL_VERSION_NUMBER & 0xFFFF0000) == 0x30300000
-#pragma message "libssl 3.2.x / 3.3.x detected"
-struct bio_st {
-    OSSL_LIB_CTX *libctx;
-    const BIO_METHOD *method;
-    /* bio, mode, argp, argi, argl, ret */
-#ifndef OPENSSL_NO_DEPRECATED_3_0
-    BIO_callback_fn callback;
-#endif
-    BIO_callback_fn_ex callback_ex;
-    char *cb_arg;               /* first argument for the callback */
-    int init;
-    int shutdown;
-    int flags;                  /* extra storage */
-    int retry_reason;
-    int num;
-    void *ptr;
-    struct bio_st *next_bio;    /* used by filter BIOs */
-    struct bio_st *prev_bio;    /* used by filter BIOs */
-    CRYPTO_REF_COUNT references;
-    uint64_t num_read;
-    uint64_t num_write;
-    CRYPTO_EX_DATA ex_data;
-};
-
-#else
-#error "libssl version not supported: OPENSSL_VERSION_NUMBER = " ##OPENSSL_VERSION_NUMBER
-#endif
-
-
 #define RESULTSET_BUFLEN_DS_16K 16000
 #define RESULTSET_BUFLEN_DS_1M 1000*1024
 
@@ -311,6 +224,8 @@ MySQL_Data_Stream::MySQL_Data_Stream() {
 	proxy_addr.addr=NULL;
 	proxy_addr.port=0;
 
+	PROXY_info = NULL;
+
 	sess=NULL;
 	mysql_real_query.pkt.ptr=NULL;
 	mysql_real_query.pkt.size=0;
@@ -383,6 +298,10 @@ MySQL_Data_Stream::~MySQL_Data_Stream() {
 	if (proxy_addr.addr) {
 		free(proxy_addr.addr);
 		proxy_addr.addr=NULL;
+	}
+	if (PROXY_info) {
+		delete PROXY_info;
+		PROXY_info = NULL;
 	}
 
 	free_mysql_real_query();
@@ -600,9 +519,9 @@ int MySQL_Data_Stream::read_from_net() {
 		}
 		char buf[MY_SSL_BUFFER];
 		int ssl_recv_bytes = recv(fd, buf, sizeof(buf), 0);
-		proxy_debug(PROXY_DEBUG_NET, 7, "Session=%p: recv() read %d bytes. num_write: %lu ,  num_read: %lu\n", sess, ssl_recv_bytes,  rbio_ssl->num_write , rbio_ssl->num_read);
+		proxy_debug(PROXY_DEBUG_NET, 7, "Session=%p: recv() read %d bytes. num_write: %lu ,  num_read: %lu\n", sess, ssl_recv_bytes,  BIO_number_written(rbio_ssl) , BIO_number_read(rbio_ssl));
 
-		if (ssl_recv_bytes > 0 || rbio_ssl->num_write > rbio_ssl->num_read) {
+		if (ssl_recv_bytes > 0 || BIO_number_written(rbio_ssl) > BIO_number_read(rbio_ssl)) {
 			char buf2[MY_SSL_BUFFER];
 			int n2;
 			enum sslstatus status;
@@ -725,7 +644,7 @@ int MySQL_Data_Stream::write_to_net() {
 		if (encrypted == false) {
 			return 0;
 		}
-		if (ssl_write_len == 0 && wbio_ssl->num_write == wbio_ssl->num_read) {
+		if (ssl_write_len == 0 && BIO_number_written(wbio_ssl) == BIO_number_read(wbio_ssl)) {
 			return 0;
 		}
 	}
@@ -735,7 +654,7 @@ int MySQL_Data_Stream::write_to_net() {
 		bytes_io = SSL_write (ssl, queue_r_ptr(queueOUT), s);
 		//proxy_info("Used SSL_write to write %d bytes\n", bytes_io);
 		proxy_debug(PROXY_DEBUG_NET, 7, "Session=%p, Datastream=%p: SSL_write() wrote %d bytes . queueOUT before: %u\n", sess, this, bytes_io, queue_data(queueOUT));
-		if (ssl_write_len || wbio_ssl->num_write > wbio_ssl->num_read) {
+		if (ssl_write_len || BIO_number_written(wbio_ssl) > BIO_number_read(wbio_ssl)) {
 			//proxy_info("ssl_write_len = %d , num_write = %d , num_read = %d\n", ssl_write_len , wbio_ssl->num_write , wbio_ssl->num_read);
 			char buf[MY_SSL_BUFFER];
 			do {
@@ -851,7 +770,7 @@ void MySQL_Data_Stream::set_pollout() {
 			_pollfd->events |= POLLOUT;
 		}
 		if (encrypted) {
-			if (ssl_write_len || wbio_ssl->num_write > wbio_ssl->num_read) {
+			if (ssl_write_len || BIO_number_written(wbio_ssl) > BIO_number_read(wbio_ssl)) {
 				_pollfd->events |= POLLOUT;
 			} else {
 				if (!SSL_is_init_finished(ssl)) {
@@ -949,7 +868,7 @@ int MySQL_Data_Stream::write_to_net_poll() {
 	}
 	if (call_write_to_net == false) {
 		if (encrypted) {
-			if (ssl_write_len || wbio_ssl->num_write > wbio_ssl->num_read) {
+			if (ssl_write_len || BIO_number_written(wbio_ssl) > BIO_number_read(wbio_ssl)) {
 				call_write_to_net = true;
 			}
 		}
@@ -1059,6 +978,92 @@ int MySQL_Data_Stream::buffer2array() {
 	} else {
 
 		if ((queueIN.pkt.size==0) && queue_data(queueIN)>=sizeof(mysql_hdr)) {
+			// check if this is a PROXY protocol packet
+			if (
+				pkts_recv==0 && // checks if no packets have been received yet
+				queueIN.tail == 0 && // checks if the input queue (`queueIN`) was never rotated . This check is redundant
+				queueIN.head > 7 && // ensures that there are at least 8 bytes in the input buffer (`queueIN.buffer`)
+									// This is because the PROXY protocol signature (`PROXY`) is 5 bytes long, and we need at least 3 more bytes to check for the `\r\n` delimiter.
+				strncmp((char *)queueIN.buffer,"PROXY ",6) == 0 // checks if the first 6 bytes of the buffer match the "PROXY " string, indicating a potential PROXY protocol packet
+			) {
+				bool found_delimiter = false;
+				size_t b = 0;
+				const char *ptr = (char *)queueIN.buffer;
+				// This loop iterates through the buffer, starting from the 8th byte (index 7) until the end of the buffer (index `queueIN.head - 1`).
+				// The loop continues as long as the delimiter hasn't been found (`found_delimiter == false`)
+				// the loop looks for \r\n , the delimiter of the PROXY packet
+				for (size_t i = 7; found_delimiter == false && i < queueIN.head - 1; i++) {
+					if (
+						ptr[i] == '\r'
+						&&
+						ptr[i+1] == '\n'
+					) {
+						found_delimiter = true;
+						b = i+2;
+					}
+				}
+				if (found_delimiter) {
+/*
+					// we could return a packet, but it is actually better to handle it here
+					queueIN.pkt.size = b;
+					queueIN.pkt.ptr=l_alloc(queueIN.pkt.size);
+					memcpy(queueIN.pkt.ptr, queueIN.buffer, b);
+					PSarrayIN->add(queueIN.pkt.ptr,queueIN.pkt.size);
+					add_to_data_packet_history(data_packets_history_IN,queueIN.pkt.ptr,queueIN.pkt.size);
+*/
+					// we move forward the internal pointer.
+					// note that parseProxyProtocolHeader() will read from the beginning of the buffer
+					queue_r(queueIN, b);
+
+					bool accept_proxy = false; // by default, we do not accept a PROXY header
+					const char * proxy_protocol_networks = mysql_thread___proxy_protocol_networks;
+
+					ProxyProtocolInfo ppi;
+					if (strcmp(proxy_protocol_networks,"*") == 0) { // all networks are accepted
+						accept_proxy = true;
+					} else {
+						if (client_addr) {
+							if (ppi.is_client_in_any_subnet(client_addr, proxy_protocol_networks) == true) {
+								accept_proxy = true;
+							}
+						}
+					}
+					if (accept_proxy == true) {
+						if (ppi.parseProxyProtocolHeader((const char *)queueIN.buffer, b)) {
+							PROXY_info = new ProxyProtocolInfo(ppi);
+							// we take a copy of old address/port
+							if (addr.addr) {
+								strncpy(PROXY_info->proxy_address, addr.addr, INET6_ADDRSTRLEN);
+								free(addr.addr);
+							}
+							PROXY_info->proxy_port = addr.port;
+							// we override old address/port
+							addr.addr = strdup(PROXY_info->source_address);
+							addr.port = PROXY_info->source_port;
+						} else {
+							if (addr.addr) {
+								proxy_warning("Unable to parse PROXY header from IP %s . Skipping PROXY header\n", addr.addr);
+							}
+						}
+					} else { // the PROXY header was not accepted
+						if (addr.addr) {
+							proxy_warning("Skipping PROXY header from IP %s because not matching mysql-proxy_protocol_networks. Skipping PROXY header\n", addr.addr);
+						}
+					}
+
+
+					pkts_recv++;
+					queueIN.pkt.size=0;
+					queueIN.pkt.ptr=NULL;
+					return b;
+				} else {
+					// set the connection unhealthy , this will cause the session to be destroyed
+					if (sess) {
+						sess->set_unhealthy();
+					}
+				}
+				return 0; // we always return
+			}
 			proxy_debug(PROXY_DEBUG_PKT_ARRAY, 5, "Session=%p . Reading the header of a new packet\n", sess);
 			memcpy(&queueIN.hdr,queue_r_ptr(queueIN),sizeof(mysql_hdr));
 			pkt_sid=queueIN.hdr.pkt_id;
@@ -1229,7 +1234,7 @@ void MySQL_Data_Stream::generate_compressed_packet() {
 			total_size+=p2.size;
 			l_free(p2.size,p2.ptr);
 		}
-		int rc=compress(dest, &destLen, source, sourceLen);
+		int rc=compress2(dest, &destLen, source, sourceLen, mysql_thread___protocol_compression_level);
 		assert(rc==Z_OK);
 		l_free(total_size, source);
 		queueOUT.pkt.size=destLen+7;
@@ -1261,9 +1266,9 @@ void MySQL_Data_Stream::generate_compressed_packet() {
 		dest1=(Bytef *)malloc(destLen1+7);
 		destLen2=len2*120/100+12;
 		dest2=(Bytef *)malloc(destLen2+7);
-		rc=compress(dest1+7, &destLen1, (const unsigned char *)p2.ptr, len1);
+		rc=compress2(dest1+7, &destLen1, (const unsigned char *)p2.ptr, len1, mysql_thread___protocol_compression_level);
 		assert(rc==Z_OK);
-		rc=compress(dest2+7, &destLen2, (const unsigned char *)p2.ptr+len1, len2);
+		rc=compress2(dest2+7, &destLen2, (const unsigned char *)p2.ptr+len1, len2, mysql_thread___protocol_compression_level);
 		assert(rc==Z_OK);
 
 		hdr.pkt_length=destLen1;
@@ -1537,7 +1542,7 @@ void MySQL_Data_Stream::destroy_MySQL_Connection_From_Pool(bool sq) {
 }
 
 bool MySQL_Data_Stream::data_in_rbio() {
-	if (rbio_ssl->num_write > rbio_ssl->num_read) {
+	if (BIO_number_written(rbio_ssl) > BIO_number_read(rbio_ssl)) {
 		return true;
 	}
 	return false;
@@ -1550,7 +1555,7 @@ void MySQL_Data_Stream::reset_connection() {
 			return_MySQL_Connection_To_Pool();
 		}
 		else {
-			if (sess && sess->session_fast_forward == false) {
+			if (sess && sess->session_fast_forward == SESSION_FORWARD_TYPE_NONE) {
 				destroy_MySQL_Connection_From_Pool(true);
 			}
 			else {
@@ -1571,6 +1576,14 @@ void MySQL_Data_Stream::get_client_myds_info_json(json& j) {
 	jc1["client_addr"]["port"] = addr.port;
 	jc1["proxy_addr"]["address"] = ( proxy_addr.addr ? proxy_addr.addr : "" );
 	jc1["proxy_addr"]["port"] = proxy_addr.port;
+	if (PROXY_info != NULL) {
+		jc1["PROXY_V1"]["source_address"] = PROXY_info->source_address;
+		jc1["PROXY_V1"]["destination_address"] = PROXY_info->destination_address;
+		jc1["PROXY_V1"]["proxy_address"] = PROXY_info->proxy_address;
+		jc1["PROXY_V1"]["source_port"] = PROXY_info->source_port;
+		jc1["PROXY_V1"]["destination_port"] = PROXY_info->destination_port;
+		jc1["PROXY_V1"]["proxy_port"] = PROXY_info->proxy_port;
+	}
 	jc1["encrypted"] = encrypted;
 	if (encrypted) {
 		const SSL_CIPHER *cipher = SSL_get_current_cipher(ssl);

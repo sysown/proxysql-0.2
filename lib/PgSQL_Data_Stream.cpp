@@ -11,61 +11,6 @@
 
 #include "openssl/x509v3.h"
 
-/*
-
-in libssl 1.1.0
-struct bio_st {
-	const BIO_METHOD *method;
-	long (*callback) (struct bio_st *, int, const char *, int, long, long);
-	char *cb_arg;
-	int init;
-	int shutdown;
-	int flags;
-	int retry_reason;
-	int num;
-	void *ptr;
-	struct bio_st *next_bio;
-	struct bio_st *prev_bio;
-	int references;
-	uint64_t num_read;
-	uint64_t num_write;
-	CRYPTO_EX_DATA ex_data;
-	CRYPTO_RWLOCK *lock;
-};
-*/
-
-typedef int CRYPTO_REF_COUNT;
-
-/**
- * @brief This is the 'bio_st' struct definition from libssl 3.0.0. NOTE: This is an internal struct from
- *   OpenSSL library, currently it's used for performing checks on the reads/writes performed on the BIO objects.
- *   It's extremely important to keep this struct up to date with each OpenSSL dependency update.
- */
-struct bio_st {
-	OSSL_LIB_CTX* libctx;
-	const BIO_METHOD* method;
-	/* bio, mode, argp, argi, argl, ret */
-#ifndef OPENSSL_NO_DEPRECATED_3_0
-	BIO_callback_fn callback;
-#endif
-	BIO_callback_fn_ex callback_ex;
-	char* cb_arg;               /* first argument for the callback */
-	int init;
-	int shutdown;
-	int flags;                  /* extra storage */
-	int retry_reason;
-	int num;
-	void* ptr;
-	struct bio_st* next_bio;    /* used by filter BIOs */
-	struct bio_st* prev_bio;    /* used by filter BIOs */
-	CRYPTO_REF_COUNT references;
-	uint64_t num_read;
-	uint64_t num_write;
-	CRYPTO_EX_DATA ex_data;
-	CRYPTO_RWLOCK* lock;
-};
-
-
 #define RESULTSET_BUFLEN_DS_16K 16000
 #define RESULTSET_BUFLEN_DS_1M 1000*1024
 
@@ -292,13 +237,13 @@ PgSQL_Data_Stream::PgSQL_Data_Stream() {
 	kill_type = 0;
 	connect_tries = 0;
 	poll_fds_idx = -1;
-	resultset_length = 0;
+	//resultset_length = 0;
 
 	revents = 0;
 
 	PSarrayIN = NULL;
 	PSarrayOUT = NULL;
-	resultset = NULL;
+	//resultset = NULL;
 	queue_init(queueIN, QUEUE_T_DEFAULT_SIZE);
 	queue_init(queueOUT, QUEUE_T_DEFAULT_SIZE);
 	mybe = NULL;
@@ -374,13 +319,13 @@ PgSQL_Data_Stream::~PgSQL_Data_Stream() {
 		}
 		delete PSarrayOUT;
 	}
-	if (resultset) {
+	/*if (resultset) {
 		while (resultset->len) {
 			resultset->remove_index_fast(0, &pkt);
 			l_free(pkt.size, pkt.ptr);
 		}
 		delete resultset;
-	}
+	}*/
 	if (mypolls) mypolls->remove_index_fast(poll_fds_idx);
 
 
@@ -438,7 +383,7 @@ void PgSQL_Data_Stream::init() {
 		if (PSarrayIN == NULL) PSarrayIN = new PtrSizeArray();
 		if (PSarrayOUT == NULL) PSarrayOUT = new PtrSizeArray();
 		//		if (PSarrayOUTpending==NULL) PSarrayOUTpending= new PtrSizeArray();
-		if (resultset == NULL) resultset = new PtrSizeArray();
+		//if (resultset == NULL) resultset = new PtrSizeArray();
 
 		if (unlikely(GloVars.global.data_packets_history_size)) {
 			data_packets_history_IN.set_max_size(GloVars.global.data_packets_history_size);
@@ -602,8 +547,8 @@ int PgSQL_Data_Stream::read_from_net() {
 		//ssize_t n = read(fd, buf, sizeof(buf));
 		int n = recv(fd, buf, sizeof(buf), 0);
 		//proxy_info("SSL recv of %d bytes\n", n);
-		proxy_debug(PROXY_DEBUG_NET, 7, "Session=%p: recv() read %d bytes. num_write: %lu ,  num_read: %lu\n", sess, n, rbio_ssl->num_write, rbio_ssl->num_read);
-		if (n > 0 || rbio_ssl->num_write > rbio_ssl->num_read) {
+		proxy_debug(PROXY_DEBUG_NET, 7, "Session=%p: recv() read %d bytes. num_write: %lu ,  num_read: %lu\n", sess, n, BIO_number_written(rbio_ssl), BIO_number_read(rbio_ssl));
+		if (n > 0 || BIO_number_written(rbio_ssl) > BIO_number_read(rbio_ssl)) {
 			//on_read_cb(buf, (size_t)n);
 
 			char buf2[MY_SSL_BUFFER];
@@ -728,7 +673,7 @@ int PgSQL_Data_Stream::write_to_net() {
 		if (encrypted == false) {
 			return 0;
 		}
-		if (ssl_write_len == 0 && wbio_ssl->num_write == wbio_ssl->num_read) {
+		if (ssl_write_len == 0 && BIO_number_written(wbio_ssl) == BIO_number_read(wbio_ssl)) {
 			return 0;
 		}
 	}
@@ -738,7 +683,7 @@ int PgSQL_Data_Stream::write_to_net() {
 		bytes_io = SSL_write(ssl, queue_r_ptr(queueOUT), s);
 		//proxy_info("Used SSL_write to write %d bytes\n", bytes_io);
 		proxy_debug(PROXY_DEBUG_NET, 7, "Session=%p, Datastream=%p: SSL_write() wrote %d bytes . queueOUT before: %u\n", sess, this, bytes_io, queue_data(queueOUT));
-		if (ssl_write_len || wbio_ssl->num_write > wbio_ssl->num_read) {
+		if (ssl_write_len || BIO_number_written(wbio_ssl) > BIO_number_read(wbio_ssl)) {
 			//proxy_info("ssl_write_len = %d , num_write = %d , num_read = %d\n", ssl_write_len , wbio_ssl->num_write , wbio_ssl->num_read);
 			char buf[MY_SSL_BUFFER];
 			do {
@@ -861,7 +806,7 @@ void PgSQL_Data_Stream::set_pollout() {
 			_pollfd->events |= POLLOUT;
 		}
 		if (encrypted) {
-			if (ssl_write_len || wbio_ssl->num_write > wbio_ssl->num_read) {
+			if (ssl_write_len || BIO_number_written(wbio_ssl) > BIO_number_read(wbio_ssl)) {
 				_pollfd->events |= POLLOUT;
 			}
 			else {
@@ -966,7 +911,7 @@ int PgSQL_Data_Stream::write_to_net_poll() {
 	}
 	if (call_write_to_net == false) {
 		if (encrypted) {
-			if (ssl_write_len || wbio_ssl->num_write > wbio_ssl->num_read) {
+			if (ssl_write_len || BIO_number_written(wbio_ssl) > BIO_number_read(wbio_ssl)) {
 				call_write_to_net = true;
 			}
 		}
@@ -997,99 +942,6 @@ int PgSQL_Data_Stream::read_pkts() {
 	return rc;
 }
 
-void PgSQL_Data_Stream::generate_compressed_packet() {
-#define MAX_COMPRESSED_PACKET_SIZE	10*1024*1024
-	unsigned int total_size = 0;
-	unsigned int i = 0;
-	PtrSize_t* p = NULL;
-	while (i < PSarrayOUT->len && total_size < MAX_COMPRESSED_PACKET_SIZE) {
-		p = PSarrayOUT->index(i);
-		total_size += p->size;
-		i++;
-	}
-	if (i >= 2) {
-		// we successfully read at least 2 packets
-		if (total_size > MAX_COMPRESSED_PACKET_SIZE) {
-			// total_size is too big, we remove the last packet read
-			total_size -= p->size;
-		}
-	}
-	if (total_size <= MAX_COMPRESSED_PACKET_SIZE) {
-		// this worked in the past . it applies for small packets
-		uLong sourceLen = total_size;
-		Bytef* source = (Bytef*)l_alloc(total_size);
-		uLongf destLen = total_size * 120 / 100 + 12;
-		Bytef* dest = (Bytef*)malloc(destLen);
-		i = 0;
-		total_size = 0;
-		while (total_size < sourceLen) {
-			PtrSize_t p2;
-			PSarrayOUT->remove_index(0, &p2);
-			memcpy(source + total_size, p2.ptr, p2.size);
-			total_size += p2.size;
-			l_free(p2.size, p2.ptr);
-		}
-		int rc = compress(dest, &destLen, source, sourceLen);
-		assert(rc == Z_OK);
-		l_free(total_size, source);
-		queueOUT.pkt.size = destLen + 7;
-		queueOUT.pkt.ptr = l_alloc(queueOUT.pkt.size);
-		mysql_hdr hdr;
-		hdr.pkt_length = destLen;
-		hdr.pkt_id = ++myconn->compression_pkt_id;
-		memcpy((unsigned char*)queueOUT.pkt.ptr, &hdr, sizeof(mysql_hdr));
-		hdr.pkt_length = total_size;
-		memcpy((unsigned char*)queueOUT.pkt.ptr + 4, &hdr, 3);
-		memcpy((unsigned char*)queueOUT.pkt.ptr + 7, dest, destLen);
-		free(dest);
-	}
-	else {
-		// if we reach here, it means we have one single packet larger than MAX_COMPRESSED_PACKET_SIZE
-		PtrSize_t p2;
-		PSarrayOUT->remove_index(0, &p2);
-
-		unsigned int len1 = MAX_COMPRESSED_PACKET_SIZE / 2;
-		unsigned int len2 = p2.size - len1;
-		uLongf destLen1;
-		uLongf destLen2;
-		Bytef* dest1;
-		Bytef* dest2;
-		int rc;
-
-		mysql_hdr hdr;
-
-		destLen1 = len1 * 120 / 100 + 12;
-		dest1 = (Bytef*)malloc(destLen1 + 7);
-		destLen2 = len2 * 120 / 100 + 12;
-		dest2 = (Bytef*)malloc(destLen2 + 7);
-		rc = compress(dest1 + 7, &destLen1, (const unsigned char*)p2.ptr, len1);
-		assert(rc == Z_OK);
-		rc = compress(dest2 + 7, &destLen2, (const unsigned char*)p2.ptr + len1, len2);
-		assert(rc == Z_OK);
-
-		hdr.pkt_length = destLen1;
-		hdr.pkt_id = ++myconn->compression_pkt_id;
-		memcpy(dest1, &hdr, sizeof(mysql_hdr));
-		hdr.pkt_length = len1;
-		memcpy((char*)dest1 + sizeof(mysql_hdr), &hdr, 3);
-
-		hdr.pkt_length = destLen2;
-		hdr.pkt_id = ++myconn->compression_pkt_id;
-		memcpy(dest2, &hdr, sizeof(mysql_hdr));
-		hdr.pkt_length = len2;
-		memcpy((char*)dest2 + sizeof(mysql_hdr), &hdr, 3);
-
-		queueOUT.pkt.size = destLen1 + destLen2 + 7 + 7;
-		queueOUT.pkt.ptr = l_alloc(queueOUT.pkt.size);
-		memcpy((char*)queueOUT.pkt.ptr, dest1, destLen1 + 7);
-		memcpy((char*)queueOUT.pkt.ptr + destLen1 + 7, dest2, destLen2 + 7);
-		free(dest1);
-		free(dest2);
-		l_free(p2.size, p2.ptr);
-	}
-}
-
-
 int PgSQL_Data_Stream::array2buffer() {
 	int ret = 0;
 	unsigned int idx = 0;
@@ -1113,32 +965,18 @@ int PgSQL_Data_Stream::array2buffer() {
 					add_to_data_packet_history_without_alloc(data_packets_history_OUT, queueOUT.pkt.ptr, queueOUT.pkt.size);
 					queueOUT.pkt.ptr = NULL;
 				}
-				//VALGRIND_ENABLE_ERROR_REPORTING;
-				if (myconn->get_status(STATUS_MYSQL_CONNECTION_COMPRESSION) == true) {
-					proxy_debug(PROXY_DEBUG_PKT_ARRAY, 5, "Session=%p . DataStream: %p -- Compression enabled\n", sess, this);
-					generate_compressed_packet();	// it is copied directly into queueOUT.pkt					
+				
+				memcpy(&queueOUT.pkt, PSarrayOUT->index(idx), sizeof(PtrSize_t));
+				idx++;
+
+				if (DSS == STATE_CLIENT_AUTH_OK) {
+					DSS = STATE_SLEEP;
+
+					//explicitly disable compression
+					myconn->options.compression_min_length = 0;
+					myconn->set_status(false, STATUS_MYSQL_CONNECTION_COMPRESSION);
 				}
-				else {
-					//VALGRIND_DISABLE_ERROR_REPORTING;
-					memcpy(&queueOUT.pkt, PSarrayOUT->index(idx), sizeof(PtrSize_t));
-					idx++;
-					//VALGRIND_ENABLE_ERROR_REPORTING;
-								// this is a special case, needed because compression is enabled *after* the first OK
-					if (DSS == STATE_CLIENT_AUTH_OK) {
-						DSS = STATE_SLEEP;
-						// enable compression
-						if (myconn->options.server_capabilities & CLIENT_COMPRESS) {
-							if (myconn->options.compression_min_length) {
-								myconn->set_status(true, STATUS_MYSQL_CONNECTION_COMPRESSION);
-							}
-						}
-						else {
-							//explicitly disable compression
-							myconn->options.compression_min_length = 0;
-							myconn->set_status(false, STATUS_MYSQL_CONNECTION_COMPRESSION);
-						}
-					}
-				}
+				
 #ifdef DEBUG
 				{ __dump_pkt(__func__, (unsigned char*)queueOUT.pkt.ptr, queueOUT.pkt.size); }
 #endif
@@ -1174,7 +1012,8 @@ __exit_array2buffer:
 	return ret;
 }
 
-unsigned char* PgSQL_Data_Stream::resultset2buffer(bool del) {
+unsigned char* PgSQL_Data_Stream::copy_array_to_buffer(PtrSizeArray* resultset, size_t resultset_length,
+	bool del) {
 	unsigned int i;
 	unsigned int l = 0;
 	unsigned char* mybuff = (unsigned char*)l_alloc(resultset_length);
@@ -1188,52 +1027,75 @@ unsigned char* PgSQL_Data_Stream::resultset2buffer(bool del) {
 	return mybuff;
 };
 
-void PgSQL_Data_Stream::buffer2resultset(unsigned char* ptr, unsigned int size) {
-	unsigned char* __ptr = ptr;
-	mysql_hdr hdr;
-	unsigned int l;
-	void* buff = NULL;
-	unsigned int bl;
-	unsigned int bf;
-	while (__ptr < ptr + size) {
-		memcpy(&hdr, __ptr, sizeof(mysql_hdr));
-		l = hdr.pkt_length + sizeof(mysql_hdr); // amount of space we need
-		if (buff) {
-			if (bf < l) {
-				// we ran out of space
-				resultset->add(buff, bl - bf);
-				buff = NULL;
+static inline uint32_t get_uint32(const unsigned char* ptr) {
+	return (static_cast<uint32_t>(ptr[0]) << 24) |
+		(static_cast<uint32_t>(ptr[1]) << 16) |
+		(static_cast<uint32_t>(ptr[2]) << 8) |
+		static_cast<uint32_t>(ptr[3]);
+}
+
+void PgSQL_Data_Stream::copy_buffer_to_resultset(PtrSizeArray* resultset, unsigned char* ptr, uint64_t size, 
+	char current_transaction_state) {
+	unsigned char* current_ptr = ptr;
+	unsigned char* buffer = NULL;
+	uint32_t data_len;
+	uint32_t buffer_len;
+	uint32_t remaining_space;
+
+	while (current_ptr < ptr + size) {
+		uint8_t packet_type = *current_ptr; // read packet type (unused in the code)
+		// Read 4-byte length
+		/*unsigned int a = current_ptr[read_pos++];
+		unsigned int b = current_ptr[read_pos++];
+		unsigned int c = current_ptr[read_pos++];
+		unsigned int d = current_ptr[read_pos++];
+		const uint32_t packet_length = (a << 24) | (b << 16) | (c << 8) | d;
+		*/
+		data_len = get_uint32(current_ptr + 1 /*skip type*/) + 1; // total space needed, including type
+
+		// Handle buffer space
+		if (buffer) {
+			if (remaining_space < data_len) {
+				// Insufficient space, add buffer to resultset
+				resultset->add(buffer, buffer_len - remaining_space);
+				buffer = NULL;
 			}
 		}
-		if (buff == NULL) {
-			if (__ptr + RESULTSET_BUFLEN_DS_1M <= ptr + size) {
-				bl = RESULTSET_BUFLEN_DS_1M;
+
+		// Allocate new buffer if needed
+		if (buffer == NULL) {
+			// Set buffer size depending on available space
+			if (current_ptr + RESULTSET_BUFLEN_DS_1M <= ptr + size) {
+				buffer_len = RESULTSET_BUFLEN_DS_1M;
 			}
 			else {
-				bl = RESULTSET_BUFLEN_DS_16K;
+				buffer_len = RESULTSET_BUFLEN_DS_16K;
 			}
-			if (l > bl) {
-				bl = l; // make sure there is the space to copy a packet
+
+			// Ensure buffer is large enough for the current packet
+			if (data_len > buffer_len) {
+				buffer_len = data_len;
 			}
-			buff = malloc(bl);
-			bf = bl;
+
+			buffer = (unsigned char*)malloc(buffer_len);
+			remaining_space = buffer_len;
 		}
-		memcpy((char*)buff + (bl - bf), __ptr, l);
-		bf -= l;
-		__ptr += l;
-		/*
-				l=hdr.pkt_length+sizeof(mysql_hdr);
-				pkt=l_alloc(l);
-				memcpy(pkt,__ptr,l);
-				resultset->add(pkt,l);
-				__ptr+=l;
-		*/
+
+		// Copy data to buffer
+		memcpy((unsigned char*)buffer + (buffer_len - remaining_space), current_ptr, data_len);
+		remaining_space -= data_len;
+		current_ptr += data_len;
+
+		if (packet_type == 'Z') {
+			// if packet is a 'Z' packet (Ready Packet), we need to overwrite trasaction state
+			*(buffer + (buffer_len - remaining_space) - 1) = current_transaction_state;
+		}
 	}
-	if (buff) {
-		// last buffer to add
-		resultset->add(buff, bl - bf);
+	// Add the last buffer to the resultset, if any
+	if (buffer) {
+		resultset->add(buffer, buffer_len - remaining_space);
 	}
-};
+}
 
 int PgSQL_Data_Stream::array2buffer_full() {
 	int rc = 0;
@@ -1339,7 +1201,7 @@ void PgSQL_Data_Stream::destroy_MySQL_Connection_From_Pool(bool sq) {
 }
 
 bool PgSQL_Data_Stream::data_in_rbio() {
-	if (rbio_ssl->num_write > rbio_ssl->num_read) {
+	if (BIO_number_written(rbio_ssl) > BIO_number_read(rbio_ssl)) {
 		return true;
 	}
 	return false;
@@ -1352,7 +1214,7 @@ void PgSQL_Data_Stream::reset_connection() {
 			myconn->last_time_used = sess->thread->curtime;
 			return_MySQL_Connection_To_Pool();
 		} else {
-			if (sess && sess->session_fast_forward == false) {
+			if (sess && sess->session_fast_forward == SESSION_FORWARD_TYPE_NONE) {
 				destroy_MySQL_Connection_From_Pool(true);
 			} else {
 				destroy_MySQL_Connection_From_Pool(false);

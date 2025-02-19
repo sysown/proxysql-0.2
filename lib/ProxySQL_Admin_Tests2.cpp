@@ -6,7 +6,8 @@
 #include <vector>       // std::vector
 #include <unordered_set>
 
-#include "query_processor.h"
+#include "MySQL_Query_Processor.h"
+#include "PgSQL_Query_Processor.h"
 
 #include "MySQL_Data_Stream.h"
 
@@ -18,7 +19,8 @@ static int int_cmp(const void *a, const void *b) {
 	return 0;
 }
 
-extern Query_Processor *GloQPro;
+extern MySQL_Query_Processor* GloMyQPro;
+extern PgSQL_Query_Processor* GloPgQPro;
 extern MySQL_Monitor *GloMyMon;
 extern MySQL_Threads_Handler *GloMTH;
 
@@ -40,6 +42,7 @@ static void init_rand_del() {
 
 int ProxySQL_Test___GetDigestTable(bool reset, bool use_swap);
 bool ProxySQL_Test___Refresh_MySQL_Variables(unsigned int cnt);
+template<enum SERVER_TYPE>
 int ProxySQL_Test___PurgeDigestTable(bool async_purge, bool parallel, char **msg);
 int ProxySQL_Test___GenerateRandomQueryInDigestTable(int n);
 
@@ -224,7 +227,7 @@ bool ProxySQL_Admin::ProxySQL_Test___Verify_mysql_query_rules_fast_routing(
 
 	if (maps_per_thread) {
 		for (uint32_t i = 0; i < static_cast<uint32_t>(ths); i++) {
-			th_hashmaps.push_back(GloQPro->create_fast_routing_hashmap(resultset2));
+			th_hashmaps.push_back(GloMyQPro->create_fast_routing_hashmap(resultset2));
 		}
 	}
 
@@ -238,11 +241,11 @@ bool ProxySQL_Admin::ProxySQL_Test___Verify_mysql_query_rules_fast_routing(
 			int dest_HG = atoi(r->fields[3]);
 			int ret_HG = -1;
 			if (dual) {
-				ret_HG = GloQPro->testing___find_HG_in_mysql_query_rules_fast_routing_dual(
+				ret_HG = GloMyQPro->testing___find_HG_in_mysql_query_rules_fast_routing_dual(
 					hashmap, r->fields[0], r->fields[1], atoi(r->fields[2]), lock
 				);
 			} else {
-				ret_HG = GloQPro->testing___find_HG_in_mysql_query_rules_fast_routing(
+				ret_HG = GloMyQPro->testing___find_HG_in_mysql_query_rules_fast_routing(
 					r->fields[0], r->fields[1], atoi(r->fields[2])
 				);
 			}
@@ -587,19 +590,19 @@ void ProxySQL_Admin::ProxySQL_Test_Handler(ProxySQL_Admin *SPA, S* sess, char *q
 				break;
 			case 4:
 				// purge the digest map, synchronously, in single thread
-				r1 = ProxySQL_Test___PurgeDigestTable(false, false, NULL);
+				r1 = ProxySQL_Test___PurgeDigestTable<SERVER_TYPE_MYSQL>(false, false, NULL);
 				SPA->send_ok_msg_to_client(sess, NULL, r1, query_no_space);
 				run_query=false;
 				break;
 			case 5:
 				// purge the digest map, synchronously, in multiple threads
-				r1 = ProxySQL_Test___PurgeDigestTable(false, true, NULL);
+				r1 = ProxySQL_Test___PurgeDigestTable<SERVER_TYPE_MYSQL>(false, true, NULL);
 				SPA->send_ok_msg_to_client(sess, NULL, r1, query_no_space);
 				run_query=false;
 				break;
 			case 6:
 				// purge the digest map, asynchronously, in single thread
-				r1 = ProxySQL_Test___PurgeDigestTable(true, false, &msg);
+				r1 = ProxySQL_Test___PurgeDigestTable<SERVER_TYPE_MYSQL>(true, false, &msg);
 				SPA->send_ok_msg_to_client(sess, msg, r1, query_no_space);
 				free(msg);
 				run_query=false;

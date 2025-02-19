@@ -44,9 +44,7 @@ LIBINJECTION_DIR=$(DEPS_PATH)/libinjection/libinjection
 LIBINJECTION_IDIR=$(LIBINJECTION_DIR)/src
 LIBINJECTION_LDIR=$(LIBINJECTION_DIR)/src
 
-SSL_DIR=$(DEPS_PATH)/libssl/openssl/
-SSL_IDIR=$(SSL_DIR)/include
-SSL_LDIR=$(SSL_DIR)
+include ../../../common_mk/openssl_flags.mk
 
 EV_DIR=$(DEPS_PATH)/libev/libev/
 EV_IDIR=$(EV_DIR)

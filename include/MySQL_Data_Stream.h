@@ -5,6 +5,7 @@
 #include "cpp.h"
 
 #include "MySQL_Protocol.h"
+#include "proxy_protocol_info.h"
 
 #ifndef PROXYJSON
 #define PROXYJSON
@@ -145,6 +146,7 @@ class MySQL_Data_Stream
 		char *addr;
 		int port;
 	} proxy_addr;
+	ProxyProtocolInfo * PROXY_info;
 
 	unsigned int connect_tries;
 	int query_retries_on_failure;
@@ -226,7 +228,7 @@ class MySQL_Data_Stream
 		//
 		// we have a similar code in MySQL_Connection
 		// in case of ASYNC_CONNECT_SUCCESSFUL
-		if (sess != NULL && sess->session_fast_forward == true) {
+		if (sess != NULL && sess->session_fast_forward) {
 			// if frontend and backend connection use SSL we will set
 			// encrypted = true and we will start using the SSL structure
 			// directly from P_MARIADB_TLS structure.
@@ -258,7 +260,7 @@ class MySQL_Data_Stream
 		myconn->myds=NULL;
 		myconn=NULL;
 		if (encrypted == true) {
-			if (sess != NULL && sess->session_fast_forward == true) {
+			if (sess != NULL && sess->session_fast_forward) {
 				// it seems we are a connection with SSL on a fast_forward session.
 				// See attach_connection() for more details .
 				// We now disable SSL metadata from the Data Stream

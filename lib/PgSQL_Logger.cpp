@@ -7,8 +7,8 @@ using json = nlohmann::json;
 #include "cpp.h"
 
 #include "PgSQL_Data_Stream.h"
-#include "query_processor.h"
-#include "PgSQL_PreparedStatement.h"
+#include "PgSQL_Query_Processor.h"
+#include "MySQL_PreparedStatement.h"
 #include "PgSQL_Logger.hpp"
 
 #include <dirent.h>
@@ -102,7 +102,7 @@ uint64_t PgSQL_Event::write(std::fstream *f, PgSQL_Session *sess) {
 		case PROXYSQL_COM_QUERY:
 		case PROXYSQL_COM_STMT_EXECUTE:
 		case PROXYSQL_COM_STMT_PREPARE:
-			if (mysql_thread___eventslog_format==1) { // format 1 , binary
+			if (pgsql_thread___eventslog_format==1) { // format 1 , binary
 				total_bytes=write_query_format_1(f);
 			} else { // format 2 , json
 				total_bytes=write_query_format_2_json(f);
@@ -453,7 +453,7 @@ uint64_t PgSQL_Event::write_query_format_2_json(std::fstream *f) {
 	return total_bytes; // always 0
 }
 
-extern Query_Processor *GloQPro;
+extern PgSQL_Query_Processor* GloPgQPro;
 
 PgSQL_Logger::PgSQL_Logger() {
 	events.enabled=false;
@@ -604,8 +604,8 @@ void PgSQL_Logger::audit_open_log_unlocked() {
 void PgSQL_Logger::events_set_base_filename() {
 	// if filename is the same, return
 	wrlock();
-	events.max_log_file_size=mysql_thread___eventslog_filesize;
-	if (strcmp(events.base_filename,mysql_thread___eventslog_filename)==0) {
+	events.max_log_file_size=pgsql_thread___eventslog_filesize;
+	if (strcmp(events.base_filename,pgsql_thread___eventslog_filename)==0) {
 		wrunlock();
 		return;
 	}
@@ -614,7 +614,7 @@ void PgSQL_Logger::events_set_base_filename() {
 	// set file id to 0 , so that find_next_id() will be called
 	events.log_file_id=0;
 	free(events.base_filename);
-	events.base_filename=strdup(mysql_thread___eventslog_filename);
+	events.base_filename=strdup(pgsql_thread___eventslog_filename);
 	if (strlen(events.base_filename)) {
 		events.enabled=true;
 		events_open_log_unlocked();
@@ -634,8 +634,8 @@ void PgSQL_Logger::events_set_datadir(char *s) {
 void PgSQL_Logger::audit_set_base_filename() {
 	// if filename is the same, return
 	wrlock();
-	audit.max_log_file_size=mysql_thread___auditlog_filesize;
-	if (strcmp(audit.base_filename,mysql_thread___auditlog_filename)==0) {
+	audit.max_log_file_size=pgsql_thread___auditlog_filesize;
+	if (strcmp(audit.base_filename,pgsql_thread___auditlog_filename)==0) {
 		wrunlock();
 		return;
 	}
@@ -644,7 +644,7 @@ void PgSQL_Logger::audit_set_base_filename() {
 	// set file id to 0 , so that find_next_id() will be called
 	audit.log_file_id=0;
 	free(audit.base_filename);
-	audit.base_filename=strdup(mysql_thread___auditlog_filename);
+	audit.base_filename=strdup(pgsql_thread___auditlog_filename);
 	if (strlen(audit.base_filename)) {
 		audit.enabled=true;
 		audit_open_log_unlocked();
@@ -712,7 +712,7 @@ void PgSQL_Logger::log_request(PgSQL_Session *sess, PgSQL_Data_Stream *myds) {
 	uint64_t query_digest = 0;
 
 	if (sess->status != PROCESSING_STMT_EXECUTE) {
-		query_digest = GloQPro->get_digest(&sess->CurrentQuery.QueryParserArgs);
+		query_digest = GloPgQPro->get_digest(&sess->CurrentQuery.QueryParserArgs);
 	} else {
 		query_digest = sess->CurrentQuery.stmt_info->digest;
 	}
