@@ -6,8 +6,8 @@ on:
     inputs:
       trigger:
         type: string
-      testtree:
-        type: string
+#      testtree:
+#        type: string
       infradb:
         type: string
       connector:
