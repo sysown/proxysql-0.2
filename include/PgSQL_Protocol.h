@@ -831,6 +831,7 @@ public:
 		return true;
 	}
 
+	void generate_ParseComplete(bool send, PtrSize_t* _ptr);
 
 	//bool generate_row_description(bool send, PgSQL_Query_Result* rs, const PG_Fields& fields, unsigned int size);
 

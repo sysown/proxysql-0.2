@@ -22,7 +22,6 @@ using json = nlohmann::json;
 
 
 
-#if 0
 // some of the code that follows is from mariadb client library memory allocator
 typedef int     myf;    // Type of MyFlags in my_funcs
 #define MYF(v)      (myf) (v)
@@ -116,7 +115,6 @@ static void ma_free_root(MA_MEM_ROOT *root, myf MyFlags)
     root->free->next=0;
   }
 }
-#endif // 0
 
 extern char * binary_sha1;
 
@@ -837,8 +835,7 @@ void PgSQL_Connection_Placeholder::set_is_client() {
 
 #define NEXT_IMMEDIATE(new_st) do { async_state_machine = new_st; goto handler_again; } while (0)
 
-#if 0
-void PgSQL_Connection_Placeholder::process_rows_in_ASYNC_STMT_EXECUTE_STORE_RESULT_CONT(unsigned long long& processed_bytes) {
+void PgSQL_Connection_Placeholder::process_rows_in_ASYNC_STMT_EXECUTE_STORE_RESULT_CONT(uint64_t& processed_bytes) {
 	PROXY_TRACE2();
 	// there is more than 1 row
 	unsigned long long total_size=0;
@@ -904,6 +901,7 @@ void PgSQL_Connection_Placeholder::process_rows_in_ASYNC_STMT_EXECUTE_STORE_RESU
 	bytes_info.bytes_recv += total_size;
 }
 
+#if 0
 int PgSQL_Connection_Placeholder::async_set_autocommit(short event, bool ac) {
 	PROXY_TRACE();
 	assert(pgsql);
@@ -1702,7 +1700,7 @@ handler_again:
 				if (myds->sess && myds->sess->client_myds && myds->sess->mirror==false) {
 					unsigned int buffered_data=0;
 					buffered_data = myds->sess->client_myds->PSarrayOUT->len * RESULTSET_BUFLEN;
-					buffered_data += myds->sess->client_myds->resultset->len * RESULTSET_BUFLEN;
+					//buffered_data += myds->sess->client_myds->resultset->len * RESULTSET_BUFLEN;
 					if (buffered_data > (unsigned int)mysql_thread___threshold_resultset_size*8) {
 						next_event(ASYNC_STMT_EXECUTE_STORE_RESULT_CONT); // we temporarily pause . See #1232
 						break;

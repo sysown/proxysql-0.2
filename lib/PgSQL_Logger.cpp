@@ -714,7 +714,7 @@ void PgSQL_Logger::log_request(PgSQL_Session *sess, PgSQL_Data_Stream *myds) {
 	if (sess->status != PROCESSING_STMT_EXECUTE) {
 		query_digest = GloPgQPro->get_digest(&sess->CurrentQuery.QueryParserArgs);
 	} else {
-		query_digest = sess->CurrentQuery.stmt_info->digest;
+	//	query_digest = sess->CurrentQuery.stmt_info->digest;
 	}
 
 	PgSQL_Event me(let,

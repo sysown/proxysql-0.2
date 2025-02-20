@@ -414,7 +414,7 @@ void PgSQL_Query_Info::init(unsigned char *_p, int len, bool header) {
 		QueryLength=(header ? len-5 : len);
 		QueryPointer=(header ? _p+5 : _p);
 	}
-	MyComQueryCmd = MYSQL_COM_QUERY__UNINITIALIZED;
+	PgQueryCmd = PGSQL_QUERY__UNINITIALIZED;
 	bool_is_select_NOT_for_update=false;
 	bool_is_select_NOT_for_update_computed=false;
 	have_affected_rows=false; // if affected rows is set, last_insert_id is set too
@@ -2513,7 +2513,7 @@ void PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___PGSQL_P
 			pause_until = 0;
 			mybe->server_myds->killed_at = 0;
 			mybe->server_myds->kill_type = 0;
-			mybe->server_myds->pgsql_real_query.init(&pkt); // fix memory leak for PREPARE in prepared statements #796
+			mybe->server_myds->mysql_real_query.init(&pkt); // fix memory leak for PREPARE in prepared statements #796
 			mybe->server_myds->statuses.questions++;
 			client_myds->setDSS_STATE_QUERY_SENT_NET();
 		}
@@ -3362,8 +3362,8 @@ __get_pkts_from_client:
 							handler_ret = -1;
 							return handler_ret;
 							break;
-						case 'P':
-						case 'B':
+						//case 'P':
+						//case 'B':
 						case 'D':
 						case 'E':
 							//ignore
@@ -3583,7 +3583,7 @@ __get_pkts_from_client:
 					}
 					break;
 				case _MYSQL_COM_STMT_PREPARE:
-					handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_PREPARE(pkt);
+					//handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_COM_STMT_PREPARE(pkt);
 					break;
 				default:
 					// in this switch we only handle the most common commands.
@@ -4018,7 +4018,7 @@ int PgSQL_Session::RunQuery(PgSQL_Data_Stream* myds, PgSQL_Connection* myconn) {
 	int rc = 0;
 	switch (status) {
 	case PROCESSING_QUERY:
-		rc = myconn->async_query(myds->revents, myds->pgsql_real_query.QueryPtr, myds->pgsql_real_query.QuerySize);
+		rc = myconn->async_query(myds->revents, myds->mysql_real_query.QueryPtr, myds->mysql_real_query.QuerySize);
 		break;
 	case PROCESSING_STMT_PREPARE:
 		rc = myconn->async_query(myds->revents, (char*)CurrentQuery.QueryPointer, CurrentQuery.QueryLength, &CurrentQuery.mysql_stmt);

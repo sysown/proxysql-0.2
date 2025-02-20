@@ -440,7 +440,6 @@ class PgSQL_Connection_Placeholder {
 	void stmt_execute_store_result_start();
 	void stmt_execute_store_result_cont(short event);
 
-#if 0
 	/**
 	 * @brief Process the rows returned by 'async_stmt_execute_store_result'. Extracts all the received
 	 *   rows from 'query.stmt->result.data' but the last one, adds them to 'MyRS', frees the buffer
@@ -449,8 +448,7 @@ class PgSQL_Connection_Placeholder {
 	 * @param processed_bytes Reference to the already processed bytes to be updated with the rows
 	 *   that are being read and added to 'MyRS'.
 	 */
-	void process_rows_in_ASYNC_STMT_EXECUTE_STORE_RESULT_CONT(unsigned long long& processed_bytes);
-#endif // 0
+	void process_rows_in_ASYNC_STMT_EXECUTE_STORE_RESULT_CONT(uint64_t& processed_bytes);
 
 	void async_free_result();
 

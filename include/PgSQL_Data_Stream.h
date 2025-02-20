@@ -94,7 +94,7 @@ public:
 	} CompPktOUT;
 
 	PgSQL_Protocol myprot;
-	PgDS_real_query pgsql_real_query;
+	PgDS_real_query mysql_real_query; // FIXME: rename this!!
 	bytes_stats_t bytes_info; // bytes statistics
 
 	PtrSize_t multi_pkt;

@@ -296,7 +296,6 @@ public:
 	unsigned long long purge_query_digests_sync(bool parallel);
 */
 
-/*
   void print_version();
 	rules_mem_sts_t reset_all(bool lock = true);
 	void delete_QP_out(Query_Processor_Output* o);
@@ -313,12 +312,10 @@ public:
 	unsigned long long purge_query_digests(bool async_purge, bool parallel, char** msg);
 
 	void save_query_rules(SQLite3_result* resultset);
-
 	void wrlock(); // explicit write lock, to be used in multi-insert
 	void rdlock(); // explicit read lock
 	void wrunlock(); // explicit unlock
 	void commit(); // this applies all the changes in memory
-*/
 
 	unsigned long long get_query_digests_total_size();
 	unsigned long long get_rules_mem_used();
