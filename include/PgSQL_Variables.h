@@ -18,13 +18,10 @@ bool validate_charset(PgSQL_Session* session, int idx, int &_rc);
 bool update_server_variable(PgSQL_Session* session, int idx, int &_rc);
 bool verify_server_variable(PgSQL_Session* session, int idx, uint32_t client_hash, uint32_t server_hash);
 bool verify_set_names(PgSQL_Session* session);
-#if 0
-bool logbin_update_server_variable(PgSQL_Session* session, int idx, int &_rc);
-#endif // 0
 
 class PgSQL_Variables {
-	static pgsql_verify_var verifiers[SQL_NAME_LAST_HIGH_WM];
-	static pgsql_update_var updaters[SQL_NAME_LAST_HIGH_WM];
+	static pgsql_verify_var verifiers[PGSQL_NAME_LAST_HIGH_WM];
+	static pgsql_update_var updaters[PGSQL_NAME_LAST_HIGH_WM];
 
 public:
 	std::string variables_regexp;
@@ -48,8 +45,8 @@ public:
 
 	bool verify_variable(PgSQL_Session* session, int idx) const;
 	bool update_variable(PgSQL_Session* session, session_status status, int &_rc);
-	bool parse_variable_boolean(PgSQL_Session*sess, int idx, std::string &value1, bool* lock_hostgroup);
-	bool parse_variable_number(PgSQL_Session*sess, int idx, std::string &value1, bool* lock_hostgroup);
+	bool parse_variable_boolean(PgSQL_Session*sess, int idx, const std::string &value1, bool *lock_hostgroup, bool *send_param_status);
+	bool parse_variable_number(PgSQL_Session*sess, int idx, std::string &value1, bool *lock_hostgroup, bool *send_param_status);
 };
 
 #endif // PGSQL_VARIABLES_H

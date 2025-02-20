@@ -132,10 +132,10 @@ S Base_Thread::create_new_session_and_client_data_stream(int _fd) {
 	} else if constexpr (std::is_same_v<T, MySQL_Thread>) {
 		MySQL_Connection* myconn = new MySQL_Connection();
 		sess->client_myds->attach_connection(myconn);
+		sess->client_myds->myconn->set_is_client(); // this is used for prepared statements
 	} else {
 		assert(0);
 	}
-	sess->client_myds->myconn->set_is_client(); // this is used for prepared statements
 	sess->client_myds->myconn->last_time_used = curtime;
 	sess->client_myds->myconn->myds = sess->client_myds; // 20141011
 	sess->client_myds->myconn->fd = sess->client_myds->fd; // 20141011

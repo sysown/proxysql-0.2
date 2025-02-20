@@ -738,10 +738,8 @@ void ProxySQL_Admin::flush_pgsql_variables___database_to_runtime(SQLite3DB* db, 
 	}
 	else {
 		GloPTH->wrlock();
-		char* previous_default_charset = GloPTH->get_variable_string((char*)"default_charset");
-		char* previous_default_collation_connection = GloPTH->get_variable_string((char*)"default_collation_connection");
-		assert(previous_default_charset);
-		assert(previous_default_collation_connection);
+		const char* previous_default_client_encoding = GloPTH->get_variable_string((char*)"default_client_encoding");
+		assert(previous_default_client_encoding);		
 		for (std::vector<SQLite3_row*>::iterator it = resultset->rows.begin(); it != resultset->rows.end(); ++it) {
 			SQLite3_row* r = *it;
 			const char* value = r->fields[1];
@@ -804,83 +802,25 @@ void ProxySQL_Admin::flush_pgsql_variables___database_to_runtime(SQLite3DB* db, 
 			}
 			//			}
 		}
-
+		
 		char q[1000];
-		char* default_charset = GloPTH->get_variable_string((char*)"default_charset");
-		char* default_collation_connection = GloPTH->get_variable_string((char*)"default_collation_connection");
-		assert(default_charset);
-		assert(default_collation_connection);
-		MARIADB_CHARSET_INFO* ci = NULL;
-		ci = proxysql_find_charset_name(default_charset);
-		if (ci == NULL) {
-			// invalid charset
-			proxy_error("Found an incorrect value for pgsql-default_charset: %s\n", default_charset);
-			// let's try to get a charset from collation connection
-			ci = proxysql_find_charset_collate(default_collation_connection);
-			if (ci == NULL) {
-				proxy_error("Found an incorrect value for pgsql-default_collation_connection: %s\n", default_collation_connection);
-				const char* p = mysql_tracked_variables[SQL_CHARACTER_SET].default_value;
-				ci = proxysql_find_charset_name(p);
-				assert(ci);
-				proxy_info("Resetting pgsql-default_charset to hardcoded default value: %s\n", ci->csname);
-				sprintf(q, "INSERT OR REPLACE INTO global_variables VALUES(\"pgsql-default_charset\",\"%s\")", ci->csname);
-				db->execute(q);
-				GloPTH->set_variable((char*)"default_charset", ci->csname);
-				proxy_info("Resetting pgsql-default_collation_connection to hardcoded default value: %s\n", ci->name);
-				sprintf(q, "INSERT OR REPLACE INTO global_variables VALUES(\"pgsql-default_collation_connection\",\"%s\")", ci->name);
-				db->execute(q);
-				GloPTH->set_variable((char*)"default_collation_connection", ci->name);
-			}
-			else {
-				proxy_info("Changing pgsql-default_charset to %s using configured pgsql-default_collation_connection %s\n", ci->csname, ci->name);
-				sprintf(q, "INSERT OR REPLACE INTO global_variables VALUES(\"pgsql-default_charset\",\"%s\")", ci->csname);
-				db->execute(q);
-				GloPTH->set_variable((char*)"default_charset", ci->csname);
-			}
+		char* default_client_encoding = GloPTH->get_variable_string((char*)"default_client_encoding");
+		assert(default_client_encoding);
+
+		int charset_encoding = PgSQL_Connection::char_to_encoding(default_client_encoding);
+
+		if (charset_encoding == -1) {
+			// invalid charset_encoding
+			proxy_error("Found an incorrect value for pgsql-default_client_encoding: %s\n", default_client_encoding);
+			const char* p = pgsql_tracked_variables[PGSQL_CLIENT_ENCODING].default_value;
+			charset_encoding = PgSQL_Connection::char_to_encoding(p);
+			assert(charset_encoding != -1);
+			proxy_info("Resetting pgsql-default_client_encoding to hardcoded default value: %s\n", p);
+			sprintf(q, "INSERT OR REPLACE INTO global_variables VALUES(\"pgsql-default_client_encoding\",\"%s\")", p);
+			db->execute(q);
+			GloPTH->set_variable((char*)"default_client_encoding", p);
 		}
-		else {
-			MARIADB_CHARSET_INFO* cic = NULL;
-			cic = proxysql_find_charset_collate(default_collation_connection);
-			if (cic == NULL) {
-				proxy_error("Found an incorrect value for pgsql-default_collation_connection: %s\n", default_collation_connection);
-				proxy_info("Changing pgsql-default_collation_connection to %s using configured pgsql-default_charset: %s\n", ci->name, ci->csname);
-				sprintf(q, "INSERT OR REPLACE INTO global_variables VALUES(\"pgsql-default_collation_connection\",\"%s\")", ci->name);
-				db->execute(q);
-				GloPTH->set_variable((char*)"default_collation_connection", ci->name);
-			}
-			else {
-				if (strcmp(cic->csname, ci->csname) == 0) {
-					// pgsql-default_collation_connection and pgsql-default_charset are compatible
-				}
-				else {
-					proxy_error("Found incompatible values for pgsql-default_charset (%s) and pgsql-default_collation_connection (%s)\n", default_charset, default_collation_connection);
-					bool use_collation = true;
-					if (strcmp(default_charset, previous_default_charset)) { // charset changed
-						if (strcmp(default_collation_connection, previous_default_collation_connection) == 0) { // collation didn't change
-							// the user has changed the charset but not the collation
-							// we use charset as source of truth
-							use_collation = false;
-						}
-					}
-					if (use_collation) {
-						proxy_info("Changing pgsql-default_charset to %s using configured pgsql-default_collation_connection %s\n", cic->csname, cic->name);
-						sprintf(q, "INSERT OR REPLACE INTO global_variables VALUES(\"pgsql-default_charset\",\"%s\")", cic->csname);
-						db->execute(q);
-						GloPTH->set_variable((char*)"default_charset", cic->csname);
-					}
-					else {
-						proxy_info("Changing pgsql-default_collation_connection to %s using configured pgsql-default_charset: %s\n", ci->name, ci->csname);
-						sprintf(q, "INSERT OR REPLACE INTO global_variables VALUES(\"pgsql-default_collation_connection\",\"%s\")", ci->name);
-						db->execute(q);
-						GloPTH->set_variable((char*)"default_collation_connection", ci->name);
-					}
-				}
-			}
-		}
-		free(default_charset);
-		free(default_collation_connection);
-		free(previous_default_charset);
-		free(previous_default_collation_connection);
+		free(default_client_encoding);
 		GloPTH->commit();
 		GloPTH->wrunlock();
 
