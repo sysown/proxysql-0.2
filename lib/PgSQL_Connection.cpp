@@ -1856,8 +1856,8 @@ void PgSQL_Connection::ProcessQueryAndSetStatusFlags(char* query_digest_text) {
 			set_status(false, STATUS_MYSQL_CONNECTION_LOCK_TABLES);
 		}
 	}
-	if (get_status(STATUS_MYSQL_CONNECTION_GET_LOCK) == false) { // we search for get_lock if not already set
-		if (strcasestr(query_digest_text, "GET_LOCK(")) {
+	if (get_status(STATUS_MYSQL_CONNECTION_GET_LOCK) == false) { // we search for pg_advisory_xact_lock* if not already set
+		if (strcasestr(query_digest_text, "SELECT pg_advisory_xact_lock")) {
 			set_status(true, STATUS_MYSQL_CONNECTION_GET_LOCK);
 		}
 	}
