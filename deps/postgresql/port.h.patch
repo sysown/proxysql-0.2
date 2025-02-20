@@ -1,0 +1,19 @@
+--- port.h	2024-05-06 20:21:25.000000000 +0000
++++ port.h	2024-09-04 10:57:58.155088100 +0000
+@@ -163,6 +163,7 @@
+ /* Portable delay handling */
+ extern void pg_usleep(long microsec);
+ 
++#ifndef PG_SYM_PROXYSQL
+ /* Portable SQL-like case-independent comparisons and conversions */
+ extern int	pg_strcasecmp(const char *s1, const char *s2);
+ extern int	pg_strncasecmp(const char *s1, const char *s2, size_t n);
+@@ -243,6 +244,8 @@
+ #define vprintf			pg_vprintf
+ #define printf(...)		pg_printf(__VA_ARGS__)
+ 
++#endif // PG_SYM_PROXYSQL
++
+ /* This is also provided by snprintf.c */
+ extern int	pg_strfromd(char *str, size_t count, int precision, double value);
+ 

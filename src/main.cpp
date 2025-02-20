@@ -22,6 +22,7 @@ using json = nlohmann::json;
 
 #include "ProxySQL_Statistics.hpp"
 #include "MySQL_PreparedStatement.h"
+#include "PgSQL_PreparedStatement.h"
 #include "ProxySQL_Cluster.hpp"
 #include "MySQL_Logger.hpp"
 #include "PgSQL_Logger.hpp"
@@ -470,7 +471,9 @@ ProxySQL_Admin *GloAdmin;
 MySQL_Threads_Handler *GloMTH = NULL;
 PgSQL_Threads_Handler* GloPTH = NULL;
 Web_Interface *GloWebInterface;
+
 MySQL_STMT_Manager_v14 *GloMyStmt;
+PgSQL_STMT_Manager_v14 *GloPgStmt;
 
 MySQL_Monitor *GloMyMon;
 PgSQL_Monitor *GloPgMon;
@@ -896,6 +899,7 @@ void ProxySQL_Main_init_main_modules() {
 	GloMyLogger=NULL;
 	GloPgSQL_Logger = NULL;
 	GloMyStmt=NULL;
+	GloPgStmt=NULL;
 
 	// initialize libev
 	if (!ev_default_loop (EVBACKEND_POLL | EVFLAG_NOENV)) {
@@ -914,6 +918,7 @@ void ProxySQL_Main_init_main_modules() {
 	GloPgSQL_Logger = new PgSQL_Logger();
 	GloPgSQL_Logger->print_version();
 	GloMyStmt=new MySQL_STMT_Manager_v14();
+	GloPgStmt=new PgSQL_STMT_Manager_v14();
 
 	PgHGM = new PgSQL_HostGroups_Manager();
 	PgHGM->init();
@@ -1279,6 +1284,10 @@ void ProxySQL_Main_shutdown_all_modules() {
 	if (GloMyStmt) {
 		delete GloMyStmt;
 		GloMyStmt=NULL;
+	}
+	if (GloPgStmt) {
+		delete GloPgStmt;
+		GloPgStmt=NULL;
 	}
 }
 

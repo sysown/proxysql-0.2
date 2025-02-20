@@ -155,6 +155,14 @@ enum debug_module {
 	PROXY_DEBUG_RESTAPI,
 	PROXY_DEBUG_MONITOR,
 	PROXY_DEBUG_CLUSTER,
+	PROXY_DEBUG_PGSQL_COM,
+	PROXY_DEBUG_PGSQL_SERVER,
+	PROXY_DEBUG_PGSQL_CONNECTION,
+	PROXY_DEBUG_PGSQL_CONNPOOL,
+	PROXY_DEBUG_PGSQL_RW_SPLIT,
+	PROXY_DEBUG_PGSQL_AUTH,
+	PROXY_DEBUG_PGSQL_PROTOCOL,
+	PROXY_DEBUG_PGSQL_QUERY_PROCESSOR,
 	PROXY_DEBUG_UNKNOWN // this module doesn't exist. It is used only to define the last possible module
 };
 
@@ -274,6 +282,10 @@ enum session_status {
 	SHOW_WARNINGS,
 	SETTING_NEXT_ISOLATION_LEVEL,
 	SETTING_NEXT_TRANSACTION_READ,
+	PGSQL_PROCESSING_PARSE,
+	PGSQL_PROCESSING_BIND,
+	PGSQL_PROCESSING_DESCRIBE,
+	PGSQL_PROCESSING_EXECUTE,
 	session_status___NONE // special marker
 };
 
@@ -727,6 +739,8 @@ class PgSQL_HostGroups_Manager;
 class ProxySQL_HTTP_Server;
 class MySQL_STMTs_local_v14;
 class MySQL_STMT_Global_info;
+class PgSQL_STMTs_local_v14;
+class PgSQL_STMT_Global_info;
 class StmtLongDataHandler;
 class ProxySQL_Cluster;
 class MySQL_ResultSet;

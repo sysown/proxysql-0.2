@@ -4713,15 +4713,18 @@ SQLite3_result* PgSQL_Threads_Handler::SQL3_Processlist() {
 						}
 					}
 					else { // prepared statement
-						MySQL_STMT_Global_info* si = sess->CurrentQuery.stmt_info;
+/*
+	// FIXME: completely disabled for now
+						PgSQL_STMT_Global_info* si = sess->CurrentQuery.stmt_info;
 						if (si->query_length) {
 							pta[13] = (char*)malloc(si->query_length + 1);
 							strncpy(pta[13], si->query, si->query_length);
 							pta[13][si->query_length] = '\0';
 						}
 						else {
+*/
 							pta[13] = NULL;
-						}
+//						}
 					}
 					sprintf(buf, "%d", mc->status_flags);
 					pta[14] = strdup(buf);

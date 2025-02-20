@@ -85,7 +85,7 @@ void Base_Session<S,DS,B,T>::init() {
 		sess_STMTs_meta = new MySQL_STMTs_meta();
 		SLDH = new StmtLongDataHandler();
 	} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
-		sess_STMTs_meta = NULL;
+		sess_STMTs_meta = new MySQL_STMTs_meta();
 		SLDH = NULL;
 	} else {
 		assert(0);

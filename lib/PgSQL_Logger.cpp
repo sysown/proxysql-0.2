@@ -714,7 +714,7 @@ void PgSQL_Logger::log_request(PgSQL_Session *sess, PgSQL_Data_Stream *myds) {
 	if (sess->status != PROCESSING_STMT_EXECUTE) {
 		query_digest = GloPgQPro->get_digest(&sess->CurrentQuery.QueryParserArgs);
 	} else {
-		query_digest = sess->CurrentQuery.stmt_info->digest;
+	//	query_digest = sess->CurrentQuery.stmt_info->digest;
 	}
 
 	PgSQL_Event me(let,
@@ -727,12 +727,14 @@ void PgSQL_Logger::log_request(PgSQL_Session *sess, PgSQL_Data_Stream *myds) {
 	char *c = NULL;
 	int ql = 0;
 	switch (sess->status) {
+/*
 		case PROCESSING_STMT_EXECUTE:
 			c = (char *)sess->CurrentQuery.stmt_info->query;
 			ql = sess->CurrentQuery.stmt_info->query_length;
 			me.set_client_stmt_id(sess->CurrentQuery.stmt_client_id);
 			break;
 		case PROCESSING_STMT_PREPARE:
+*/
 		default:
 			c = (char *)sess->CurrentQuery.QueryPointer;
 			ql = sess->CurrentQuery.QueryLength;

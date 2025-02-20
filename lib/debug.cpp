@@ -537,6 +537,14 @@ void init_debug_struct() {
 	GloVars.global.gdbg_lvl[PROXY_DEBUG_RESTAPI].name=(char *)"debug_restapi";
 	GloVars.global.gdbg_lvl[PROXY_DEBUG_MONITOR].name=(char *)"debug_monitor";
 	GloVars.global.gdbg_lvl[PROXY_DEBUG_CLUSTER].name=(char *)"debug_cluster";
+	GloVars.global.gdbg_lvl[PROXY_DEBUG_PGSQL_COM].name=(char *)"debug_pgsql_com";
+	GloVars.global.gdbg_lvl[PROXY_DEBUG_PGSQL_SERVER].name=(char *)"debug_pgsql_server";
+	GloVars.global.gdbg_lvl[PROXY_DEBUG_PGSQL_CONNECTION].name=(char *)"debug_pgsql_connection";
+	GloVars.global.gdbg_lvl[PROXY_DEBUG_PGSQL_CONNPOOL].name=(char *)"debug_pgsql_connpool";
+	GloVars.global.gdbg_lvl[PROXY_DEBUG_PGSQL_RW_SPLIT].name=(char *)"debug_pgsql_rw_split";
+	GloVars.global.gdbg_lvl[PROXY_DEBUG_PGSQL_AUTH].name=(char *)"debug_pgsql_auth";
+	GloVars.global.gdbg_lvl[PROXY_DEBUG_PGSQL_PROTOCOL].name=(char *)"debug_pgsql_protocol";
+	GloVars.global.gdbg_lvl[PROXY_DEBUG_PGSQL_QUERY_PROCESSOR].name=(char *)"debug_pgsql_query_processor";
 
 	for (i=0;i<PROXY_DEBUG_UNKNOWN;i++) {
 		// if this happen, the above table is not populated correctly

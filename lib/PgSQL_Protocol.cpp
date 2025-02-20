@@ -97,6 +97,45 @@ void PG_pkt::finish_packet() {
 	*pos++ = len & 255;
 }
 
+/**
+ * @brief Writes a packet with generic data types based on a descriptor string.
+ *
+ * This function allows for flexible packet construction by defining the data
+ * types and order using a descriptor string. It supports various data types,
+ * including char, uint16, uint32, uint64, C-style strings, and byte arrays.
+ *
+ * @param type The packet type identifier.
+ * @param pktdesc A string describing the packet structure. Each character
+ *                represents a specific data type:
+ *                - 'c': char/byte
+ *                - 'h': uint16
+ *                - 'i': uint32
+ *                - 'q': uint64
+ *                - 's': C-style string
+ *                - 'b': byte array
+ * @param ... Variable arguments containing the actual data to write.
+ *            The order and type of the arguments must match the descriptor string.
+ *
+ * @note The function assumes the existence of helper functions:
+ *       - start_packet(int type): Initializes a new packet with the specified type.
+ *       - finish_packet(): Finalizes the packet and prepares it for transmission.
+ *       - put_char(int): Writes a single byte (character) to the packet.
+ *       - put_uint16(int): Writes a 16-bit unsigned integer to the packet.
+ *       - put_uint32(int): Writes a 32-bit unsigned integer to the packet.
+ *       - put_uint64(uint64_t): Writes a 64-bit unsigned integer to the packet.
+ *       - put_string(char*): Writes a null-terminated string to the packet.
+ *       - put_bytes(uint8_t* bin, int len): Writes a block of bytes to the packet.
+ *
+ * @note If the 'multiple_pkt_mode' flag is set, the current packet size is
+ *       stored in the 'pkt_offset' vector. This allows for handling multiple
+ *       packets within a larger transmission.
+ *
+ * @warning It is crucial to ensure the correct order and types of the variable
+ *          arguments match the descriptor string. Incorrect data types can lead
+ *          to undefined behavior or crashes.
+ *
+ */
+
 void PG_pkt::write_generic(int type, const char *pktdesc, ...) {
 	va_list ap;
 	const char *adesc = pktdesc;
@@ -1268,6 +1307,29 @@ char* extract_tag_from_query(const char* query) {
 	}
 }
 
+void PgSQL_Protocol::generate_ParseComplete(bool send, PtrSize_t* _ptr) {
+	assert(send == true || _ptr != nullptr);
+
+	const size_t ParseComplete_length = 5;
+	const size_t ReadyForQuery_length = 6;
+
+	PG_pkt pgpkt(ParseComplete_length+ReadyForQuery_length);
+
+	pgpkt.put_char('1');
+	pgpkt.put_uint32(ParseComplete_length - 1);
+	pgpkt.set_multi_pkt_mode(true);
+	pgpkt.write_ReadyForQuery();
+	pgpkt.set_multi_pkt_mode(false);
+
+
+	auto buff = pgpkt.detach();
+	if (send == true) {
+		(*myds)->PSarrayOUT->add((void*)buff.first, buff.second);
+	} else {
+		_ptr->ptr = buff.first;
+		_ptr->size = buff.second;
+	}
+}
 
 bool PgSQL_Protocol::generate_ok_packet(bool send, bool ready, const char* msg, int rows, const char* query, char trx_state, PtrSize_t* _ptr) {
 	// to avoid memory leak
@@ -2160,4 +2222,301 @@ void PgSQL_Query_Result::reset() {
 	pkt_count = 0;
 	affected_rows = -1;
 	result_packet_type = PGSQL_QUERY_RESULT_NO_DATA;
+}
+
+
+bool PgBindPacket::parseBindPacket(PtrSize_t& pkt) {
+	const char *packet = (const char *)pkt.ptr;
+	size_t length = pkt.size;
+	size_t offset = 0;
+
+	// Ensure packet length is sufficient for the initial 'B' identifier and the length field
+	if (length < sizeof(char) + sizeof(int32_t)) {
+		return false;
+	}
+
+	// Skip the initial 'B' identifier
+	offset += sizeof(char);
+
+	// Skip the length field
+	offset += sizeof(int32_t);
+
+	// Validate length for portal name
+	if (offset >= length) {
+		return false;
+	}
+
+	// Read the portal name
+	this->portal_name = packet + offset;
+	size_t portal_name_length = strlen(this->portal_name) + 1;
+	offset += portal_name_length;
+
+	// Validate length for statement name
+	if (offset >= length) {
+		return false;
+	}
+
+	// Read the statement name
+	this->statement_name = packet + offset;
+	size_t statement_name_length = strlen(this->statement_name) + 1;
+	offset += statement_name_length;
+
+	// Validate length for parameter format count
+	if (offset + sizeof(int16_t) > length) {
+		return false;
+	}
+
+	// Read the parameter format codes count
+	paramFormatCount = ntohs(*reinterpret_cast<const int16_t*>(packet + offset));
+	offset += sizeof(int16_t);
+
+	// Validate length for parameter format codes
+	if (offset + paramFormatCount * sizeof(int16_t) > length) {
+		return false;
+	}
+
+	this->param_formats = new int[paramFormatCount];
+	for (int i = 0; i < paramFormatCount; ++i) {
+		this->param_formats[i] = ntohs(*reinterpret_cast<const int16_t*>(packet + offset));
+		offset += sizeof(int16_t);
+	}
+
+	// Validate length for parameter value count
+	if (offset + sizeof(int16_t) > length) {
+		return false;
+	}
+
+	// Read the parameter values count
+	int16_t paramValueCount = ntohs(*reinterpret_cast<const int16_t*>(packet + offset));
+	offset += sizeof(int16_t);
+
+	this->num_parameters = paramValueCount;
+	this->param_values = new char*[paramValueCount];
+	this->param_lengths = new int[paramValueCount];
+
+	for (int i = 0; i < paramValueCount; ++i) {
+		// Validate length for each parameter value length field
+		if (offset + sizeof(int32_t) > length) {
+			return false;
+		}
+
+		int32_t valueLength = ntohl(*reinterpret_cast<const int32_t*>(packet + offset));
+		offset += sizeof(int32_t);
+
+		// Validate length for the actual parameter value
+		if (offset + valueLength > length) {
+			return false;
+		}
+
+		this->param_lengths[i] = valueLength;
+		this->param_values[i] = const_cast<char*>(packet + offset);
+		offset += valueLength;
+	}
+
+	// Validate length for result column format codes
+	if (offset + sizeof(int16_t) > length) {
+		return false;
+	}
+
+	int16_t resultFormatCount = ntohs(*reinterpret_cast<const int16_t*>(packet + offset));
+	offset += sizeof(int16_t);
+
+	// Validate length for all result column format codes
+	if (offset + resultFormatCount * sizeof(int16_t) > length) {
+		return false;
+	}
+
+	this->num_result_formats = resultFormatCount;
+	this->result_formats = new int[resultFormatCount];
+	for (int i = 0; i < resultFormatCount; ++i) {
+		this->result_formats[i] = ntohs(*reinterpret_cast<const int16_t*>(packet + offset));
+		offset += sizeof(int16_t);
+	}
+
+	// take "ownership"
+	this->pkt_size = pkt.size;
+	this->pkt_ptr = pkt.ptr;
+	return true;
+}
+
+bool PgSQL_Protocol::parseDescribePacket(PgDescribePacket& describePacket, PtrSize_t& pkt) {
+	const char *packet = (const char *)pkt.ptr;
+	size_t length = pkt.size;
+	size_t offset = 0;
+
+	// Check if the packet length is sufficient for the initial 'D' identifier and length field
+	if (length < 5) {  // 1 byte for message type + 4 bytes for message length
+		return false;
+	}
+
+	// Skip the initial 'D' identifier
+	offset += sizeof(char);
+
+	// Read the length of the packet (4 bytes, big-endian)
+	int32_t packetLength = ntohl(*reinterpret_cast<const int32_t*>(packet + offset));
+	offset += sizeof(int32_t);
+
+	// Check if the reported packet length matches the provided length
+	if (static_cast<size_t>(packetLength) != length - 1) {
+		return false;
+	}
+
+	// Check if remaining packet length is sufficient for the type and name fields
+	if (length < offset + sizeof(char) + 1) {
+		return false;  // Not enough data for type and at least null-terminated name
+	}
+
+	// Read the type ('S' for prepared statement, 'P' for portal)
+	describePacket.type = packet[offset];
+	offset += sizeof(char);
+
+	// Validate type field
+	if (describePacket.type != 'S' && describePacket.type != 'P') {
+		return false;  // Invalid type field
+	}
+
+	// Read the name (null-terminated string)
+	describePacket.name = packet + offset;
+
+	// Ensure there is a null-terminator within the packet length
+	size_t name_length = strnlen(describePacket.name, length - offset);
+	if (offset + name_length >= length) {
+		return false;  // No null-terminator found within the packet bounds
+	}
+
+	return true;  // Successfully parsed Describe packet
+}
+
+
+bool PgSQL_Protocol::parseExecutePacket(PgExecutePacket& executePacket, PtrSize_t& pkt) {
+	const char *packet = (const char *)pkt.ptr;
+	size_t length = pkt.size;
+	size_t offset = 0;
+
+	// Check if the packet length is sufficient for the initial 'E' identifier and length field
+	if (length < 5) {  // 1 byte for message type + 4 bytes for message length
+		return false;
+	}
+
+	// Skip the initial 'E' identifier
+	offset += sizeof(char);
+
+	// Read the length of the packet (4 bytes, big-endian)
+	int32_t packetLength = ntohl(*reinterpret_cast<const int32_t*>(packet + offset));
+	offset += sizeof(int32_t);
+
+	// Check if the reported packet length matches the provided length
+	if (static_cast<size_t>(packetLength) != length - 1) {
+		return false;
+	}
+
+	// Validate remaining length for portal name (at least 1 byte for null-terminated string)
+	if (offset >= length) {
+		return false;  // Not enough data for portal name
+	}
+
+	// Read the portal name (null-terminated string)
+	executePacket.portal_name = packet + offset;
+	size_t portal_name_length = strnlen(executePacket.portal_name, length - offset);
+
+	// Ensure there is a null-terminator within the packet length
+	if (offset + portal_name_length >= length) {
+		return false;  // No null-terminator found within the packet bounds
+	}
+
+	offset += portal_name_length + 1;  // Move past the null-terminated portal name
+
+	// Validate remaining length for max_rows field
+	if (offset + sizeof(int32_t) > length) {
+		return false;  // Not enough data for max_rows
+	}
+
+	// Read the max_rows (4-byte integer)
+	executePacket.max_rows = ntohl(*reinterpret_cast<const int32_t*>(packet + offset));
+
+	return true;  // Successfully parsed Execute packet
+}
+
+
+bool PgParsePacket::parseParsePacket(PtrSize_t& pkt) {
+	const char *packet = (const char *)pkt.ptr;
+	size_t length = pkt.size;
+    size_t offset = 0;
+
+    // Check if the packet length is sufficient for the initial 'P' identifier and length field
+    if (length < 5) {  // 1 byte for message type + 4 bytes for message length
+        return false;
+    }
+
+    // Skip the initial 'P' identifier
+    offset += sizeof(char);
+
+    // Read the length of the packet (4 bytes, big-endian)
+    int32_t packetLength = ntohl(*reinterpret_cast<const int32_t*>(packet + offset));
+    offset += sizeof(int32_t);
+
+    // Check if the reported packet length matches the provided length
+    if (static_cast<size_t>(packetLength) != length - 1) {
+        return false;
+    }
+
+    // Validate remaining length for statement name (at least 1 byte for null-terminated string)
+    if (offset >= length) {
+        return false;  // Not enough data for statement name
+    }
+
+    // Read the statement name (null-terminated string)
+    this->statementName = packet + offset;
+    size_t statement_name_length = strnlen(this->statementName, length - offset);
+
+    // Ensure there is a null-terminator within the packet length
+    if (offset + statement_name_length >= length) {
+        return false;  // No null-terminator found within the packet bounds
+    }
+
+    offset += statement_name_length + 1;  // Move past the null-terminated statement name
+
+    // Validate remaining length for query string (at least 1 byte for null-terminated string)
+    if (offset >= length) {
+        return false;  // Not enough data for query string
+    }
+
+    // Read the query string (null-terminated string)
+    this->query = packet + offset;
+    size_t query_length = strnlen(this->query, length - offset);
+
+    // Ensure there is a null-terminator within the packet length
+    if (offset + query_length >= length) {
+        return false;  // No null-terminator found within the packet bounds
+    }
+
+    offset += query_length + 1;  // Move past the null-terminated query string
+
+    // Validate remaining length for number of parameter types (2 bytes)
+    if (offset + sizeof(int16_t) > length) {
+        return false;  // Not enough data for numParameterTypes
+    }
+
+    // Read the number of parameter types (2-byte integer)
+    this->numParameterTypes = ntohs(*reinterpret_cast<const int16_t*>(packet + offset));
+    offset += sizeof(int16_t);
+
+    // If there are parameter types, ensure there's enough data for all of them
+    if (this->numParameterTypes > 0) {
+        if (offset + this->numParameterTypes * sizeof(int32_t) > length) {
+            return false;  // Not enough data for all parameter types
+        }
+
+        // Read the parameter types array (each is 4 bytes, big-endian)
+        this->parameterTypes = reinterpret_cast<const int32_t*>(packet + offset);
+
+        // Move past the parameter types
+        offset += this->numParameterTypes * sizeof(int32_t);
+    }
+
+	// take "ownership"
+	this->pkt_size = pkt.size;
+	this->pkt_ptr = pkt.ptr;
+    // If we reach here, the packet is valid and fully parsed
+    return true;
 }

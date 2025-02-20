@@ -33,7 +33,6 @@ class PgSQL_Event {
 	uint64_t last_insert_id;
 	uint64_t rows_sent;
 	uint32_t client_stmt_id;
-
 	public:
 	PgSQL_Event(log_event_type _et, uint32_t _thread_id, char * _username, char * _schemaname , uint64_t _start_time , uint64_t _end_time , uint64_t _query_digest, char *_client, size_t _client_len);
 	uint64_t write(std::fstream *f, PgSQL_Session *sess);

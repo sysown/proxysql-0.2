@@ -77,6 +77,74 @@ struct PG_Field {
 
 using PG_Fields = std::vector<PG_Field>;
 
+class PgBindPacket {
+public:
+	const char *portal_name;
+	const char *statement_name;
+	int num_parameters;
+	int16_t paramFormatCount = 0;
+	char **param_values;	// Array of pointers to parameter values
+	int *param_lengths;		// Array of lengths of parameter values
+	int *param_formats;		// Array of format codes for parameters
+	int num_result_formats;
+	int *result_formats;	// Array of format codes for result columns
+	unsigned int pkt_size = 0;
+	void *pkt_ptr = nullptr;
+
+	PgBindPacket() : portal_name(nullptr), statement_name(nullptr), num_parameters(0),
+				param_values(nullptr), param_lengths(nullptr), param_formats(nullptr),
+				num_result_formats(0), result_formats(nullptr) {}
+
+	~PgBindPacket() {
+		delete[] param_values;
+		delete[] param_lengths;
+		delete[] param_formats;
+		delete[] result_formats;
+		if (pkt_ptr != nullptr) {
+			free(pkt_ptr);
+			pkt_ptr = nullptr;
+		}
+	}
+	bool parseBindPacket(PtrSize_t& pkt);
+};
+
+
+class PgDescribePacket {
+public:
+	char type;			// 'S' for prepared statement or 'P' for portal
+	const char* name;	// The name of the prepared statement or portal
+
+	PgDescribePacket() : type(0), name(nullptr) {}
+};
+
+class PgExecutePacket {
+public:
+	const char* portal_name;	// The name of the portal to execute
+	int max_rows;				// Maximum number of rows to return
+
+	PgExecutePacket() : portal_name(nullptr), max_rows(0) {}
+};
+
+class PgParsePacket {
+public:
+	const char* statementName;	// The name of the prepared statement
+	const char* query;			// The query string to be prepared
+	int16_t numParameterTypes;	// Number of parameter types specified
+	const int32_t* parameterTypes;	// Array of parameter types (can be nullptr if none)
+	unsigned int pkt_size = 0;
+	void *pkt_ptr = nullptr;
+
+	PgParsePacket() : statementName(nullptr), query(nullptr), numParameterTypes(0), parameterTypes(nullptr) {}
+
+	~PgParsePacket() {
+		if (pkt_ptr != nullptr) {
+			free(pkt_ptr);
+			pkt_ptr = nullptr;
+		}
+	}
+	bool parseParsePacket(PtrSize_t& pkt);
+};
+
 class PG_pkt 
 {
 public:
@@ -595,7 +663,7 @@ public:
 		myds = __myds;
 		userinfo = __userinfo;
 		sess = __sess;
-		current_PreStmt = NULL;
+		//current_PreStmt = NULL;
 	}
 	PgSQL_Data_Stream* get_myds() { return *myds; }
 
@@ -705,6 +773,7 @@ public:
 	 */
 	void generate_error_packet(bool send, bool ready, const char* msg, PGSQL_ERROR_CODES code, bool fatal, bool track = false, PtrSize_t* _ptr = NULL);
 
+
 	/**
 	 * @brief Generates an "OK" packet for the PostgreSQL protocol.
 	 * 
@@ -761,6 +830,8 @@ public:
 		generate_error_packet(send, true, sql_message, PGSQL_ERROR_CODES::ERRCODE_RAISE_EXCEPTION, false, track);
 		return true;
 	}
+
+	void generate_ParseComplete(bool send, PtrSize_t* _ptr);
 
 	//bool generate_row_description(bool send, PgSQL_Query_Result* rs, const PG_Fields& fields, unsigned int size);
 
@@ -908,6 +979,9 @@ public:
 	 * @return The number of bytes copied to the `PgSQL_Query_Result` object.
 	 */
 	unsigned int copy_buffer_to_PgSQL_Query_Result(bool send, PgSQL_Query_Result* pg_query_result, const PSresult* result);
+	//static bool parseBindPacket(PgBindPacket& bindPacket, PtrSize_t& pkt);
+	static bool parseDescribePacket(PgDescribePacket& describePacket, PtrSize_t& pkt);
+	static bool parseExecutePacket(PgExecutePacket& executePacket, PtrSize_t& pkt);
 
     /**
      * @brief Copies the start of a response to a PgSQL_Query_Result.

@@ -27,7 +27,7 @@ typedef struct _pgsql_queue_t {
 } pgsql_queue_t;
 
 // this class avoid copying data
-class PgSQL_MyDS_real_query {
+class PgDS_real_query {
 public:
 	PtrSize_t pkt; // packet coming from the client
 	char* QueryPtr;	// pointer to beginning of the query
@@ -41,12 +41,20 @@ public:
 		*/
 		pkt.ptr = _pkt->ptr;
 		pkt.size = _pkt->size;
-		QuerySize = pkt.size - 5;
-		if (QuerySize == 0) {
-			QueryPtr = const_cast<char*>("");
-		}
-		else {
-			QueryPtr = (char*)pkt.ptr + 5;
+		char *p = (char*)pkt.ptr;
+		if (p[0] == 'P') { // Parse packet
+			char * stmt_name = p+5;
+			size_t l = strlen(stmt_name);
+			QueryPtr = stmt_name + l + 1;
+			QuerySize = strlen((const char*)QueryPtr);
+		} else {
+			QuerySize = pkt.size - 5;
+			if (QuerySize == 0) {
+				QueryPtr = const_cast<char*>("");
+			}
+			else {
+				QueryPtr = (char*)pkt.ptr + 5;
+			}
 		}
 	}
 	void end() {
@@ -86,7 +94,7 @@ public:
 	} CompPktOUT;
 
 	PgSQL_Protocol myprot;
-	PgSQL_MyDS_real_query mysql_real_query;
+	PgDS_real_query mysql_real_query; // FIXME: rename this!!
 	bytes_stats_t bytes_info; // bytes statistics
 
 	PtrSize_t multi_pkt;

@@ -269,7 +269,34 @@ public:
 	Query_Processor(int _query_rules_fast_routing_algorithm);
 	~Query_Processor();
 
-	void print_version();
+
+/*
+	void query_parser_init(SQP_par_t *qp, char *query, int query_length, int flags);
+	enum MYSQL_COM_QUERY_command query_parser_command_type(SQP_par_t *qp);
+	bool query_parser_first_comment(Query_Processor_Output *qpo, char *fc);
+	void query_parser_free(SQP_par_t *qp);
+	char * get_digest_text(SQP_par_t *qp);
+	uint64_t get_digest(SQP_par_t *qp);
+	bool is_valid_gtid(char *gtid, size_t gtid_len);
+	template<typename S, typename CI, typename SGI>
+	void update_query_digest(SQP_par_t *qp, int hid, CI* ui, unsigned long long t, unsigned long long n, SGI *_stmt_info, S * sess);
+	template<typename S>
+	unsigned long long query_parser_update_counters(S* sess, enum MYSQL_COM_QUERY_command c, SQP_par_t *qp, unsigned long long t);
+
+	SQLite3_result * get_stats_commands_counters();
+	SQLite3_result * get_query_digests();
+	SQLite3_result * get_query_digests_reset();
+	std::pair<SQLite3_result *, int> get_query_digests_v2(const bool use_resultset = true);
+	std::pair<SQLite3_result *, int> get_query_digests_reset_v2(
+		const bool copy, const bool use_resultset = true
+	);
+	void get_query_digests_reset(umap_query_digest *uqd, umap_query_digest_text *uqdt);
+	unsigned long long purge_query_digests(bool async_purge, bool parallel, char **msg);
+	unsigned long long purge_query_digests_async(char **msg);
+	unsigned long long purge_query_digests_sync(bool parallel);
+*/
+
+  void print_version();
 	rules_mem_sts_t reset_all(bool lock = true);
 	void delete_QP_out(Query_Processor_Output* o);
 	void query_parser_init(SQP_par_t* qp, const char* query, int query_length, int flags);
@@ -285,7 +312,6 @@ public:
 	unsigned long long purge_query_digests(bool async_purge, bool parallel, char** msg);
 
 	void save_query_rules(SQLite3_result* resultset);
-
 	void wrlock(); // explicit write lock, to be used in multi-insert
 	void rdlock(); // explicit read lock
 	void wrunlock(); // explicit unlock

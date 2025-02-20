@@ -36,9 +36,12 @@ class Timer {
 #ifdef DEBUG
 #define PROXY_TRACE() { proxy_debug(PROXY_DEBUG_GENERIC,10,"TRACE\n"); }
 #define PROXY_TRACE2()
+#define PROXY_TRACE3() { proxy_info("TRACE\n"); }
+//#define PROXY_TRACE3()
 #else
 #define PROXY_TRACE()
 #define PROXY_TRACE2()
+#define PROXY_TRACE3()
 #endif
 
 #ifdef DEBUG

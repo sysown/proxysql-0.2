@@ -135,9 +135,16 @@ int ProxySQL_Test___GenerateRandomQueryInDigestTable(int n) {
 					myhash.Update(ui.schemaname,strlen(ui.schemaname));
 					myhash.Update(&hg,sizeof(hg));
 					myhash.Final(&qp.digest_total,&hash2);
+
+
+/* FIXME: review this!!!!!
+					MySQL_STMT_Global_info *stmt_info = NULL;
+					GloQPro->update_query_digest(&qp, hg, &ui, fastrand(), 0, stmt_info, sess);
+
 					//update_query_digest(qp, sess->current_hostgroup, ui, t, sess->thread->curtime, NULL, sess);
 					GloMyQPro->update_query_digest(qp.digest_total,qp.digest,qp.digest_text,hg,&ui,fastrand(),0,"",
 						sess->CurrentQuery.affected_rows, sess->CurrentQuery.rows_sent);
+*/
 				}
 			}
 		}

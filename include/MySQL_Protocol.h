@@ -4,7 +4,7 @@
 #include "proxysql.h"
 #include "cpp.h"
 #include "MySQL_Variables.h"
-#include "MySQL_Prepared_Stmt_info.h"
+//#include "MySQL_Prepared_Stmt_info.h"
 
 #define RESULTSET_BUFLEN 16300
 
@@ -133,7 +133,7 @@ class MySQL_Protocol {
 #ifdef DEBUG
 	bool dump_pkt;
 #endif
-	MySQL_Prepared_Stmt_info *current_PreStmt;
+	//MySQL_Prepared_Stmt_info *current_PreStmt;
 	enum proxysql_auth_plugins sent_auth_plugin_id;
 	enum proxysql_auth_plugins auth_plugin_id;
 	uint16_t prot_status;

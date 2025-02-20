@@ -123,7 +123,7 @@ void MySQL_Protocol::init(MySQL_Data_Stream **__myds, MySQL_Connection_userinfo 
 	myds=__myds;
 	userinfo=__userinfo;
 	sess=__sess;
-	current_PreStmt=NULL;
+	//current_PreStmt=NULL;
 }
 
 static unsigned char protocol_version=10;

@@ -13,6 +13,9 @@ using json = nlohmann::json;
 #include "proxysql.h"
 #include "cpp.h"
 
+
+#include "MySQL_PreparedStatement.h"
+#include "PgSQL_PreparedStatement.h"
 #include "PgSQL_Data_Stream.h"
 #include "MySQL_Data_Stream.h"
 #include "query_processor.h"
@@ -1284,7 +1287,70 @@ Query_Processor_Output* Query_Processor<QP_DERIVED>::process_query(TypeSession* 
 	// NOTE: if ptr == NULL , we are calling process_mysql_query() on an STMT_EXECUTE
 	// to avoid unnecssary deallocation/allocation, we initialize qpo witout new allocation
 
-	if (__sync_add_and_fetch(&version,0) > _thr_SQP_version) {
+/* FIXME: port to PgSQL_Query_Processor.cpp?
+	Query_Processor_Output *ret=sess->qpo;
+	ret->init();
+
+	SQP_par_t stmt_exec_qp;
+	SQP_par_t *qp=NULL;
+	if (qi) {
+		if constexpr (std::is_same_v<S, MySQL_Session>) {
+			// NOTE: if ptr == NULL , we are calling process_mysql_query() on an STMT_EXECUTE
+			if (ptr) {
+				qp=(SQP_par_t *)&qi->QueryParserArgs;
+			} else {
+				qp=&stmt_exec_qp;
+				qp->digest = qi->stmt_info->digest;
+				qp->digest_text = qi->stmt_info->digest_text;
+				qp->first_comment = qi->stmt_info->first_comment;
+			}
+		} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
+			if (ptr) {
+				qp=(SQP_par_t *)&qi->QueryParserArgs;
+			} else {
+				assert(0); // FIXME
+			}
+		} else {
+			assert(0);
+		}
+	}
+#define stackbuffer_size 128
+	char stackbuffer[stackbuffer_size];
+	unsigned int len=0;
+	char *query=NULL;
+	if constexpr (std::is_same_v<S, MySQL_Session>) {
+		// NOTE: if ptr == NULL , we are calling process_mysql_query() on an STMT_EXECUTE
+		if (ptr) {
+			len = size-sizeof(mysql_hdr)-1;
+			if (len < stackbuffer_size) {
+				query=stackbuffer;
+			} else {
+				query=(char *)l_alloc(len+1);
+			}
+			memcpy(query,(char *)ptr+sizeof(mysql_hdr)+1,len);
+			query[len]=0;
+		} else {
+			query = qi->stmt_info->query;
+			len = qi->stmt_info->query_length;
+		}
+	} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
+		if (ptr) {
+			len = qi->QueryLength;
+			if (len < stackbuffer_size) {
+				query=stackbuffer;
+			} else {
+				query=(char *)l_alloc(len+1);
+			}
+			memcpy(query, qi->QueryPointer, len);
+			query[len]=0;
+		} else {
+			assert(0); // FIXME
+		}
+	} else {
+		assert(0);
+	}
+*/
+  if (__sync_add_and_fetch(&version,0) > _thr_SQP_version) {
 		// update local rules;
 		proxy_debug(PROXY_DEBUG_MYSQL_QUERY_PROCESSOR, 4, "Detected a changed in version. Global:%d , local:%d . Refreshing...\n", version, _thr_SQP_version);
 		rdlock();
@@ -1859,16 +1925,72 @@ void Query_Processor<QP_DERIVED>::query_parser_update_counters(TypeSession* sess
 		assert(ui->username);
 		assert(ui->schemaname);
 		myhash.Update(ui->username,strlen(ui->username));
-		myhash.Update(&digest,sizeof(digest));
+
+/* FIXME: port to PgSQL_Query_Processor.cpp?
+		myhash.Update(&qp->digest,sizeof(qp->digest));
+		myhash.Update(ui->schemaname,strlen(ui->schemaname));
+		myhash.Update(&sess->current_hostgroup,sizeof(sess->default_hostgroup));
+		myhash.Update(ca,strlen(ca));
+		myhash.Final(&qp->digest_total,&hash2);
+
+//		update_query_digest(qp, sess->current_hostgroup, ui, t, sess->thread->curtime, NULL, sess);
+
+		if constexpr (std::is_same_v<S, MySQL_Session>) {
+			MySQL_STMT_Global_info *stmt_info = NULL;
+			update_query_digest(qp, sess->current_hostgroup, ui, t, sess->thread->curtime, stmt_info, sess);
+		} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
+			PgSQL_STMT_Global_info *stmt_info = NULL;
+			update_query_digest(qp, sess->current_hostgroup, ui, t, sess->thread->curtime, stmt_info, sess);
+		} else {
+			assert(0);
+		}
+	}
+	if (sess->CurrentQuery.stmt_info && sess->CurrentQuery.stmt_info->digest_text) {
+		uint64_t hash2;
+		SpookyHash myhash;
+		myhash.Init(19,3);
+		assert(sess);
+		assert(sess->client_myds);
+		assert(sess->client_myds->myconn);
+		assert(sess->client_myds->myconn->userinfo);
+		auto *ui=sess->client_myds->myconn->userinfo;
+		assert(ui->username);
+		assert(ui->schemaname);
+		myhash.Update(ui->username,strlen(ui->username));
+		if constexpr (std::is_same_v<S, MySQL_Session>) {
+			MySQL_STMT_Global_info *stmt_info=sess->CurrentQuery.stmt_info;
+			myhash.Update(&stmt_info->digest,sizeof(qp->digest));
+		} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
+			PgSQL_STMT_Global_info *stmt_info=sess->CurrentQuery.stmt_info;
+			myhash.Update(&stmt_info->digest,sizeof(qp->digest));
+		} else {
+			assert(0);
+		}
 		myhash.Update(ui->schemaname,strlen(ui->schemaname));
 		myhash.Update(&sess->current_hostgroup,sizeof(sess->current_hostgroup));
 		myhash.Update(ca,strlen(ca));
-		myhash.Final(&digest_total,&hash2);
-		update_query_digest(digest_total, digest, digest_text, sess->current_hostgroup, ui, t, sess->thread->curtime, ca, 
-			sess->CurrentQuery.affected_rows, sess->CurrentQuery.rows_sent);
+
+/* FIXME: port to PgSQL_Query_Processor.cpp?
+myhash.Final(&qp->digest_total,&hash2);
+		//delete myhash;
+
+//		update_query_digest(qp, sess->current_hostgroup, ui, t, sess->thread->curtime, stmt_info, sess);
+
+		if constexpr (std::is_same_v<S, MySQL_Session>) {
+			MySQL_STMT_Global_info *stmt_info=sess->CurrentQuery.stmt_info;
+			update_query_digest(qp, sess->current_hostgroup, ui, t, sess->thread->curtime, stmt_info, sess);
+		} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
+			PgSQL_STMT_Global_info *stmt_info=sess->CurrentQuery.stmt_info;
+			update_query_digest(qp, sess->current_hostgroup, ui, t, sess->thread->curtime, stmt_info, sess);
+		}
+*/
 	}
 }
 
+/* FIXME: port to PgSQL_Query_Processor.cpp?
+template<typename S, typename CI, typename SGI>
+void Query_Processor::update_query_digest(SQP_par_t *qp, int hid, CI* ui, unsigned long long t, unsigned long long n, SGI *_stmt_info, S * sess) {
+*/
 template <typename QP_DERIVED>
 void Query_Processor<QP_DERIVED>::update_query_digest(uint64_t digest_total, uint64_t digest, char* digest_text, int hid, 
 	TypeConnInfo* ui, unsigned long long t, unsigned long long n, const char* client_addr, unsigned long long rows_affected,
@@ -2430,6 +2552,7 @@ void Query_Processor_Output::get_info_json(json& j) {
 	j["retries"] = retries;
 	j["max_lag_ms"] = max_lag_ms;
 }
+
 template
 class Query_Processor<MySQL_Query_Processor>;
 
