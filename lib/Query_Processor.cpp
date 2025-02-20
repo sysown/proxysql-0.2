@@ -52,27 +52,6 @@ struct __RE2_objects_t {
 
 typedef struct __RE2_objects_t re2_t;
 
-
-template void Query_Processor<MySQL_Query_Processor>::print_version();
-template void Query_Processor<PgSQL_Query_Processor>::print_version();
-template void Query_Processor<MySQL_Query_Processor>::rdlock();
-template void Query_Processor<PgSQL_Query_Processor>::rdlock();
-template void Query_Processor<MySQL_Query_Processor>::wrlock();
-template void Query_Processor<PgSQL_Query_Processor>::wrlock();
-template void Query_Processor<MySQL_Query_Processor>::wrunlock();
-template void Query_Processor<PgSQL_Query_Processor>::wrunlock();
-template unsigned long long Query_Processor<MySQL_Query_Processor>::get_firewall_memory_users_table();
-template unsigned long long Query_Processor<PgSQL_Query_Processor>::get_firewall_memory_users_table();
-template unsigned long long Query_Processor<MySQL_Query_Processor>::get_firewall_memory_users_config();
-template unsigned long long Query_Processor<PgSQL_Query_Processor>::get_firewall_memory_users_config();
-/*
-template void Query_Processor<MySQL_Query_Processor>::init_thread();
-template void Query_Processor<PgSQL_Query_Processor>::init_thread();
-template void Query_Processor<MySQL_Query_Processor>::end_thread();
-template void Query_Processor<PgSQL_Query_Processor>::end_thread();
-*/
-
-
 static int int_cmp(const void *a, const void *b) {
 	const unsigned long long *ia = (const unsigned long long *)a;
 	const unsigned long long *ib = (const unsigned long long *)b;
@@ -2573,13 +2552,9 @@ void Query_Processor_Output::get_info_json(json& j) {
 	j["retries"] = retries;
 	j["max_lag_ms"] = max_lag_ms;
 }
-/*
+
 template
 class Query_Processor<MySQL_Query_Processor>;
 
 template
-Query_Processor_Output* Query_Processor::process_mysql_query<PgSQL_Session, PgSQL_Query_Info>(PgSQL_Session*, void*, unsigned int, PgSQL_Query_Info*);
-
-template
-unsigned long long Query_Processor::query_parser_update_counters<PgSQL_Session>(PgSQL_Session*, MYSQL_COM_QUERY_command, __SQP_query_parser_t*, unsigned long long);
-*/
+class Query_Processor<PgSQL_Query_Processor>;
