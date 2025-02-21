@@ -43,7 +43,7 @@ struct DebugLogEntry {
 	std::string backtrace;
 };
 
-static const size_t limitSize = 30;
+static const size_t limitSize = 100;
 static std::vector<DebugLogEntry> log_buffer = {};
 
 
@@ -285,7 +285,11 @@ void proxy_debug_func(
 			// but the entries can be read in `log_buffer` in the core dump
 			// note2: also in case of shutdown , `log_buffer` will have entries that won't be saved.
 			// if we really want *all* entries, we could just call sync_log_buffer_to_disk() on shutdown
-			if (log_buffer.size() > limitSize) {
+			if (
+				(log_buffer.size() >= limitSize)
+				||
+				(entry.file == "ProxySQL_Admin.cpp" && entry.funct == "flush_logs")
+			) {
 				sync_log_buffer_to_disk(db);
 			}
 		}
