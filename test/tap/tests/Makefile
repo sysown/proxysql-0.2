@@ -62,23 +62,7 @@ LIBINJECTION_DIR := $(DEPS_PATH)/libinjection/libinjection
 LIBINJECTION_IDIR := $(LIBINJECTION_DIR)/src
 LIBINJECTION_LDIR := $(LIBINJECTION_DIR)/src
 
-libssl_path := $(shell find /usr /usr/local /opt -name "libssl.so" 2>/dev/null | head -n 1)
-
-ifneq ($(libssl_path),)
-    SSL_LDIR := $(dir $(libssl_path))
-    $(info Found OpenSSL libs at $(SSL_LDIR))
-else
-    $(error Warning: OpenSSL library not found. exiting, please install openssl.)
-endif
-
-ssl_header_path := $(shell find /usr /usr/local /opt -name "ssl.h" -path "*/openssl/*" 2>/dev/null | head -n 1)
-
-ifneq ($(ssl_header_path),)
-    SSL_IDIR := $(shell dirname $(ssl_header_path))
-    $(info Found OpenSSL headers at $(SSL_IDIR))
-else
-    $(error Warning: OpenSSL headers not found. exiting, please install openssl.)
-endif
+include ../../../common_mk/openssl_flags.mk
 
 EV_DIR := $(DEPS_PATH)/libev/libev/
 EV_IDIR := $(EV_DIR)
@@ -340,6 +324,12 @@ mysql_reconnect_libmariadb-t: mysql_reconnect.cpp $(TAP_LDIR)/libtap.so
 
 mysql_reconnect_libmysql-t: mysql_reconnect.cpp $(TAP_LDIR)/libtap_mysql8.a
 	$(CXX) -DLIBMYSQL_HELPER8 -DDISABLE_WARNING_COUNT_LOGGING $< -I$(TEST_MYSQL8_IDIR) -I$(TEST_MYSQL8_EDIR) -L$(TEST_MYSQL8_LDIR) -lmysqlclient -ltap_mysql8 -lresolv $(CUSTOMARGS) -o $@
+
+test_match_eof_conn_cap_libmysql-t: test_match_eof_conn_cap.cpp $(TAP_LDIR)/libtap_mysql8.a
+	$(CXX) -DLIBMYSQL_HELPER8 -DDISABLE_WARNING_COUNT_LOGGING $< -I$(TEST_MYSQL8_IDIR) -I$(TEST_MYSQL8_EDIR) -L$(TEST_MYSQL8_LDIR) -lmysqlclient -ltap_mysql8 -lresolv $(CUSTOMARGS) -o $@
+
+test_match_eof_conn_cap_libmariadb-t: test_match_eof_conn_cap.cpp $(TAP_LDIR)/libtap_mysql8.a
+	$(CXX) -DDISABLE_WARNING_COUNT_LOGGING $< $(IDIRS) $(LDIRS) $(OPT) $(MYLIBS) $(STATIC_LIBS) -o $@
 
 test_clickhouse_server_libmysql-t: test_clickhouse_server-t.cpp $(TAP_LDIR)/libtap.so
 	$(CXX) -DLIBMYSQL_HELPER -DDISABLE_WARNING_COUNT_LOGGING $< -I$(TEST_MYSQL_IDIR) -I$(TEST_MYSQL_EDIR) -L$(TEST_MYSQL_LDIR) -lmysqlclient -ltap_mysql57 $(CUSTOMARGS) -o $@

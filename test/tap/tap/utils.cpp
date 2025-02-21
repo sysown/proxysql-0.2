@@ -399,6 +399,12 @@ int create_table_test_sbtest1(int num_rows, MYSQL *mysql) {
 	return add_more_rows_test_sbtest1(num_rows, mysql);
 }
 
+unsigned long long monotonic_time() {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (((unsigned long long) ts.tv_sec) * 1000000) + (ts.tv_nsec / 1000);
+}
+
 int create_table_test_sqlite_sbtest1(int num_rows, MYSQL *mysql) {
 	MYSQL_QUERY(mysql, "DROP TABLE IF EXISTS sbtest1");
 	MYSQL_QUERY(mysql, "CREATE TABLE IF NOT EXISTS sbtest1 (id INTEGER PRIMARY KEY AUTOINCREMENT, `k` int(10) NOT NULL DEFAULT '0', `c` char(120) NOT NULL DEFAULT '', `pad` char(60) NOT NULL DEFAULT '')");

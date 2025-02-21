@@ -11,12 +11,6 @@
 #include "command_line.h"
 #include "utils.h"
 
-inline unsigned long long monotonic_time() {
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return (((unsigned long long) ts.tv_sec) * 1000000) + (ts.tv_nsec / 1000);
-}
-
 
 std::string queries[5] = {
 	"SELECT LAST_INSERT_ID() LIMIT 1",

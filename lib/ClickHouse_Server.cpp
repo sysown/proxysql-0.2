@@ -1397,7 +1397,7 @@ static void *child_mysql(void *arg) {
 
 	GloMyQPro->init_thread();
 	mysql_thr->refresh_variables();
-	sess=mysql_thr->create_new_session_and_client_data_stream<MySQL_Thread, MySQL_Session*>(client);
+	sess=mysql_thr->create_new_session_and_client_data_stream(client);
 	sess->thread=mysql_thr;
 	sess->session_type = PROXYSQL_SESSION_CLICKHOUSE;
 	sess->handler_function=ClickHouse_Server_session_handler;
@@ -1477,7 +1477,7 @@ static void * sqlite3server_main_loop(void *arg)
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-	set_thread_name("ClickHouseMain");
+	set_thread_name("ClickHouseMain", GloVars.set_thread_name);
 	while (glovars.shutdown==0 && *shutdown==0)
 	{
 		int *client;

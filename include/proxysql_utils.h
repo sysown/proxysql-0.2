@@ -307,7 +307,10 @@ struct free_deleter {
 template <typename T>
 using mf_unique_ptr = std::unique_ptr<T, free_deleter>;
 
-static inline void set_thread_name(const char name[16]) {
+static inline void set_thread_name(const char name[16], const bool en = true) {
+	if (en == false) {
+		return;
+	}
 #if defined(__linux__) || defined(__FreeBSD__)
 	int rc;
 	rc = pthread_setname_np(pthread_self(), name);

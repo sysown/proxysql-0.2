@@ -735,6 +735,16 @@ void ProxySQL_Main_process_global_variables(int argc, const char **argv) {
 				proxy_error("The config file is configured with an invalid cluster_sync_interfaces\n");
 			}
 		}
+		if (root.exists("set_thread_name")==true) {
+			bool value_bool;
+			bool rc;
+			rc=root.lookupValue("set_thread_name", value_bool);
+			if (rc==true) {
+				GloVars.set_thread_name=value_bool;
+			} else {
+				proxy_error("The config file is configured with an invalid set_thread_name\n");
+			}
+		}
 		if (root.exists("pidfile")==true) {
 			string pidfile_path;
 			bool rc;
@@ -2293,11 +2303,6 @@ int print_jemalloc_conf() {
 #endif
 
 int main(int argc, const char * argv[]) {
-	// Output current jemalloc conf; no action taken when disabled
-	{
-		int rc = print_jemalloc_conf();
-		if (rc) { exit(EXIT_FAILURE); }
-	}
 
 	if (check_openssl_version() == false) {
 		exit(EXIT_FAILURE);
@@ -2311,7 +2316,6 @@ int main(int argc, const char * argv[]) {
 		ppi.run_tests();
 	}
 #endif // DEBUG
-
 
 	{
 		MYSQL *my = mysql_init(NULL);
@@ -2338,6 +2342,12 @@ int main(int argc, const char * argv[]) {
 #ifdef DEBUG
 		std::cerr << "Main init global variables completed in ";
 #endif
+	}
+
+	// Output current jemalloc conf; no action taken when disabled
+	{
+		int rc = print_jemalloc_conf();
+		if (rc) { exit(EXIT_FAILURE); }
 	}
 
 	struct rlimit nlimit;

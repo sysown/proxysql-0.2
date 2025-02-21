@@ -1245,6 +1245,7 @@ __thread int mysql_thread___poll_timeout;
 __thread int mysql_thread___poll_timeout_on_failure;
 __thread bool mysql_thread___connection_warming;
 __thread bool mysql_thread___have_compress;
+__thread int mysql_thread___protocol_compression_level;
 __thread bool mysql_thread___have_ssl;
 __thread bool mysql_thread___multiplexing;
 __thread bool mysql_thread___log_unhealthy_connections;
@@ -1301,6 +1302,9 @@ __thread char * mysql_thread___ssl_p2s_crlpath;
 /* variables used by events log */
 __thread char * mysql_thread___eventslog_filename;
 __thread int mysql_thread___eventslog_filesize;
+__thread int mysql_thread___eventslog_buffer_history_size;
+__thread int mysql_thread___eventslog_table_memory_size;
+__thread int mysql_thread___eventslog_buffer_max_query_length;
 __thread int mysql_thread___eventslog_default_log;
 __thread int mysql_thread___eventslog_format;
 
@@ -1545,6 +1549,7 @@ extern __thread int mysql_thread___poll_timeout;
 extern __thread int mysql_thread___poll_timeout_on_failure;
 extern __thread bool mysql_thread___connection_warming;
 extern __thread bool mysql_thread___have_compress;
+extern __thread int mysql_thread___protocol_compression_level;
 extern __thread bool mysql_thread___have_ssl;
 extern __thread bool mysql_thread___multiplexing;
 extern __thread bool mysql_thread___log_unhealthy_connections;
@@ -1601,6 +1606,9 @@ extern __thread char * mysql_thread___ssl_p2s_crlpath;
 /* variables used by events log */
 extern __thread char * mysql_thread___eventslog_filename;
 extern __thread int mysql_thread___eventslog_filesize;
+extern __thread int mysql_thread___eventslog_buffer_history_size;
+extern __thread int mysql_thread___eventslog_table_memory_size;
+extern __thread int mysql_thread___eventslog_buffer_max_query_length;
 extern __thread int mysql_thread___eventslog_default_log;
 extern __thread int mysql_thread___eventslog_format;
 
