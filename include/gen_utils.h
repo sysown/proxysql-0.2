@@ -271,6 +271,33 @@ public:
 
 #endif /* __CLASS_PTR_ARRAY_H */
 
+#ifndef CLASS_ConditionalLock_H
+#define CLASS_ConditionalLock_H
+#include <mutex>
+
+class ConditionalLock {
+private:
+	std::mutex& mutex;
+	bool locked;
+
+public:
+	ConditionalLock(std::mutex& m, bool should_lock) : mutex(m), locked(should_lock) {
+		if (locked) {
+			mutex.lock();
+		}
+	}
+
+	~ConditionalLock() {
+		if (locked) {
+			mutex.unlock();
+		}
+	}
+
+	// Prevent copying and assignment
+	ConditionalLock(const ConditionalLock&) = delete;
+	ConditionalLock& operator=(const ConditionalLock&) = delete;
+};
+#endif // CLASS_ConditionalLock_H
 
 
 #ifndef __GEN_FUNCTIONS
@@ -338,6 +365,7 @@ char *trim_spaces_and_quotes_in_place(char *str);
 bool mywildcmp(const char *p, const char *str);
 std::string trim(const std::string& s);
 char* escape_string_single_quotes_and_backslashes(char* input, bool free_it);
+const char* escape_string_backslash_spaces(const char* input);
 
 /**
  * @brief Helper function that converts a MYSQL_RES into a 'SQLite3_result'.

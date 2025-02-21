@@ -973,7 +973,7 @@ int PgSQL_Data_Stream::array2buffer() {
 					DSS = STATE_SLEEP;
 
 					//explicitly disable compression
-					myconn->options.compression_min_length = 0;
+					//myconn->options.compression_min_length = 0;
 					myconn->set_status(false, STATUS_MYSQL_CONNECTION_COMPRESSION);
 				}
 				
@@ -1148,9 +1148,7 @@ void PgSQL_Data_Stream::return_MySQL_Connection_To_Pool() {
 	unsigned long long intv = pgsql_thread___connection_max_age_ms;
 	intv *= 1000;
 	if (
-		(((intv) && (mc->last_time_used > mc->creation_time + intv))
-			||
-			(mc->local_stmts->get_num_backend_stmts() > (unsigned int)GloPTH->variables.max_stmts_per_connection))
+		((intv) && (mc->last_time_used > mc->creation_time + intv))
 		&&
 		// NOTE: If the current session if in 'PINGING_SERVER' status, there is
 		// no need to reset the session. The destruction and creation of a new

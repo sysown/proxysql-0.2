@@ -15,7 +15,7 @@
 
 #include "prometheus_helpers.h"
 
-#include "set_parser.h"
+#include "PgSQL_Set_Stmt_Parser.h"
 
 enum class AUTHENTICATION_METHOD {
 	NO_PASSWORD,
@@ -126,7 +126,7 @@ struct CopyCmdMatcher {
 	CopyCmdMatcher() : 
 		options(RE2::Quiet), 
 		pattern(
-			R"(((?is)(?:--.*?$|/\*[\s\S]*?\*/|\s)*\bCOPY\b\s+[^;]*?\bFROM\b\s+STDIN\b(?:\s+WITH\s*\([^)]*\))?))",
+			R"(((?is)(?:--.*?$|/\*[\s\S]*?\*/|\s)*\bCOPY\b\s+[^;]*?\bFROM\b\s+(?:STDIN|STDOUT)\b(?:\s+WITH\s*\([^)]*\))?))",
 			options) {
 		//((?is)(?:--.*?$|/\*[\s\S]*?\*/|\s)*\bCOPY\b\s+[^;]*?\bFROM\b\s+STDIN\b(?:\s+WITH\s*\([^)]*\))?)
 	}
@@ -137,7 +137,7 @@ struct CopyCmdMatcher {
 	}
 };
 
-class __attribute__((aligned(64))) PgSQL_Thread : public Base_Thread
+class __attribute__((aligned(64))) PgSQL_Thread : public Base_Thread<PgSQL_Thread>
 {
 private:
 	unsigned int servers_table_version_previous;
@@ -231,6 +231,7 @@ public:
 	struct {
 		unsigned long long stvar[PG_st_var_END];
 		unsigned int active_transactions;
+		std::atomic<unsigned int> non_idle_client_connections;
 	} status_variables;
 
 	struct {
@@ -244,7 +245,9 @@ public:
 	pthread_mutex_t thread_mutex;
 
 	// if set_parser_algorithm == 2 , a single thr_SetParser is used
-	SetParser* thr_SetParser;
+	PgSQL_Set_Stmt_Parser *thr_SetParser;
+
+	bool GloMyQPro_init_thread = false;
 
 	/**
 	 * @brief Default constructor for the PgSQL_Thread class.
@@ -392,7 +395,7 @@ public:
 	 * active and needs to be removed from the thread's session list.
 	 *
 	 */
-	void unregister_session(int);
+	//void unregister_session(int);
 
 	/**
 	 * @brief Returns a pointer to the `pollfd` structure for a specific data stream.
@@ -535,7 +538,7 @@ public:
 	 * removed from the connection handler list.
 	 *
 	 */
-	void unregister_session_connection_handler(int idx, bool _new = false);
+	//void unregister_session_connection_handler(int idx, bool _new = false);
 
 	/**
 	 * @brief Handles a new connection accepted by a listener.
@@ -648,6 +651,10 @@ public:
 	 *
 	 */
 	void Scan_Sessions_to_Kill(PtrArray * mysess);
+
+
+	void Scan_Sessions_to_Kill(const std::vector<PgSQL_Session *>& sessions);
+	void Scan_Sessions_to_Kill_innerLoop(PgSQL_Session *_sess);
 
 	/**
 	 * @brief  Scans all session arrays across all threads to identify and kill sessions.
@@ -816,8 +823,6 @@ private:
 public:
 	struct {
 		int authentication_method;
-		char* server_version;
-
 		int monitor_history;
 		int monitor_connect_interval;
 		int monitor_connect_interval_window;
@@ -898,7 +903,6 @@ public:
 		char* default_schema;
 		char* interfaces;
 		char* keep_multiplexing_variables;
-		char* default_client_encoding;
 		//unsigned int default_charset; // removed in 2.0.13 . Obsoleted previously using PgSQL_Variables instead
 		int handle_unknown_charset;
 		bool servers_stats;
@@ -960,7 +964,7 @@ public:
 		char* ldap_user_variable;
 		char* add_ldap_user_comment;
 		char* default_session_track_gtids;
-		char* default_variables[SQL_NAME_LAST_LOW_WM];
+		char* default_variables[PGSQL_NAME_LAST_HIGH_WM];
 		char* firewall_whitelist_errormsg;
 #ifdef DEBUG
 		bool session_debug;
@@ -998,6 +1002,8 @@ public:
 		bool log_mysql_warnings_enabled;
 		int data_packets_history_size;
 		int handle_warnings;
+		char* server_version;
+		char* server_encoding;
 	} variables;
 	struct {
 		unsigned int mirror_sessions_current;

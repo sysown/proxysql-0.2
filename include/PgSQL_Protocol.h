@@ -571,6 +571,8 @@ private:
 	 */
 	void reset();
 
+	void clear();
+
 	PtrSizeArray PSarrayOUT;
 	unsigned long long resultset_size;
 	unsigned long long num_rows;
@@ -732,7 +734,8 @@ public:
 	 *       updates the output buffer with the generated packet. If `ready` is 
 	 *       true, it also generates and sends a ready-for-query packet.
 	 */
-	bool generate_ok_packet(bool send, bool ready, const char* msg, int rows, const char* query, char trx_state = 'I', PtrSize_t* _ptr = NULL);
+	bool generate_ok_packet(bool send, bool ready, const char* msg, int rows, const char* query, char trx_state = 'I', PtrSize_t* _ptr = NULL, 
+		const std::vector<std::pair<std::string,std::string>>& param_status = std::vector<std::pair<std::string, std::string>>());
 
 	// temporary overriding generate_pkt_OK to avoid crash. FIXME remove this
 	bool generate_pkt_OK(bool send, void** ptr, unsigned int* len, uint8_t sequence_id, unsigned int affected_rows, 
@@ -1037,6 +1040,9 @@ private:
 	 *       4. Sends the server's final message to the client.
 	 */
 	bool scram_handle_client_final(ScramState* scram_state, PgCredentials* user, const unsigned char* data, uint32_t datalen);
+
+	// parse options parameter
+	static std::vector<std::pair<std::string, std::string>> parse_options(const char* options);
 
 	PgSQL_Data_Stream** myds;
 	PgSQL_Connection_userinfo* userinfo;

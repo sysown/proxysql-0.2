@@ -21,11 +21,11 @@ class MySQL_Session;
 class PgSQL_Session;
 
 enum SESSION_FORWARD_TYPE : uint8_t {
-	SESSION_FORWARD_TYPE_NONE			   = 0x00,
-	SESSION_FORWARD_TYPE_PERMANENT		   = 0x01,
-	SESSION_FORWARD_TYPE_TEMPORARY		   = 0x02,
-	SESSION_FORWARD_TYPE_COPY_STDIN		   = 0x04 | SESSION_FORWARD_TYPE_TEMPORARY,
-	SESSION_FORWARD_TYPE_START_REPLICATION = 0x08 | SESSION_FORWARD_TYPE_TEMPORARY,
+	SESSION_FORWARD_TYPE_NONE					= 0x00,
+	SESSION_FORWARD_TYPE_PERMANENT				= 0x01,
+	SESSION_FORWARD_TYPE_TEMPORARY				= 0x02,
+	SESSION_FORWARD_TYPE_COPY_FROM_STDIN_STDOUT	= 0x04 | SESSION_FORWARD_TYPE_TEMPORARY,
+	SESSION_FORWARD_TYPE_START_REPLICATION		= 0x08 | SESSION_FORWARD_TYPE_TEMPORARY,
 };
 
 template<typename S, typename DS, typename B, typename T>
@@ -115,7 +115,7 @@ class Base_Session {
 	void writeout();
 	void return_proxysql_internal(PtrSize_t* pkt);
 	virtual void generate_proxysql_internal_session_json(nlohmann::json &) = 0;
-	virtual void RequestEnd(DS *) = 0;
+	virtual void RequestEnd(DS *, const unsigned int, const char *) = 0;
 	virtual void SQLite3_to_MySQL(SQLite3_result*, char*, int, MySQL_Protocol*, bool in_transaction = false, bool deprecate_eof_active = false) = 0;
 	bool has_any_backend();
 	void reset_all_backends();

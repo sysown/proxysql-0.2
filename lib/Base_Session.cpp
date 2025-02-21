@@ -43,7 +43,7 @@ template void Base_Session<MySQL_Session, MySQL_Data_Stream, MySQL_Backend, MySQ
 template void Base_Session<PgSQL_Session, PgSQL_Data_Stream, PgSQL_Backend, PgSQL_Thread>::reset_all_backends();
 
 template bool Base_Session<MySQL_Session, MySQL_Data_Stream, MySQL_Backend, MySQL_Thread>::handler_special_queries_STATUS(_PtrSize_t*);
-template bool Base_Session<PgSQL_Session, PgSQL_Data_Stream, PgSQL_Backend, PgSQL_Thread>::handler_special_queries_STATUS(_PtrSize_t*);
+//template bool Base_Session<PgSQL_Session, PgSQL_Data_Stream, PgSQL_Backend, PgSQL_Thread>::handler_special_queries_STATUS(_PtrSize_t*);
 
 template void Base_Session<MySQL_Session, MySQL_Data_Stream, MySQL_Backend, MySQL_Thread>::housekeeping_before_pkts();
 template void Base_Session<PgSQL_Session, PgSQL_Data_Stream, PgSQL_Backend, PgSQL_Thread>::housekeeping_before_pkts();
@@ -337,7 +337,7 @@ void Base_Session<S, DS, B, T>::return_proxysql_internal(PtrSize_t* pkt) {
 		assert(0);
 	}
 	if (mirror == false) {
-		RequestEnd(NULL);
+		RequestEnd(NULL, 0, NULL);
 	}
 	else {
 		client_myds->DSS = STATE_SLEEP;
@@ -433,35 +433,22 @@ bool Base_Session<S,DS,B,T>::handler_special_queries_STATUS(PtrSize_t* pkt) {
 			string vals[4];
 			json j = {};
 			json& jc = j["conn"];
-			if constexpr (std::is_same_v<S, MySQL_Session>) {
-				MySQL_Connection * conn = client_myds->myconn;
-				conn->variables[SQL_CHARACTER_SET_CLIENT].fill_client_internal_session(jc, SQL_CHARACTER_SET_CLIENT);
-				conn->variables[SQL_CHARACTER_SET_CONNECTION].fill_client_internal_session(jc, SQL_CHARACTER_SET_CONNECTION);
-				conn->variables[SQL_CHARACTER_SET_DATABASE].fill_client_internal_session(jc, SQL_CHARACTER_SET_DATABASE);
-			} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
-				PgSQL_Connection * conn = client_myds->myconn;
-				conn->variables[SQL_CHARACTER_SET_CLIENT].fill_client_internal_session(jc, SQL_CHARACTER_SET_CLIENT);
-				conn->variables[SQL_CHARACTER_SET_CONNECTION].fill_client_internal_session(jc, SQL_CHARACTER_SET_CONNECTION);
-				conn->variables[SQL_CHARACTER_SET_DATABASE].fill_client_internal_session(jc, SQL_CHARACTER_SET_DATABASE);
-			} else {
-				assert(0);
-			}
+
+			MySQL_Connection * conn = client_myds->myconn;
+			conn->variables[SQL_CHARACTER_SET_CLIENT].fill_client_internal_session(jc, SQL_CHARACTER_SET_CLIENT);
+			conn->variables[SQL_CHARACTER_SET_CONNECTION].fill_client_internal_session(jc, SQL_CHARACTER_SET_CONNECTION);
+			conn->variables[SQL_CHARACTER_SET_DATABASE].fill_client_internal_session(jc, SQL_CHARACTER_SET_DATABASE);
+			
 
 			// @@character_set_client
 			vals[0] = jc[mysql_tracked_variables[SQL_CHARACTER_SET_CLIENT].internal_variable_name];
 			// @@character_set_connection
 			vals[1] = jc[mysql_tracked_variables[SQL_CHARACTER_SET_CONNECTION].internal_variable_name];
 			// @@character_set_server
-			if constexpr (std::is_same_v<S, MySQL_Session>) {
-				vals[2] = string(mysql_thread___default_variables[SQL_CHARACTER_SET]);
-			} else if constexpr (std::is_same_v<S, PgSQL_Session>) {
-				vals[2] = string(mysql_thread___default_variables[SQL_CHARACTER_SET]);
-			} else {
-				assert(0);
-			}
+			vals[2] = string(mysql_thread___default_variables[SQL_CHARACTER_SET]);
 			// @@character_set_database
 			vals[3] = jc[mysql_tracked_variables[SQL_CHARACTER_SET_DATABASE].internal_variable_name];
-
+			
 			const char* pta[4];
 			for (int i = 0; i < 4; i++) {
 				pta[i] = vals[i].c_str();
