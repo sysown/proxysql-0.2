@@ -441,6 +441,7 @@ bool PgSQL_Variables::parse_variable_boolean(PgSQL_Session *sess, int idx, const
 	int __tmp_value = -1;
 	if (
 		(strcasecmp(value1.c_str(),(char *)"0")==0) ||
+		(strcasecmp(value1.c_str(), (char*)"f") == 0) ||
 		(strcasecmp(value1.c_str(),(char *)"false")==0) ||
 		(strcasecmp(value1.c_str(),(char *)"off")==0)
 	) {
@@ -448,6 +449,7 @@ bool PgSQL_Variables::parse_variable_boolean(PgSQL_Session *sess, int idx, const
 	} else {
 		if (
 			(strcasecmp(value1.c_str(),(char *)"1")==0) ||
+			(strcasecmp(value1.c_str(), (char*)"t") == 0) ||
 			(strcasecmp(value1.c_str(),(char *)"true")==0) ||
 			(strcasecmp(value1.c_str(),(char *)"on")==0)
 		) {
@@ -477,7 +479,7 @@ bool PgSQL_Variables::parse_variable_boolean(PgSQL_Session *sess, int idx, const
 
 
 
-bool PgSQL_Variables::parse_variable_number(PgSQL_Session *sess, int idx, string& value1, bool* lock_hostgroup, bool* send_param_status) {
+bool PgSQL_Variables::parse_variable_number(PgSQL_Session *sess, int idx, const std::string& value1, bool* lock_hostgroup, bool* send_param_status) {
 	int vl = strlen(value1.c_str());
 	const char *v = value1.c_str();
 	bool only_digit_chars = true;
@@ -486,17 +488,7 @@ bool PgSQL_Variables::parse_variable_number(PgSQL_Session *sess, int idx, string
 			only_digit_chars=false;
 		}
 	}
-	if (!only_digit_chars) {
-		if (
-			(variable_name_exists(pgsql_tracked_variables[idx],"sql_select_limit") == true) // sql_select_limit allows value "default"
-			||
-			(variable_name_exists(pgsql_tracked_variables[idx],"max_join_size") == true) // max_join_size allows value "default"
-		) {
-			if (strcasecmp(v,"default")==0) {
-				only_digit_chars = true;
-			}
-		}
-	}
+
 	if (only_digit_chars) {
 		// see https://dev.pgsql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_max_join_size
 		proxy_debug(PROXY_DEBUG_MYSQL_COM, 7, "Processing SET %s value %s\n", pgsql_tracked_variables[idx].set_variable_name, value1.c_str());
@@ -505,18 +497,6 @@ bool PgSQL_Variables::parse_variable_number(PgSQL_Session *sess, int idx, string
 			if (!pgsql_variables.client_set_value(sess, idx, value1.c_str()))
 				return false;
 			proxy_debug(PROXY_DEBUG_MYSQL_COM, 5, "Changing connection %s to %s\n", pgsql_tracked_variables[idx].set_variable_name, value1.c_str());
-			if (idx == SQL_MAX_JOIN_SIZE) {
-				// see https://dev.pgsql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_max_join_size
-				if (
-					(value1 == "18446744073709551615")
-					||
-					(strcasecmp(v,"default")==0)
-				) {
-					pgsql_variables.client_set_value(sess, SQL_SQL_BIG_SELECTS, "ON");
-				} else {
-					pgsql_variables.client_set_value(sess, SQL_SQL_BIG_SELECTS, "OFF");
-				}
-			}
 		}
 		//exit_after_SetParse = true;
 	} else {
