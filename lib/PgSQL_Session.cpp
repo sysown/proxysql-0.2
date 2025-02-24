@@ -89,7 +89,7 @@ static const std::set<std::string> pgsql_variables_boolean = {
 };
 
 static const std::set<std::string> pgsql_variables_numeric = {
-	"extra_float_digits"
+	
 };
 
 static const std::set<std::string> pgsql_variables_strings = {
@@ -100,7 +100,8 @@ static const std::set<std::string> pgsql_variables_strings = {
 	"allow_in_place_tablespaces",
 	"bytea_output",
 	"client_min_messages",
-	"maintenance_work_mem"
+	"maintenance_work_mem",
+	"extra_float_digits"
 };
 
 #include "proxysql_find_charset.h"
