@@ -254,13 +254,17 @@ enum pgsql_variable_name {
 	PGSQL_STANDARD_CONFORMING_STRINGS,
 	PGSQL_TIMEZONE,
 	PGSQL_NAME_LAST_LOW_WM,
+	PGSQL_ALLOW_IN_PLACE_TABLESPACES,
 	PGSQL_BYTEA_OUTPUT,
 	PGSQL_CLIENT_MIN_MESSAGES,
 	PGSQL_ENABLE_BITMAPSCAN,
 	PGSQL_ENABLE_INDEXSCAN,
 	PGSQL_ENABLE_SEQSCAN,
+	PGSQL_ENABLE_SORT,
 	PGSQL_ESCAPE_STRING_WARNING,
+	PGSQL_EXTRA_FLOAT_DIGITS,
 	PGSQL_MAINTENANCE_WORK_MEM,
+	PGSQL_SYNCHRONOUS_COMMIT,
 	PGSQL_NAME_LAST_HIGH_WM
 };
 
@@ -1769,13 +1773,19 @@ pgsql_variable_st pgsql_tracked_variables[] {
 	{ PGSQL_STANDARD_CONFORMING_STRINGS, SETTING_VARIABLE, "standard_conforming_strings", "standard_conforming_strings", "on", (PGTRACKED_VAR_OPT_BOOL | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE | PGTRACKED_VAR_OPT_PARAM_STATUS), nullptr },
 	{ PGSQL_TIMEZONE,			   SETTING_VARIABLE,	"timezone", "timezone", "GMT" , (PGTRACKED_VAR_OPT_QUOTE | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE | PGTRACKED_VAR_OPT_PARAM_STATUS), { "TIME ZONE", nullptr } },
 	{ PGSQL_NAME_LAST_LOW_WM,      session_status___NONE, "placeholder", "placeholder", "0" , 0, nullptr },  // this is just a placeholder to separate the previous index from the next block
+	{ PGSQL_ALLOW_IN_PLACE_TABLESPACES,	   SETTING_VARIABLE,	"allow_in_place_tablespaces", "allow_in_place_tablespaces", "off", (PGTRACKED_VAR_OPT_BOOL | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE), nullptr },
 	{ PGSQL_BYTEA_OUTPUT,		   SETTING_VARIABLE,	"bytea_output", "bytea_output", "hex", (PGTRACKED_VAR_OPT_QUOTE | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE), nullptr },
 	{ PGSQL_CLIENT_MIN_MESSAGES,   SETTING_VARIABLE,	"client_min_messages", "client_min_messages", "NOTICE", (PGTRACKED_VAR_OPT_QUOTE | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE), nullptr },
 	{ PGSQL_ENABLE_BITMAPSCAN,	   SETTING_VARIABLE,	"enable_bitmapscan", "enable_bitmapscan", "on", (PGTRACKED_VAR_OPT_BOOL | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE), nullptr },
 	{ PGSQL_ENABLE_INDEXSCAN,	   SETTING_VARIABLE,	"enable_indexscan", "enable_indexscan", "on", (PGTRACKED_VAR_OPT_BOOL | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE), nullptr },
 	{ PGSQL_ENABLE_SEQSCAN,		   SETTING_VARIABLE,	"enable_seqscan", "enable_seqscan", "on", (PGTRACKED_VAR_OPT_BOOL | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE), nullptr },
+	{ PGSQL_ENABLE_SORT,		   SETTING_VARIABLE,	"enable_sort", "enable_sort", "on", (PGTRACKED_VAR_OPT_BOOL | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE), nullptr },
 	{ PGSQL_ESCAPE_STRING_WARNING, SETTING_VARIABLE,    "escape_string_warning", "escape_string_warning", "on", (PGTRACKED_VAR_OPT_BOOL | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE), nullptr },
+	// TODO: fix this
+	{ PGSQL_EXTRA_FLOAT_DIGITS,	   SETTING_VARIABLE,    "extra_float_digits", "extra_float_digits", "1", (PGTRACKED_VAR_OPT_GLOBAL_VARIABLE), nullptr },
 	{ PGSQL_MAINTENANCE_WORK_MEM,  SETTING_VARIABLE,    "maintenance_work_mem", "maintenance_work_mem", "64MB", (PGTRACKED_VAR_OPT_QUOTE | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE), nullptr },
+	// TODO: fix this
+	{ PGSQL_SYNCHRONOUS_COMMIT,	   SETTING_VARIABLE,	"synchronous_commit", "synchronous_commit", "on", (PGTRACKED_VAR_OPT_BOOL | PGTRACKED_VAR_OPT_GLOBAL_VARIABLE), nullptr },
 };
 
 #else

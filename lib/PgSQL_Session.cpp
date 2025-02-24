@@ -80,12 +80,16 @@ static inline char is_normal_char(char c) {
 
 static const std::set<std::string> pgsql_variables_boolean = {
 	"standard_conforming_strings",
+	"enable_bitmapscan",
 	"enable_indexscan",
 	"enable_seqscan",
-	"escape_string_warning"
+	"enable_sort",
+	"escape_string_warning",
+	"synchronous_commit"
 };
 
 static const std::set<std::string> pgsql_variables_numeric = {
+	"extra_float_digits"
 };
 
 static const std::set<std::string> pgsql_variables_strings = {
@@ -93,6 +97,7 @@ static const std::set<std::string> pgsql_variables_strings = {
 	"intervalstyle",
 	"timezone",
 	"time zone",
+	"allow_in_place_tablespaces",
 	"bytea_output",
 	"client_min_messages",
 	"maintenance_work_mem"
@@ -4376,7 +4381,11 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 							}
 						}
 						if (idx != PGSQL_NAME_LAST_HIGH_WM) {
-							if (pgsql_variables.parse_variable_boolean(this, idx, *values, lock_hostgroup, &send_param_status) == false) {
+							std::string value1 = *values;
+							if ((value1.size() == sizeof("DEFAULT") - 1) && strncasecmp(value1.c_str(), (char*)"DEFAULT", sizeof("DEFAULT") - 1) == 0) {
+								value1 = get_default_session_variable((enum pgsql_variable_name)idx);
+							}
+							if (pgsql_variables.parse_variable_boolean(this, idx, value1, lock_hostgroup, &send_param_status) == false) {
 								return false;
 							}
 						}
@@ -4391,7 +4400,11 @@ bool PgSQL_Session::handler___status_WAITING_CLIENT_DATA___STATE_SLEEP___MYSQL_C
 							}
 						}
 						if (idx != PGSQL_NAME_LAST_HIGH_WM) {
-							if (pgsql_variables.parse_variable_number(this, idx, *values, lock_hostgroup, &send_param_status) == false) {
+							std::string value1 = *values;
+							if ((value1.size() == sizeof("DEFAULT") - 1) && strncasecmp(value1.c_str(), (char*)"DEFAULT", sizeof("DEFAULT") - 1) == 0) {
+								value1 = get_default_session_variable((enum pgsql_variable_name)idx);
+							}
+							if (pgsql_variables.parse_variable_number(this, idx, value1, lock_hostgroup, &send_param_status) == false) {
 								return false;
 							}
 						}
