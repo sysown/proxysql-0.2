@@ -278,13 +278,6 @@ public:
 	void fill_client_internal_session(nlohmann::json &j, int idx);
 };
 
-enum pgsql_charset_action {
-	POSTGRESQL_CHARSET_ACTION_UNKNOWN,
-	POSTGRESQL_CHARSET_ACTION_NAMES,
-	POSTGRESQL_CHARSET_ACTION_CHARSET,
-	POSTGRESQL_CHARSET_ACTION_CONNECT_START
-};
-
 class PgSQL_Connection_userinfo {
 	private:
 	uint64_t compute_hash();
@@ -306,195 +299,7 @@ class PgSQL_Connection_userinfo {
 	bool set_dbname(const char *);
 };
 
-class PgSQL_Connection_Placeholder {
-	private:
-	void update_warning_count_from_connection();
-	void update_warning_count_from_statement();
-	bool is_expired(unsigned long long timeout);
-	unsigned long long inserted_into_pool;
-	public:
-	struct {
-		char *server_version;
-		uint32_t session_track_gtids_int;
-		uint32_t max_allowed_pkt;
-		uint32_t server_capabilities;
-		uint32_t client_flag;
-		unsigned int compression_min_length;
-		char *init_connect;
-		bool init_connect_sent;
-		char * session_track_gtids;
-		char *ldap_user_variable;
-		char *ldap_user_variable_value;
-		bool session_track_gtids_sent;
-		bool ldap_user_variable_sent;
-		uint8_t protocol_version;
-		int8_t last_set_autocommit;
-		bool autocommit;
-		bool no_backslash_escapes;
-	} options;
-
-	PgSQL_Conn_Param conn_params;
-
-	PgSQL_Variable variables[SQL_NAME_LAST_HIGH_WM];
-	uint32_t var_hash[SQL_NAME_LAST_HIGH_WM];
-	// for now we store possibly missing variables in the lower range
-	// we may need to fix that, but this will cost performance
-	bool var_absent[SQL_NAME_LAST_HIGH_WM] = {false};
-
-	std::vector<uint32_t> dynamic_variables_idx;
-	unsigned int reorder_dynamic_variables_idx();
-
-	struct {
-		unsigned long length;
-		char *ptr;
-		MYSQL_STMT *stmt;
-		MYSQL_RES *stmt_result;
-		stmt_execute_metadata_t *stmt_meta;
-	} query;
-	char scramble_buff[40];
-	unsigned long long creation_time;
-	unsigned long long last_time_used;
-	unsigned long long timeout;
-	int auto_increment_delay_token;
-	int fd;
-	MySQL_STMTs_local_v14 *local_stmts;	// local view of prepared statements
-	MYSQL *pgsql;
-	MYSQL *ret_mysql;
-	MYSQL_RES *mysql_result;
-	MYSQL_ROW mysql_row;
-	PgSQL_SrvC *parent;
-	PgSQL_Connection_userinfo *userinfo;
-	PgSQL_Data_Stream *myds;
-
-	struct {
-		char* hostname;
-		char* ip;
-	} connected_host_details;
-	/**
-	 * @brief Keeps tracks of the 'server_status'. Do not confuse with the 'server_status' from the
-	 *  'MYSQL' connection itself. This flag keeps track of the configured server status from the
-	 *  parent 'MySrvC'.
-	 */
-	enum MySerStatus server_status; // this to solve a side effect of #774
-
-	bytes_stats_t bytes_info; // bytes statistics
-	struct {
-		unsigned long long questions;
-		unsigned long long pgconnpoll_get;
-		unsigned long long pgconnpoll_put;
-	} statuses;
-
-	unsigned long largest_query_length;
-	unsigned int warning_count;
-	/**
-	 * @brief This represents the internal knowledge of ProxySQL about the connection. It keeps track of those
-	 *  states which *are not reflected* into 'server_status', but are relevant for connection handling.
-	 */
-	uint32_t status_flags;
-	int async_exit_status; // exit status of MariaDB Client Library Non blocking API
-	int interr;	// integer return
-	PG_ASYNC_ST async_state_machine;	// Async state machine
-	short wait_events;
-	uint8_t compression_pkt_id;
-	my_bool ret_bool;
-	bool async_fetch_row_start;
-	bool send_quit;
-	bool reusable;
-	bool processing_multi_statement;
-	bool multiplex_delayed;
-	bool unknown_transaction_status;
-	void compute_unknown_transaction_status();
-	char gtid_uuid[128];
-	PgSQL_Connection_Placeholder();
-	~PgSQL_Connection_Placeholder();
-	bool set_autocommit(bool);
-	bool set_no_backslash_escapes(bool);
-	unsigned int set_charset(unsigned int, enum pgsql_charset_action);
-
-	void set_status(bool set, uint32_t status_flag);
-	bool get_status(uint32_t status_flag);
-#if 0
-	void set_status_sql_log_bin0(bool);
-	bool get_status_sql_log_bin0();
-	void set_autocommit_start();
-	void set_autocommit_cont(short event);
-#endif // 0
-	void set_names_start();
-	void set_names_cont(short event);
-#ifndef PROXYSQL_USE_RESULT
-	void store_result_start();
-	void store_result_cont(short event);
-#endif // PROXYSQL_USE_RESULT
-#if 0
-	void initdb_start();
-	void initdb_cont(short event);
-	void set_option_start();
-	void set_option_cont(short event);
-#endif // 0
-	void set_query(char *stmt, unsigned long length);
-	
-	int async_set_autocommit(short event, bool);
-	int async_set_names(short event, unsigned int nr);
-	int async_send_simple_command(short event, char *stmt, unsigned long length); // no result set expected
-
-	int async_set_option(short event, bool mask);
-
-	void stmt_prepare_start();
-	void stmt_prepare_cont(short event);
-	void stmt_execute_start();
-	void stmt_execute_cont(short event);
-	void stmt_execute_store_result_start();
-	void stmt_execute_store_result_cont(short event);
-
-#if 0
-	/**
-	 * @brief Process the rows returned by 'async_stmt_execute_store_result'. Extracts all the received
-	 *   rows from 'query.stmt->result.data' but the last one, adds them to 'MyRS', frees the buffer
-	 *   used by 'query.stmt' and allocates a new one with the last row, leaving it ready for being filled
-	 *   with the new rows to be received.
-	 * @param processed_bytes Reference to the already processed bytes to be updated with the rows
-	 *   that are being read and added to 'MyRS'.
-	 */
-	void process_rows_in_ASYNC_STMT_EXECUTE_STORE_RESULT_CONT(unsigned long long& processed_bytes);
-#endif // 0
-
-	void async_free_result();
-
-	
-	bool IsAutoCommit();
-	bool AutocommitFalse_AndSavepoint();
-	bool MultiplexDisabled(bool check_delay_token = true);
-	bool IsKeepMultiplexEnabledVariables(char *query_digest_text);
-	void optimize();
-	void close_mysql();
-
-	void set_is_client(); // used for local_stmts
-
-	void reset();
-
-	bool get_gtid(char *buff, uint64_t *trx_id);
-	void reduce_auto_increment_delay_token() { if (auto_increment_delay_token) auto_increment_delay_token--; };
-
-	bool match_tracked_options(const PgSQL_Connection *c);
-	unsigned int number_of_matching_session_variables(const PgSQL_Connection *client_conn, unsigned int& not_matching);
-	unsigned long get_mysql_thread_id() { return pgsql ? pgsql->thread_id : 0; }
-
-
-	/********* These will be removed **********/
-	MySQL_ResultSet* MyRS;
-	MySQL_ResultSet* MyRS_reuse;
-	
-	// these method should not be called from this class
-	int async_select_db(short event) { assert(0); return -1; }
-	bool IsServerOffline() { assert(0); return false; }
-	bool IsKnownActiveTransaction() { assert(0); return false; }
-	bool IsActiveTransaction() { assert(0); return false; }
-	PG_ASYNC_ST handler(short event) { assert(0); return ASYNC_IDLE; }
-	void ProcessQueryAndSetStatusFlags(char* query_digest_text);
-	/********* End of remove ******************/
-};
-
-class PgSQL_Connection : public PgSQL_Connection_Placeholder {
+class PgSQL_Connection {
 public:
 	PgSQL_Connection();
 	~PgSQL_Connection();
@@ -510,13 +315,12 @@ public:
 	void reset_session_cont(short event);
 	
 	int  async_connect(short event);
-#if 0
-	int  async_set_autocommit(short event, bool ac);
-#endif // 0
-	int  async_query(short event, char* stmt, unsigned long length, MYSQL_STMT** _stmt = NULL, stmt_execute_metadata_t* _stmt_meta = NULL);
+
+	int  async_query(short event, char* stmt, unsigned long length);
 	int  async_ping(short event);
 	int  async_reset_session(short event);
-	
+	int	 async_send_simple_command(short event, char* stmt, unsigned long length); // no result set expected
+
 	void next_event(PG_ASYNC_ST new_st);
 	bool IsAutoCommit();
 	bool is_connected() const;
@@ -618,6 +422,8 @@ public:
 	void update_bytes_recv(uint64_t bytes_recv);
 	void update_bytes_sent(uint64_t bytes_sent);
 	void ProcessQueryAndSetStatusFlags(char* query_digest_text);
+	void set_charset(const char* charset);
+	void connect_start_SetCharset(const char* client_encoding, uint32_t hash = 0);
 
 	inline const PGconn* get_pg_connection() const { return pgsql_conn; }
 	inline int get_pg_server_version() { return PQserverVersion(pgsql_conn); }
@@ -647,7 +453,74 @@ public:
 	const char* get_pg_transaction_status_str();
 	unsigned int get_memory_usage() const;
 
-	//PgSQL_Conn_Param conn_params;
+	inline
+	int get_backend_pid() { return (pgsql_conn) ? get_pg_backend_pid() : -1; }
+
+	static int char_to_encoding(const char* name) {
+		return pg_char_to_encoding(name);
+	}
+
+	static const char* encoding_to_char(int encoding) {
+		return pg_encoding_to_char(encoding);
+	}
+
+	static int valid_server_encoding_id(int encoding) {
+		return pg_valid_server_encoding_id(encoding);
+	}
+
+	inline
+	void reduce_auto_increment_delay_token() { if (auto_increment_delay_token) auto_increment_delay_token--; };
+
+	void set_status(bool set, uint32_t status_flag);
+	bool get_status(uint32_t status_flag);
+	bool MultiplexDisabled(bool check_delay_token = true);
+
+	bool AutocommitFalse_AndSavepoint();
+
+	unsigned int reorder_dynamic_variables_idx();
+	unsigned int number_of_matching_session_variables(const PgSQL_Connection* client_conn, unsigned int& not_matching);
+	void set_query(char* stmt, unsigned long length);
+	void reset();
+
+	bool IsKeepMultiplexEnabledVariables(char* query_digest_text);
+
+	struct {
+		unsigned long length;
+		char* ptr;
+	} query;
+
+	struct {
+		char* init_connect;
+		bool init_connect_sent;
+	} options;
+
+	struct {
+		char* hostname;
+		char* ip;
+	} connected_host_details;
+
+	bytes_stats_t bytes_info; // bytes statistics
+	struct {
+		unsigned long long questions;
+		unsigned long long pgconnpoll_get;
+		unsigned long long pgconnpoll_put;
+	} statuses;
+
+	PgSQL_Variable variables[PGSQL_NAME_LAST_HIGH_WM];
+	uint32_t var_hash[PGSQL_NAME_LAST_HIGH_WM];
+	// for now we store possibly missing variables in the lower range
+	// we may need to fix that, but this will cost performance
+	bool var_absent[PGSQL_NAME_LAST_HIGH_WM] = { false };
+	std::vector<uint32_t> dynamic_variables_idx;
+
+	/**
+	 * @brief Keeps tracks of the 'server_status'. Do not confuse with the 'server_status' from the
+	 *  'MYSQL' connection itself. This flag keeps track of the configured server status from the
+	 *  parent 'MySrvC'.
+	 */
+	enum MySerStatus server_status; // this to solve a side effect of #774
+
+	PgSQL_Conn_Param conn_params;
 	PgSQL_ErrorInfo error_info;
 	PGconn* pgsql_conn;
 	uint8_t result_type;
@@ -655,12 +528,37 @@ public:
 	PSresult  ps_result;
 	PgSQL_Query_Result* query_result;
 	PgSQL_Query_Result* query_result_reuse;
+	unsigned long long creation_time;
+	unsigned long long last_time_used;
+	unsigned long long timeout;
+	int auto_increment_delay_token;
+	PG_ASYNC_ST async_state_machine;	// Async state machine
+	short wait_events;
 	bool new_result;
 	bool is_copy_out;
-	//PgSQL_SrvC* parent;
-	//PgSQL_Connection_userinfo* userinfo;
-	//PgSQL_Data_Stream* myds;
-	//int fd;
+
+	bool send_quit;
+	bool reusable;
+	bool processing_multi_statement;
+	bool multiplex_delayed;
+
+
+	PgSQL_SrvC *parent;
+	PgSQL_Connection_userinfo* userinfo;
+	PgSQL_Data_Stream* myds;
+	//unsigned int warning_count;
+	int fd;
+	/**
+	 * @brief This represents the internal knowledge of ProxySQL about the connection. It keeps track of those
+	 *  states which *are not reflected* into 'server_status', but are relevant for connection handling.
+	 */
+	uint32_t status_flags;
+	unsigned long largest_query_length;
+	int async_exit_status; // exit status of Non blocking API
+	bool unknown_transaction_status;
+
+
+
 
 private:
 	// Handles the COPY OUT response from the server.
@@ -668,6 +566,8 @@ private:
 	bool handle_copy_out(const PGresult* result, uint64_t* processed_bytes);
 	static void notice_handler_cb(void* arg, const PGresult* result);
 	static void unhandled_notice_cb(void* arg, const PGresult* result);
+	//void update_warning_count_from_connection();
+	//void update_warning_count_from_statement();
 };
 
 #endif /* __CLASS_PGSQL_CONNECTION_H */

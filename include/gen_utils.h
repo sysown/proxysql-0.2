@@ -338,6 +338,7 @@ char *trim_spaces_and_quotes_in_place(char *str);
 bool mywildcmp(const char *p, const char *str);
 std::string trim(const std::string& s);
 char* escape_string_single_quotes_and_backslashes(char* input, bool free_it);
+const char* escape_string_backslash_spaces(const char* input);
 
 /**
  * @brief Helper function that converts a MYSQL_RES into a 'SQLite3_result'.
