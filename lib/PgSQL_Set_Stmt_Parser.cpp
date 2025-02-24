@@ -128,7 +128,7 @@ void PgSQL_Set_Stmt_Parser::generateRE_parse1v2() {
 		}
 	}
 
-	vp = "\\w+(?:,\\w+)+"; // multiple words separated by commas, WITHOUT any spaces between words
+	vp = "\\w+(?:\\s*,\\s*\\w+)+"; // multiple words separated by commas, WITHOUT any spaces between words
 	// NOTE: we do not use multiple words without quotes
 	for (auto it = quote_symbol.begin(); it != quote_symbol.end(); it++) {
 		string s = *it + vp + *it;
